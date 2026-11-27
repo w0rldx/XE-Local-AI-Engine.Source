@@ -17,7 +17,7 @@ internal static class AddNodeDocumentIngestionExtensions
 
         // Process-wide admission gate that bounds concurrent synchronous (in-request) conversation extractions so many
         // simultaneous uploads cannot aggregate to an out-of-memory condition. Singleton — the semaphore is shared.
-        builder.Services.AddSingleton<IDocumentExtractionAdmissionGate, DocumentExtractionAdmissionGate>();
+        builder.Services.AddSingleton<DocumentExtractionAdmissionGate>();
 
         // Persistence boundary for the metadata rows, including the display-name encryption. Scoped: it owns a
         // NodeChatDbContext per operation.
@@ -29,7 +29,7 @@ internal static class AddNodeDocumentIngestionExtensions
 
         // Gate → buffer → extract → persist orchestration behind the conversation upload endpoint. Singleton: stateless
         // apart from the three singletons above.
-        builder.Services.AddSingleton<IConversationUploadIngestor, ConversationUploadIngestor>();
+        builder.Services.AddSingleton<ConversationUploadIngestor>();
 
         return builder;
     }

@@ -4,12 +4,13 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
+using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 
 public sealed class StartGgufImportEndpoint : Endpoint<StartGgufImportRequest, GgufAcquisitionTicketResponse>, IDesktopOnlyEndpoint
 {
-    private readonly IGgufImportTransactionCoordinator _coordinator;
+    private readonly GgufImportTransactionCoordinator _coordinator;
 
-    public StartGgufImportEndpoint(IGgufImportTransactionCoordinator coordinator)
+    public StartGgufImportEndpoint(GgufImportTransactionCoordinator coordinator)
     {
         ArgumentNullException.ThrowIfNull(coordinator);
         _coordinator = coordinator;

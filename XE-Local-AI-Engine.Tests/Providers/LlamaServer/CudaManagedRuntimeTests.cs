@@ -28,7 +28,7 @@ public sealed class CudaManagedRuntimeTests
     [UnsupportedOSPlatform("windows")]
     public async Task EnsureBinary_ManagedCuda_ServesBuiltBinaryNoDownload()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDirectory("xe-cuda-managed", unixMode: TempDirectory.NotWorldWritable);
         var (binDir, serverPath, sha) = SeedSourceBuild(dir.Path, GpuStub);
         using var store = new InstalledRuntimeStore(dir.Path);
         await store.WriteAsync(SourceBuildState(binDir, sha), CancellationToken.None);
@@ -51,7 +51,7 @@ public sealed class CudaManagedRuntimeTests
     [Test]
     public async Task InstallTag_LinuxArm64CudaWithoutManagedBuild_RefusesBeforeDownloadAndWritesNoRecord()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDirectory("xe-cuda-managed", unixMode: TempDirectory.NotWorldWritable);
         using var store = new InstalledRuntimeStore(dir.Path);
         using var handler = NoNetworkHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
@@ -79,7 +79,7 @@ public sealed class CudaManagedRuntimeTests
     [UnsupportedOSPlatform("windows")]
     public async Task InstallTag_LinuxCudaWithManagedBuild_RefusesAndKeepsServingManagedBuild()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDirectory("xe-cuda-managed", unixMode: TempDirectory.NotWorldWritable);
         var (binDir, serverPath, sha) = SeedSourceBuild(dir.Path, GpuStub);
         using var store = new InstalledRuntimeStore(dir.Path);
         var recorded = SourceBuildState(binDir, sha);
@@ -117,7 +117,7 @@ public sealed class CudaManagedRuntimeTests
     [UnsupportedOSPlatform("windows")]
     public async Task EnsureBinary_ManagedCuda_ShaMismatch_DiscardsAndFailsLoud()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDirectory("xe-cuda-managed", unixMode: TempDirectory.NotWorldWritable);
         var (binDir, serverPath, _) = SeedSourceBuild(dir.Path, GpuStub);
         using var store = new InstalledRuntimeStore(dir.Path);
         // Record a deliberately wrong SHA so the serve-time recompare fails.
@@ -143,7 +143,7 @@ public sealed class CudaManagedRuntimeTests
     [UnsupportedOSPlatform("windows")]
     public async Task EnsureBinary_ManagedRecordMissingOnDisk_GracefulFallbackNoSilentCpu()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDirectory("xe-cuda-managed", unixMode: TempDirectory.NotWorldWritable);
         var missingBin = Path.Combine(dir.Path, "llama.cpp", "source-cuda", LlamaCppReleasePins.PinnedTag, "build", "bin");
         using var store = new InstalledRuntimeStore(dir.Path);
         await store.WriteAsync(SourceBuildState(missingBin, new string('b', 64)), CancellationToken.None);
@@ -168,7 +168,7 @@ public sealed class CudaManagedRuntimeTests
     {
         // The serve is refused, but a perms failure is not evidence the build is foreign: discarding the record here
         // cost the operator a 20-40 min rebuild for a fixable chmod. Only a SHA mismatch or a missing server discards.
-        using var dir = new TempDir();
+        using var dir = new TempDirectory("xe-cuda-managed", unixMode: TempDirectory.NotWorldWritable);
         var (binDir, _, sha) = SeedSourceBuild(dir.Path, GpuStub);
         using var store = new InstalledRuntimeStore(dir.Path);
         await store.WriteAsync(SourceBuildState(binDir, sha), CancellationToken.None);
@@ -200,7 +200,7 @@ public sealed class CudaManagedRuntimeTests
 
         // An exception during serve validation must not discard the record, or one transient read error on the server
         // binary loses the build for good.
-        using var dir = new TempDir();
+        using var dir = new TempDirectory("xe-cuda-managed", unixMode: TempDirectory.NotWorldWritable);
         var (binDir, serverPath, sha) = SeedSourceBuild(dir.Path, GpuStub);
         using var store = new InstalledRuntimeStore(dir.Path);
         await store.WriteAsync(SourceBuildState(binDir, sha), CancellationToken.None);
@@ -240,7 +240,7 @@ public sealed class CudaManagedRuntimeTests
     [UnsupportedOSPlatform("windows")]
     public async Task EnsureBinary_SourceRecordVariantMismatch_ServesRecordedBuildAndSeedsSignal()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDirectory("xe-cuda-managed", unixMode: TempDirectory.NotWorldWritable);
         var (binDir, serverPath, sha) = SeedSourceBuild(dir.Path, GpuStub);
         using var store = new InstalledRuntimeStore(dir.Path);
         await store.WriteAsync(SourceBuildState(binDir, sha), CancellationToken.None);
@@ -279,7 +279,7 @@ public sealed class CudaManagedRuntimeTests
     [Test]
     public async Task Store_Acquire_ExcludesASecondStoreOnTheSameDirectory()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDirectory("xe-cuda-managed", unixMode: TempDirectory.NotWorldWritable);
         using var first = new InstalledRuntimeStore(dir.Path);
         using var second = new InstalledRuntimeStore(dir.Path);
 
@@ -306,7 +306,7 @@ public sealed class CudaManagedRuntimeTests
     [UnsupportedOSPlatform("windows")]
     public async Task RemoveSourceBuild_ExplicitOperatorAction_ClearsRecordAndDeletesTree()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDirectory("xe-cuda-managed", unixMode: TempDirectory.NotWorldWritable);
         var activeTree = Path.Combine(dir.Path, "llama.cpp", "source-build", "active");
         var binDir = Path.Combine(activeTree, "build", "bin");
         Directory.CreateDirectory(binDir);
@@ -334,7 +334,7 @@ public sealed class CudaManagedRuntimeTests
     [UnsupportedOSPlatform("windows")]
     public async Task EnsureBinary_InvalidCpuSourceRecord_NeverServesCachedCpuPrebuilt()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDirectory("xe-cuda-managed", unixMode: TempDirectory.NotWorldWritable);
         var missingBin = Path.Combine(dir.Path, "llama.cpp", "source-build", "active", "build", "bin");
         using var store = new InstalledRuntimeStore(dir.Path);
         await store.WriteAsync(SourceBuildState(missingBin, new string('b', 64), GpuVariant.Cpu), CancellationToken.None);
@@ -375,7 +375,7 @@ public sealed class CudaManagedRuntimeTests
     [UnsupportedOSPlatform("windows")]
     public async Task Selector_BeforeStartupSeed_SeedsOnceFromRecordedSourceBuild()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDirectory("xe-cuda-managed", unixMode: TempDirectory.NotWorldWritable);
         var (binDir, _, sha) = SeedSourceBuild(dir.Path, GpuStub);
         using var store = new InstalledRuntimeStore(dir.Path);
         await store.WriteAsync(SourceBuildState(binDir, sha), CancellationToken.None);
@@ -420,7 +420,7 @@ public sealed class CudaManagedRuntimeTests
     [UnsupportedOSPlatform("windows")]
     public async Task RemoveCudaSourceBuild_RefusesPathOutsideSourceCuda()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDirectory("xe-cuda-managed", unixMode: TempDirectory.NotWorldWritable);
         using var store = new InstalledRuntimeStore(dir.Path);
 
         // A recorded build path OUTSIDE {cacheRoot}/llama.cpp/source-cuda/ must never trigger a delete of the source-cuda tree.
@@ -446,7 +446,7 @@ public sealed class CudaManagedRuntimeTests
     [Test]
     public async Task InstalledRuntimeState_RoundTrips_SourceBuildPath_OldFileLoadsNull()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDirectory("xe-cuda-managed", unixMode: TempDirectory.NotWorldWritable);
         using var store = new InstalledRuntimeStore(dir.Path);
 
         // Additive field round-trips.
@@ -530,37 +530,4 @@ public sealed class CudaManagedRuntimeTests
 
     private static ThrowingHttpMessageHandler NoNetworkHandler() =>
         new(new InvalidOperationException("No network call expected: a managed CUDA serve must never download."));
-
-    private sealed class TempDir : IDisposable
-    {
-        public TempDir()
-        {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "xe-cuda-managed-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path);
-            if (!OperatingSystem.IsWindows())
-            {
-                File.SetUnixFileMode(Path,
-                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
-                    | UnixFileMode.GroupRead | UnixFileMode.GroupExecute
-                    | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
-            }
-        }
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            try
-            {
-                if (Directory.Exists(Path))
-                {
-                    Directory.Delete(Path, recursive: true);
-                }
-            }
-            catch (IOException)
-            {
-                // Best-effort temp cleanup.
-            }
-        }
-    }
 }

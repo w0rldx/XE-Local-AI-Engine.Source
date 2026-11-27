@@ -18,9 +18,9 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Chat;
 /// </remarks>
 public sealed class SendGraphWorkflowChatMessageEndpoint : Endpoint<SendGraphWorkflowChatMessageRequest, SendGraphWorkflowChatMessageResponse>
 {
-    private readonly IGraphWorkflowChatService _chat;
+    private readonly GraphWorkflowChatService _chat;
 
-    public SendGraphWorkflowChatMessageEndpoint(IGraphWorkflowChatService chat)
+    public SendGraphWorkflowChatMessageEndpoint(GraphWorkflowChatService chat)
     {
         ArgumentNullException.ThrowIfNull(chat);
         _chat = chat;

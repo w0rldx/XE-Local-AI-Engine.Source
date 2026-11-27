@@ -60,11 +60,6 @@ export function extractTraceId(headerValue: string | null | undefined): string |
 
 const configTraceIds = new WeakMap<object, string>();
 
-/** Stash the trace id on a request-config object (keyed by identity, never cloned). */
-export function rememberTraceId(config: object, traceId: string): void {
-	configTraceIds.set(config, traceId);
-}
-
 /** Read the trace id previously stashed for a config object, if any. */
 export function getTraceId(config: object): string | undefined {
 	return configTraceIds.get(config);

@@ -255,6 +255,27 @@ public sealed class ApplicationHubWireTests
     }
 
     [Test]
+    public async Task ImageJobStatusPush_CarriesTheModelUnloadedReasonByName()
+    {
+        var (hubContext, sent) = CapturingHubContext<ImageJobHub>();
+
+        await new ImageJobEventPublisher(hubContext).PublishStatusAsync(new ImageJobStatusEvent
+        {
+            JobId = FirstId,
+            Phase = nameof(ImageJobStatus.Failed),
+            QueuePosition = null,
+            ElapsedMs = null,
+            ImageId = null,
+            SanitizedError = "The image runtime unloaded the model while the generation was starting. Try again.",
+            FailureReason = ImageJobFailureReason.ModelUnloadedWhileStarting,
+            OccurredAtUtc = 1758000000002,
+            Seq = 1
+        });
+
+        AssertEx.Contains(WriteFrame(sent.Single().Message), "\"failureReason\":\"ModelUnloadedWhileStarting\"");
+    }
+
+    [Test]
     public async Task ImageJobReplay_KeepsTheLiveWireFrame()
     {
         var coordinator = Substitute.For<IImageJobCoordinator>();

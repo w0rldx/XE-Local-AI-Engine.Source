@@ -91,6 +91,9 @@ export function sameExperimentId(left: string | undefined, right: string | undef
 	return left !== undefined && right !== undefined && left.toLowerCase() === right.toLowerCase();
 }
 
+// How long the Model Lab views reuse one read of the installed models.
+export const installedModelsStaleMs = 30_000;
+
 // Every installed llama.cpp GGUF: the page picker lists them, and Inspect compares a model with its repo's other files.
 // The label is the one the chat pickers show (toModelOption's display name), else the model name.
 export function installedGgufModels(

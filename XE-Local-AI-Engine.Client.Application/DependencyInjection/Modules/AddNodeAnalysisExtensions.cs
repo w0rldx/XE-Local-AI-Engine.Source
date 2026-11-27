@@ -19,7 +19,7 @@ internal static class AddNodeAnalysisExtensions
         builder.Services.AddSingleton<IPlaybookAnalysisAgent, DefaultPlaybookAnalysisAgent>();
         // Analysis orchestration: gates on the occurrence threshold, validates proposal evidence, dedupes, and writes
         // suggested actions for human review.
-        builder.Services.AddScoped<IPlaybookAnalysisService, PlaybookAnalysisService>();
+        builder.Services.AddScoped<PlaybookAnalysisService>();
 
         return builder;
     }

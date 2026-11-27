@@ -107,7 +107,7 @@ public sealed class AgentExecutionLogApprovalDecisionTests : IDisposable
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new AgentExecutionLogStore(context, new FixedTimeProvider(FixedNow));
+        var store = new AgentExecutionLogStore(context, new ManualTimeProvider(FixedNow));
 
         await store.AddApprovalDecisionAsync(new ApprovalDecisionAuditInput
         {
@@ -138,7 +138,7 @@ public sealed class AgentExecutionLogApprovalDecisionTests : IDisposable
         await using var context = CreateContext(databasePath, keyHolder);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
-        var store = new AgentExecutionLogStore(context, new FixedTimeProvider(FixedNow));
+        var store = new AgentExecutionLogStore(context, new ManualTimeProvider(FixedNow));
 
         await store.AddApprovalDecisionAsync(input);
 
@@ -155,20 +155,5 @@ public sealed class AgentExecutionLogApprovalDecisionTests : IDisposable
     {
         Directory.CreateDirectory(_rootPath);
         return Path.Combine(_rootPath, fileName);
-    }
-
-    private sealed class FixedTimeProvider : TimeProvider
-    {
-        private readonly DateTimeOffset _now;
-
-        public FixedTimeProvider(DateTimeOffset now)
-        {
-            _now = now;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return _now;
-        }
     }
 }

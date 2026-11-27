@@ -3,19 +3,14 @@ namespace XE_Local_AI_Engine.Client.Services.Training.Datasets;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 
-public interface IToolMockEngine
+/// <summary>Answers a mocked tool call from its declared rules; stateless.</summary>
+public static class ToolMockEngine
 {
     /// <summary>
     ///     Gets the literal response for a call; <see langword="false" /> when no rule matched and the body declares no
     ///     default. Never executes anything; never falls back to the real tool.
     /// </summary>
-    bool TryRespond(ToolMockBodyV1 body, JsonElement arguments, [NotNullWhen(true)] out string? response);
-}
-
-/// <inheritdoc />
-public sealed class ToolMockEngine : IToolMockEngine
-{
-    public bool TryRespond(ToolMockBodyV1 body, JsonElement arguments, [NotNullWhen(true)] out string? response)
+    public static bool TryRespond(ToolMockBodyV1 body, JsonElement arguments, [NotNullWhen(true)] out string? response)
     {
         ArgumentNullException.ThrowIfNull(body);
         var matched = body.Rules.FirstOrDefault(rule => Matches(rule, arguments));

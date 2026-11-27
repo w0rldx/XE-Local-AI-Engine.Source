@@ -17,7 +17,7 @@ using Microsoft.Extensions.Options;
 ///     it. The same document always yields the same sections and chunks. Sizing rules and their rationale:
 ///     <c>docs/wiki/15-knowledge-base.md</c> ("Ingestion pipeline").
 /// </remarks>
-public sealed class HeaderBoundaryChunkingService : IChunkingService
+public sealed class HeaderBoundaryChunkingService
 {
     private const int MinHeadingLevel = 1;
     private const int MaxHeadingLevel = 6;
@@ -42,6 +42,19 @@ public sealed class HeaderBoundaryChunkingService : IChunkingService
         _options = options.Value;
     }
 
+    /// <summary>
+    ///     Walks the document's heading structure and produces the ordered section list plus size-bounded, overlapping chunks.
+    /// </summary>
+    /// <remarks>
+    ///     A document with no headers yields a single implicit section. A section is cut at whichever bound is reached
+    ///     first — the per-chunk token budget or the character ceiling — always at a whitespace boundary, so a chunk plus
+    ///     its heading prefix stays inside the embedding model's context window. A supplied context window tightens the
+    ///     token budget to that window minus a safety reserve, so a smaller-window embedder yields smaller chunks.
+    /// </remarks>
+    /// <param name="embeddingContextWindowTokens">
+    ///     Resolved embedding context window in tokens; a positive value tightens the per-chunk token budget (never
+    ///     enlarges it), <see langword="null" /> keeps the configured <c>MaxChunkTokens</c>.
+    /// </param>
     public KnowledgeChunkingResult Chunk(IngestionDocument document, int? embeddingContextWindowTokens = null)
     {
         ArgumentNullException.ThrowIfNull(document);

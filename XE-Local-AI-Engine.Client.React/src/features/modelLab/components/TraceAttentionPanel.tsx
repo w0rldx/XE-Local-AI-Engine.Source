@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { type CSSProperties, type ReactNode, useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { ApiError } from "@/core/api/errors/ApiError";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { getModelLabExperimentAttentionOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import type { XeLocalAiEngineClientServicesModelLabModelLabTraceResult as TraceResult } from "@/core/api/generated/types.gen";
@@ -18,6 +17,7 @@ import {
 	rowKeys,
 } from "@/features/modelLab/models/ModelLabAttention";
 import type { ExplanationLevel } from "@/features/modelLab/models/ModelLabExplanation";
+import { isNotFound } from "@/features/modelLab/models/ModelLabPyTorch";
 
 const cellSize = 6;
 const cellGap = 1;
@@ -120,7 +120,7 @@ export function TraceAttentionPanel({ experimentId, result, layer, step }: Trace
 			{attention.status === "pending" && <Loader size="sm" />}
 			{attention.status === "error" && (
 				<Alert color="red" data-testid="model-lab-stepper-attention-failed">
-					{attention.error instanceof ApiError && attention.error.statusCode === 404
+					{isNotFound(attention.error)
 						? t("pages.modelLab.trace.stepper.attentionNotFound", "This run kept no attention rows for block {{index}}.", {
 								index: layer,
 							})

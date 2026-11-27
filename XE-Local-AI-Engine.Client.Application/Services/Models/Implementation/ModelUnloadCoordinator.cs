@@ -3,8 +3,11 @@ namespace XE_Local_AI_Engine.Client.Services.Models.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
-/// <inheritdoc />
-internal sealed class ModelUnloadCoordinator : IModelUnloadCoordinator
+/// <summary>Gracefully evicts a model from llama-server's memory, in every role that holds it.</summary>
+/// <remarks>
+///     An in-flight generation completes before the model is evicted, so unload never interrupts a running turn.
+/// </remarks>
+public sealed class ModelUnloadCoordinator
 {
     private readonly ILlamaServerProcessSupervisor _supervisor;
 
@@ -24,6 +27,9 @@ internal sealed class ModelUnloadCoordinator : IModelUnloadCoordinator
     ///     A role that is not running reports <c>NotRunning</c>, which is success — the whole operation is idempotent. Only a process still
     ///     busy after the drain window (left running on purpose, because force is not set here) makes the unload unsuccessful.
     /// </remarks>
+    /// <returns>
+    ///     <see langword="false" /> only when a llama-server process was still busy when the bounded drain window elapsed and was left running.
+    /// </returns>
     public async Task<bool> UnloadAsync(string modelName, CancellationToken cancellationToken = default)
     {
         var unloaded = true;

@@ -1074,7 +1074,7 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
             }),
             StubNodeRuntimeSettings.Create().Build(),
             new FakeNodeDataDirectory(fixture.StateRoot),
-            new StaticIdentityProvider(),
+            new FixedAgentHomeIdentityProvider("owner-hardening", "node-hardening"),
             new AgentHomeRunApplyGuard(),
             scopeFactory.GetRequiredService<IServiceScopeFactory>(),
             NullLogger<NodePatchApplyService>.Instance);
@@ -1162,7 +1162,7 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         var patchService = new AgentHomePatchService(provider, runtimeSettings, clock, NullLogger<AgentHomePatchService>.Instance);
 
         var reader = new CoderWorkspaceReader(provider,
-            new StaticIdentityProvider(),
+            new FixedAgentHomeIdentityProvider("owner-hardening", "node-hardening"),
             leases,
             new SensitiveFileExclusionService(),
             Options.Create(new CoderOptions()),
@@ -1181,7 +1181,7 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
 
         var service = new AgentHomeService(manifestService,
             provider,
-            new StaticIdentityProvider(),
+            new FixedAgentHomeIdentityProvider("owner-hardening", "node-hardening"),
             leases,
             new AgentHomeRunExecutionRegistry(),
             isolation,
@@ -1327,18 +1327,6 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
 
         public void Dispose()
         {
-        }
-    }
-
-    private sealed class StaticIdentityProvider : IAgentHomeIdentityProvider
-    {
-        public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(new AgentHomeOwnerIdentity
-            {
-                OwnerUserId = "owner-hardening",
-                NodeId = "node-hardening"
-            });
         }
     }
 

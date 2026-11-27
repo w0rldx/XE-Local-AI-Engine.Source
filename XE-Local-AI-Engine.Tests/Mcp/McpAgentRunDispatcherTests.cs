@@ -11,7 +11,6 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Mcp.Runs;
 using XE_Local_AI_Engine.Tests.Testing;
-using SharedClock = ManualTimeProvider;
 
 [Category(TestCategories.Unit)]
 public sealed class McpAgentRunDispatcherTests
@@ -213,7 +212,7 @@ public sealed class McpAgentRunDispatcherTests
     {
         var max = new McpAgentRunOptions().MaxResultCharacters;
 
-        var finalization = await FinalizeSuccessfulRunAsync(new string('x', max + 1));
+        var finalization = await FinalizeRunAsync(SpawnOutcome.Success(new string('x', max + 1)));
 
         AssertEx.Equal(max, finalization.Result!.Length);
         AssertEx.True(finalization.Result.EndsWith(McpAgentRunResultTruncation.Marker, StringComparison.Ordinal),
@@ -225,12 +224,28 @@ public sealed class McpAgentRunDispatcherTests
     {
         var content = new string('x', new McpAgentRunOptions().MaxResultCharacters);
 
-        var finalization = await FinalizeSuccessfulRunAsync(content);
+        var finalization = await FinalizeRunAsync(SpawnOutcome.Success(content));
 
         AssertEx.Equal(content, finalization.Result!);
     }
 
-    private static async Task<McpAgentRunFinalization> FinalizeSuccessfulRunAsync(string content)
+    [Test]
+    public async Task ExecuteAsync_WhenTheDisplayMessageExceedsItsBound_StoresTheFirst512Characters()
+    {
+        var finalization = await FinalizeRunAsync(SpawnOutcome.Failed("spawn-failed", new string('x', count: 600)));
+
+        AssertEx.Equal(new string('x', count: 512), finalization.DisplayMessage);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenTheDisplayBoundSplitsASurrogatePair_StoresTheMessageWithoutThePair()
+    {
+        var finalization = await FinalizeRunAsync(SpawnOutcome.Failed("spawn-failed", new string('x', count: 511) + "\U0001F600 tail"));
+
+        AssertEx.Equal(new string('x', count: 511), finalization.DisplayMessage);
+    }
+
+    private static async Task<McpAgentRunFinalization> FinalizeRunAsync(SpawnOutcome outcome)
     {
         using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         var registry = new McpAgentRunCancellationRegistry();
@@ -256,7 +271,7 @@ public sealed class McpAgentRunDispatcherTests
                  Run = claimed
              });
         store.GetAsync(claimed.RequestId, Arg.Any<CancellationToken>()).Returns(claimed);
-        executor.ExecuteAsync(claimed, Arg.Any<CancellationToken>()).Returns(SpawnOutcome.Success(content));
+        executor.ExecuteAsync(claimed, Arg.Any<CancellationToken>()).Returns(outcome);
         store.TryFinalizeAsync(Arg.Any<McpAgentRunFinalization>(), Arg.Any<CancellationToken>()).Returns(callInfo =>
         {
             finalization = callInfo.Arg<McpAgentRunFinalization>();
@@ -282,7 +297,7 @@ public sealed class McpAgentRunDispatcherTests
     public async Task ExecuteAsync_AfterThirtyMinuteWatchdog_PersistsMarkerBeforeCancellingExecution()
     {
         using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
+        var clock = new DueTimeRecordingTimeProvider(DateTimeOffset.UnixEpoch);
         var registry = new McpAgentRunCancellationRegistry();
         var store = Substitute.For<IMcpAgentRunStore>();
         var executor = Substitute.For<IMcpAgentRunExecutor>();
@@ -370,7 +385,7 @@ public sealed class McpAgentRunDispatcherTests
     public async Task AnIdleWorker_ClaimsAnAdmissionOnItsWake_WithoutTheClockMoving()
     {
         using var stop = new CancellationTokenSource();
-        var clock = new SharedClock();
+        var clock = new ManualTimeProvider();
         var queue = new ScriptedQueue();
         await using var provider = CreateProvider(queue.Store, queue.Executor);
         using var wake = NewWake();
@@ -396,7 +411,7 @@ public sealed class McpAgentRunDispatcherTests
     public async Task WithoutAWake_AnIdleWorkerReadsNothingUntilTheFallback_ThenStillClaims()
     {
         using var stop = new CancellationTokenSource();
-        var clock = new SharedClock();
+        var clock = new ManualTimeProvider();
         var queue = new ScriptedQueue();
         await using var provider = CreateProvider(queue.Store, queue.Executor);
         using var wake = NewWake();
@@ -425,7 +440,7 @@ public sealed class McpAgentRunDispatcherTests
     public async Task AWakeRaisedBetweenTheEmptyReadAndTheWait_IsNotLost()
     {
         using var stop = new CancellationTokenSource();
-        var clock = new SharedClock();
+        var clock = new ManualTimeProvider();
         var queue = new ScriptedQueue();
         await using var provider = CreateProvider(queue.Store, queue.Executor);
         using var wake = NewWake();
@@ -455,7 +470,7 @@ public sealed class McpAgentRunDispatcherTests
     public async Task TwoIdleWorkers_ClaimTwoAdmissions_WithoutTheClockMoving()
     {
         using var stop = new CancellationTokenSource();
-        var clock = new SharedClock();
+        var clock = new ManualTimeProvider();
         var queue = new ScriptedQueue();
         await using var provider = CreateProvider(queue.Store, queue.Executor);
         using var wake = NewWake(workers: 2);
@@ -491,7 +506,7 @@ public sealed class McpAgentRunDispatcherTests
     }
 
     /// <summary>Completes once the idle workers have armed their fallback timers, so the clock is never moved past a wait nobody holds.</summary>
-    private static Task ParkedAsync(SharedClock clock, int timers) =>
+    private static Task ParkedAsync(ManualTimeProvider clock, int timers) =>
         AssertEx.EventuallyAsync(() => clock.ArmedTimerCount >= timers, TestBudgets.Contended, "the worker never parked on its fallback timer.");
 
     private static McpAgentRunWakeSignal NewWake(int workers = 1) =>
@@ -682,13 +697,14 @@ public sealed class McpAgentRunDispatcherTests
         }
     }
 
-    private sealed class ManualTimeProvider : TimeProvider
+    /// <summary>A manual clock that also records the first timer's due time, which the shared <see cref="ManualTimeProvider" /> does not expose.</summary>
+    private sealed class DueTimeRecordingTimeProvider : TimeProvider
     {
         private readonly object _gate = new();
         private readonly List<ManualTimer> _timers = [];
         private DateTimeOffset _utcNow;
 
-        public ManualTimeProvider(DateTimeOffset utcNow)
+        public DueTimeRecordingTimeProvider(DateTimeOffset utcNow)
         {
             _utcNow = utcNow;
         }
@@ -735,14 +751,14 @@ public sealed class McpAgentRunDispatcherTests
 
         private sealed class ManualTimer : ITimer
         {
-            private readonly ManualTimeProvider _owner;
+            private readonly DueTimeRecordingTimeProvider _owner;
             private readonly TimerCallback _callback;
             private readonly object? _state;
             private TimeSpan _remaining;
             private TimeSpan _period;
             private bool _disposed;
 
-            public ManualTimer(ManualTimeProvider owner,
+            public ManualTimer(DueTimeRecordingTimeProvider owner,
                 TimerCallback callback,
                 object? state,
                 TimeSpan dueTime,

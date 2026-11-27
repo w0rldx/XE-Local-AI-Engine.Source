@@ -3,8 +3,8 @@
 # object store other than the one its working directory (or -C) points at. `git -C <dir>` does not override
 # them: an exported GIT_DIR answers every query for that other repository, and this repository's own working
 # rules have agents export a private GIT_INDEX_FILE. The gates and checks (run-backend-tests.sh,
-# run-release-contract-tests.sh, openapi-live-check.sh, assembly-guard.sh, lint-release-scripts.sh) drop them at
-# the top so neither they nor any child can be steered elsewhere. scripts/lib/build-lock-common.sh strips them
+# run-release-contract-tests.sh, python-validation.sh, openapi-live-check.sh, assembly-guard.sh,
+# lint-release-scripts.sh) drop them at the top so neither they nor any child can be steered elsewhere. scripts/lib/build-lock-common.sh strips them
 # per git call instead (xe_git): the lock wrapper runs arbitrary commands, which must keep seeing what their
 # caller exported, and a library cannot rely on its sourcer having dropped them.
 
@@ -24,9 +24,16 @@ XE_GIT_REPO_ENV_VARS=(
   GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
   GIT_NAMESPACE
 )
+# The variables that inject configuration, for a gate whose children create scratch repositories
+# (python-validation.sh): an inherited GIT_CONFIG is the file `git config` writes, so a fixture's
+# `git config user.email` would rewrite the operator's identity; GIT_CONFIG_PARAMETERS and GIT_CONFIG_COUNT add
+# settings (a hook path, a signing agent); GIT_TEMPLATE_DIR outranks init.templateDir. scripts/lib/git_env.py
+# (CONFIG_OVERRIDES) and GitEnvironment.mjs hold the same list.
+XE_GIT_CONFIG_ENV_VARS=(GIT_CONFIG GIT_CONFIG_PARAMETERS GIT_CONFIG_COUNT GIT_TEMPLATE_DIR)
 
 # Removes them from this shell and everything it starts from now on.
 xe_drop_git_repo_env() { unset "${XE_GIT_REPO_ENV_VARS[@]}"; }
+xe_drop_git_config_env() { unset "${XE_GIT_CONFIG_ENV_VARS[@]}"; }
 
 # Runs git with them removed, for code that must not change its caller's environment.
 xe_git() {

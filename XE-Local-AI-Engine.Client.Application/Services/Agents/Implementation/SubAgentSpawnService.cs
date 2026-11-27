@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Coder;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
@@ -76,11 +77,11 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
     private readonly ProviderCallBudgetOptions _providerCallBudgetOptions;
     private readonly INodeSettingsStore _nodeSettingsStore;
     private readonly INodeRuntimeSettings _runtimeSettings;
-    private readonly ISpawnSerializer _spawnSerializer;
+    private readonly SpawnSerializer _spawnSerializer;
     private readonly IAgentToolRegistry _toolRegistry;
 
     public SubAgentSpawnService(ICapacityService capacityService,
-        ISpawnSerializer spawnSerializer,
+        SpawnSerializer spawnSerializer,
         IAgentDefinitionStore definitionStore,
         IAgentDefinitionResolver agentDefinitionResolver,
         IAgentToolRegistry toolRegistry,

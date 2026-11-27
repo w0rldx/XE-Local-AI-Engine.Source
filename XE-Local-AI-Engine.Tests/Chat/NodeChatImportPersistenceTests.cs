@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Tests.Chat;
 using System.Globalization;
 using System.Text;
 using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -366,23 +365,10 @@ public sealed class NodeChatImportPersistenceTests : IDisposable
         return connection;
     }
 
-    private async Task<ServiceProvider> BuildProviderAsync(string fileName)
-    {
-        var databasePath = DatabasePath(fileName);
-        var services = new ServiceCollection();
-        // A real key, so content is ciphertext and a blob bound to the wrong row ids fails to decrypt on read.
-        services.AddSingleton<INodeSqliteKeyHolder>(NodeChatStreamServiceTestSupport.FenceKeyHolder);
-        services.AddDbContext<NodeChatDbContext>(options => options.UseSqlite($"Data Source={databasePath}"));
-        services.AddSingleton<NodeChatPersistenceWriter>();
-
-        var provider = services.BuildServiceProvider(true);
-        await using var scope = provider.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        await dbContext.Database.EnsureDeletedAsync();
-        await dbContext.Database.EnsureCreatedAsync();
-
-        return provider;
-    }
+    private Task<ServiceProvider> BuildProviderAsync(string fileName) =>
+        // A real key, so content is ciphertext and a blob bound to the wrong row ids fails to decrypt on read. Each scope
+        // gets its own holder (same fixed key): the provider disposes what its factory returns, never the shared static.
+        NodeChatTestProvider.BuildAsync(DatabasePath(fileName), pooled: true, static _ => new FixedNodeSqliteKeyHolder(new byte[32]));
 
     // Attributes the imported model to a real provider, so the comparison covers the envelope's provider too.
     private static NodeChatPersistenceService CreateService(ServiceProvider provider)

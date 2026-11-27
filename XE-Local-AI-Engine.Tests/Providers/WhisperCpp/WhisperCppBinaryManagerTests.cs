@@ -42,6 +42,9 @@ public sealed class WhisperCppBinaryManagerTests
         AssertEx.False(exception.Message.Contains(Path.GetTempPath(), StringComparison.Ordinal),
             "The operator-facing message must not leak the temp path.");
         AssertEx.Contains(exception.Message, "integrity", StringComparison.OrdinalIgnoreCase);
+        AssertEx.Equal("The whisper.cpp runtime could not be downloaded or failed integrity verification after a retry. Check the network connection and try again.",
+            exception.Message);
+        AssertEx.Equal("The whisper.cpp runtime download failed integrity verification.", AssertEx.NotNull(exception.InnerException).Message);
     }
 
     [Test]
@@ -103,6 +106,44 @@ public sealed class WhisperCppBinaryManagerTests
         AssertEx.Equal(WhisperBackend.Cpu, binary.Backend);
         AssertEx.True(binary.IsPinnedFallback);
         AssertEx.Equal(WhisperCppReleasePins.PinnedTag, binary.Version);
+    }
+
+    [Test]
+    public async Task EnsureBinary_ZipAsset_ExtractsAndResolvesAnExecutableServer()
+    {
+        // The Windows assets are zips, which carry no file modes: the extracted server must still resolve and be made executable.
+        using var cache = new TempDirectory("xe-whispercpp-test");
+        var pin = WhisperCppReleasePins.Resolve(OSPlatform.Windows, Architecture.X64, WhisperBackend.Cpu)!;
+        var archive = BuildZip(pin.ServerRelativePath, "fake-whisper-server");
+
+        using var handler = new DigestPinningHandler(archive);
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var manager = new WhisperCppBinaryManager(http,
+            cache.Path,
+            WhisperCppReleasePins.PinnedTag,
+            OSPlatform.Windows,
+            Architecture.X64,
+            overrideOptions: null,
+            installedRuntimeStore: null,
+            managedSourceSignal: null,
+            new WhisperAssetPin
+            {
+                AssetName = pin.AssetName,
+                Sha256 = handler.Digest,
+                ServerRelativePath = pin.ServerRelativePath,
+                ArchiveKind = WhisperArchiveKind.Zip
+            });
+
+        var binary = await manager.EnsureBinaryAsync(WhisperBackend.Cpu, CancellationToken.None);
+
+        AssertEx.Equal(Path.GetFullPath(Path.Combine(cache.Path, "whisper.cpp", WhisperCppReleasePins.PinnedTag, "cpu", pin.ServerRelativePath)),
+            binary.ServerExecutablePath);
+        AssertEx.Equal("fake-whisper-server", await File.ReadAllTextAsync(binary.ServerExecutablePath));
+        if (!OperatingSystem.IsWindows())
+        {
+            AssertEx.True((File.GetUnixFileMode(binary.ServerExecutablePath) & UnixFileMode.UserExecute) != UnixFileMode.None,
+                "a server extracted from a zip is made executable");
+        }
     }
 
     [Test]
@@ -329,6 +370,19 @@ public sealed class WhisperCppBinaryManagerTests
                     DataStream = new MemoryStream(Encoding.UTF8.GetBytes(content))
                 };
                 tar.WriteEntry(entry);
+            }
+
+        return payload.ToArray();
+    }
+
+    /// <summary>Builds a real .zip containing one entry at <paramref name="entryPath" />.</summary>
+    private static byte[] BuildZip(string entryPath, string content)
+    {
+        var payload = new MemoryStream();
+        using (var zip = new ZipArchive(payload, ZipArchiveMode.Create, leaveOpen: true))
+            using (var writer = new StreamWriter(zip.CreateEntry(entryPath).Open()))
+            {
+                writer.Write(content);
             }
 
         return payload.ToArray();

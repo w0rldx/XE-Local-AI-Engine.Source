@@ -1015,7 +1015,6 @@ public sealed class BenchmarkRunFreezeServiceTests
                 ggufModels,
                 LeaseProvider,
                 Substitute.For<IModelClassificationStore>(),
-                new BenchmarkEligibilityPolicy(),
                 dependencies,
                 snapshots,
                 new BenchmarkPhaseLaunchResolver(Profiles(profile),

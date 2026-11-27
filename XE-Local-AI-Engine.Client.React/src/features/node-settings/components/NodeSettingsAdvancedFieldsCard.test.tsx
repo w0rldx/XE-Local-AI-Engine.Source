@@ -11,37 +11,13 @@ import {
 } from "@/features/node-settings/components/NodeSettingsAdvancedFieldsCard";
 import { toNodeSettingsFieldBounds } from "@/features/node-settings/models/NodeSettingsFieldBounds";
 import { toNodeSettingsFieldsForm } from "@/features/node-settings/models/NodeSettingsFieldsModel";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({
 		t: (_key: string, fallback?: string) => fallback ?? _key,
 	}),
 }));
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-}
 
 function renderCards(): void {
 	const props: NodeSettingsAdvancedFieldsCardProps = {

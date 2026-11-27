@@ -97,7 +97,7 @@ say which.
 - A shared graph never brings authority with it: its action nodes are gate errors until the operator flags the
   definition on this node, and its accepted trigger sources reset to the default.
 - Every graph change is also a Dev Workflows decision
-  (`docs/wiki/22-workflow-engines-divergence-register.md`); Dev Workflows gets none of this.
+  (`docs/adr/0023-dev-workflows-converge-into-graph-workflows.md`); Dev Workflows gets none of this.
 
 ## Alternatives rejected
 

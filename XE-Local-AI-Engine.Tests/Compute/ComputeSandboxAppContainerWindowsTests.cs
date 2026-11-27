@@ -6,7 +6,6 @@ using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
-using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Compute.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
@@ -180,7 +179,7 @@ public sealed class ComputeSandboxAppContainerWindowsTests
 
     private static ComputeToolGateway CreateGateway(IAgentSandboxRuntimeProvider provider, IComputePythonEnvironment environment) =>
         new(provider,
-            new StubIdentityProvider(),
+            new FixedAgentHomeIdentityProvider("owner-windows", "node-windows"),
             environment,
             Options.Create(new ComputeOptions
             {
@@ -212,15 +211,5 @@ public sealed class ComputeSandboxAppContainerWindowsTests
     private sealed class PreviewsOn : IExecutionPreviewPolicy
     {
         public bool PreviewMechanismsEnabled => true;
-    }
-
-    private sealed class StubIdentityProvider : IAgentHomeIdentityProvider
-    {
-        public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(new AgentHomeOwnerIdentity
-            {
-                OwnerUserId = "owner-windows",
-                NodeId = "node-windows"
-            });
     }
 }

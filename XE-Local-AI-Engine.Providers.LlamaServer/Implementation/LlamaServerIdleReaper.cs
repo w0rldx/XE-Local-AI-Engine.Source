@@ -89,8 +89,8 @@ internal sealed class LlamaServerIdleReaper : IDisposable
     ///     Chat processes count against <see cref="LlamaServerSupervisorOptions.MaxLoadedProcesses" />, companions (embedding,
     ///     reranker, decision) against <see cref="LlamaServerSupervisorOptions.MaxLoadedCompanionProcesses" />, each by its
     ///     <em>reserved-port</em> count, so in-flight spawns are included — see wiki 03, "Eviction &amp; reaper". A
-    ///     <see cref="ModelResidencyIntent.Background" /> spawn never evicts a live chat process. The cap is read under the gate and as many
-    ///     victims are evicted as it needs; out of victims, the admission is refused and the ones already detached are still torn down.
+    ///     <see cref="ModelResidencyIntent.Background" /> spawn never evicts a live chat process. The cap is re-read after every victim, a victim whose
+    ///     claim failed is skipped for the rest of the admission, and out of victims the admission is refused; the ones detached are still torn down.
     /// </remarks>
     internal async Task<int> AdmitAndAllocatePortAsync(ModelRole role, ModelResidencyIntent intent, CancellationToken ct)
     {
@@ -98,6 +98,7 @@ internal sealed class LlamaServerIdleReaper : IDisposable
         // Processes detached from the table under the gate, tree-killed after it is released (see KillDetachedProcesses).
         var detached = new List<RunningProcess>();
         var exitedSurvivors = new List<IProcessTreeHandle>();
+        var excluded = new HashSet<ProcessKey>();
         await _admissionGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
@@ -105,12 +106,18 @@ internal sealed class LlamaServerIdleReaper : IDisposable
             PruneExitedProcesses(detached);
             ReclaimExitedUnconfirmedKills(exitedSurvivors);
 
-            var cap = companion ? _options.MaxLoadedCompanionProcesses : _options.MaxLoadedProcesses;
-            while (_ports.ReservedCountOf(companion) >= cap)
+            while (true)
             {
+                // Read per pass: the operator may raise the cap while a lost claim makes this admission retry.
+                var cap = companion ? _options.MaxLoadedCompanionProcesses : _options.MaxLoadedProcesses;
+                if (_ports.ReservedCountOf(companion) < cap)
+                {
+                    break;
+                }
+
                 // A cancelled admission stops evicting; the finally below still tears down every victim it already detached.
                 ct.ThrowIfCancellationRequested();
-                if (!TryEvictIdleLeastRecentlyUsed(intent, companion, cap, detached))
+                if (!TryEvictIdleLeastRecentlyUsed(intent, companion, cap, excluded, detached))
                 {
                     // A held survivor occupies a slot of its own class only, so only one of the admitting class explains the refusal.
                     throw CapReached(_unconfirmedKills.Exists(kill => IsCompanion(kill.Key.Role) == companion));
@@ -273,9 +280,10 @@ internal sealed class LlamaServerIdleReaper : IDisposable
             // A held survivor that exited since the early check frees its slot here, so a live chat is not unloaded in its place.
             PruneExitedProcesses(detached);
             ReclaimExitedUnconfirmedKills(exitedSurvivors);
+            var leased = new HashSet<ProcessKey>();
             while (_ports.ReservedCountOf(companion: false) > _options.MaxLoadedProcesses)
             {
-                if (!TryEvictChatAboveCap(protectedModels, detached))
+                if (!TryEvictChatAboveCap(protectedModels, leased, detached))
                 {
                     break;
                 }
@@ -290,7 +298,11 @@ internal sealed class LlamaServerIdleReaper : IDisposable
     }
 
     /// <summary>Detaches the best chat victim above a lowered cap into <paramref name="detached" />; the caller holds the admission gate.</summary>
-    private bool TryEvictChatAboveCap(IReadOnlyCollection<string> protectedModels, List<RunningProcess> detached)
+    /// <remarks>
+    ///     A victim whose claim a lease won joins <paramref name="leased" /> and the caller rescans. Any other lost claim ends the pass: that
+    ///     process is already on its way out, so its slot frees without an in-window chat paying for it.
+    /// </remarks>
+    private bool TryEvictChatAboveCap(IReadOnlyCollection<string> protectedModels, HashSet<ProcessKey> leased, List<RunningProcess> detached)
     {
         var now = _timeProvider.GetUtcNow();
         ProcessKey? victimKey = null;
@@ -298,7 +310,7 @@ internal sealed class LlamaServerIdleReaper : IDisposable
         var victimRank = int.MaxValue;
         foreach (var (key, running) in _processes)
         {
-            if (!IsUnloadableChat(key, running, protectedModels, now) || running.ActiveLeases > 0)
+            if (leased.Contains(key) || !IsUnloadableChat(key, running, protectedModels, now) || running.ActiveLeases > 0)
             {
                 continue;
             }
@@ -314,9 +326,20 @@ internal sealed class LlamaServerIdleReaper : IDisposable
             victimRank = rank;
         }
 
-        if (victimKey is null || victim is null || !TryClaimAndDetach(victimKey.Value, victim, detached))
+        if (victimKey is null || victim is null)
         {
             return false;
+        }
+
+        if (!TryClaimAndDetach(victimKey.Value, victim, detached, out var lostToLease))
+        {
+            if (!lostToLease)
+            {
+                return false;
+            }
+
+            leased.Add(victimKey.Value);
+            return true;
         }
 
         _logger.LogWarning("Loaded-model cap ({Cap}) is below the loaded chat models; unloading the llama-server for model {ModelName}.",
@@ -360,11 +383,11 @@ internal sealed class LlamaServerIdleReaper : IDisposable
     ///     Evicts the least-recently-used process that is currently idle; the caller holds the admission gate.
     /// </summary>
     /// <remarks>
-    ///     The victim is detached here — its slot and port are free the moment this returns <see langword="true" /> —
-    ///     and appended to <paramref name="detached" /> for the caller to tree-kill once the gate is released. The
-    ///     ranking it applies is in wiki 03, "Eviction &amp; reaper".
+    ///     A claimed victim is detached into <paramref name="detached" />, its slot and port free at once, for the caller to tree-kill once the gate
+    ///     is released. A victim whose claim failed, whatever the reason, joins <paramref name="excluded" />, so the scan never picks it again (it
+    ///     does not filter a claim another teardown holds). <see langword="false" /> only when no victim is left. Ranking: wiki 03, "Eviction &amp; reaper".
     /// </remarks>
-    private bool TryEvictIdleLeastRecentlyUsed(ModelResidencyIntent intent, bool companion, int cap, List<RunningProcess> detached)
+    private bool TryEvictIdleLeastRecentlyUsed(ModelResidencyIntent intent, bool companion, int cap, HashSet<ProcessKey> excluded, List<RunningProcess> detached)
     {
         var now = _timeProvider.GetUtcNow();
         ProcessKey? victimKey = null;
@@ -373,7 +396,7 @@ internal sealed class LlamaServerIdleReaper : IDisposable
         foreach (var (key, running) in _processes)
         {
             // Each class has its own slots, so only a process of the admitting class frees one: companions never evict a chat model or the reverse.
-            if (IsCompanion(key.Role) != companion)
+            if (excluded.Contains(key) || IsCompanion(key.Role) != companion)
             {
                 continue;
             }
@@ -419,9 +442,16 @@ internal sealed class LlamaServerIdleReaper : IDisposable
             victimRank = rank;
         }
 
-        if (victimKey is null || victim is null || !TryClaimAndDetach(victimKey.Value, victim, detached))
+        if (victimKey is null || victim is null)
         {
             return false;
+        }
+
+        // The caller re-reads the cap: a slot freed by the teardown that owns this victim admits without a second eviction.
+        if (!TryClaimAndDetach(victimKey.Value, victim, detached, out _))
+        {
+            excluded.Add(victimKey.Value);
+            return true;
         }
 
         _logger.LogWarning("Loaded-model cap ({Cap}) reached; evicting {Idleness} llama-server for model {ModelName} role {Role} to admit a new one.",
@@ -481,8 +511,8 @@ internal sealed class LlamaServerIdleReaper : IDisposable
                 return new ChatEvictionOutcome(null, busyKey);
             }
 
-            // A lease taken between the scan and the claim makes the victim busy, not ineligible.
-            if (!TryClaimAndDetach(victimKey.Value, victim, detached))
+            // Any lost claim, a lease's or another teardown's, makes the victim busy, not ineligible.
+            if (!TryClaimAndDetach(victimKey.Value, victim, detached, out _))
             {
                 return new ChatEvictionOutcome(null, victimKey);
             }
@@ -503,13 +533,19 @@ internal sealed class LlamaServerIdleReaper : IDisposable
     internal readonly record struct ChatEvictionOutcome(ProcessKey? Evicted, ProcessKey? Busy);
 
     /// <summary>Atomically claims <paramref name="victim" /> and detaches it into <paramref name="detached" /> for a kill outside the gate.</summary>
-    /// <remarks>The caller holds the admission gate.</remarks>
-    private bool TryClaimAndDetach(ProcessKey key, RunningProcess victim, List<RunningProcess> detached)
+    /// <remarks>
+    ///     The caller holds the admission gate. On failure <paramref name="lostToLease" /> tells a lease that won the claim (the victim stays
+    ///     loaded and busy) from a claim another teardown owns or a removal it won (that victim's slot frees without this caller).
+    /// </remarks>
+    private bool TryClaimAndDetach(ProcessKey key, RunningProcess victim, List<RunningProcess> detached, out bool lostToLease)
     {
-        // Atomically latch the chosen victim before tearing it down: if a request took a lease between the heuristic scan and here, TryBeginEvict fails and no
-        // victim is admitted this round, so the caller surfaces its error. An EXITED victim holds no real lease and is torn down regardless.
-        if (!victim.Handle.HasExited && !victim.TryBeginEvict(forProfiling: false, out _))
+        lostToLease = false;
+
+        // Latch the victim before tearing it down; a request that leased it since the heuristic scan makes the claim fail. An EXITED victim holds
+        // no real lease and is torn down regardless.
+        if (!victim.Handle.HasExited && !victim.TryBeginEvict(forProfiling: false, out _, out var alreadyEvicting))
         {
+            lostToLease = !alreadyEvicting;
             return false;
         }
 

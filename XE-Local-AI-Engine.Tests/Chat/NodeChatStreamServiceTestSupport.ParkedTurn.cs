@@ -6,7 +6,6 @@ using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
-using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
@@ -78,7 +77,7 @@ internal static partial class NodeChatStreamServiceTestSupport
     }
 
     /// <summary>Parks the turn of one conversation on an approval through a real <see cref="HumanPark" />; every other turn completes at once.</summary>
-    internal sealed class ParkingInvocationRunner : IInvocationRunner
+    internal sealed class ParkingInvocationRunner : InvocationRunnerStub
     {
         private readonly WorkerEventDispatcher _dispatcher;
         private readonly Guid _parkedConversationId;
@@ -106,9 +105,7 @@ internal static partial class NodeChatStreamServiceTestSupport
 
         public TaskCompletionSource Answer { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public int ActiveInvocationCount => 0;
-
-        public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
+        public override async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
             var invocationId = context.Package.InvocationId;
             if (context.Package.ConversationId == _parkedConversationId)
@@ -146,33 +143,6 @@ internal static partial class NodeChatStreamServiceTestSupport
 
             await _dispatcher.ReportInvocationStreamChunkAsync(invocationId, "answer");
             await _dispatcher.ReportInvocationCompletedAsync(invocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13);
-        }
-
-        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default) =>
-            Task.FromResult(true);
-
-        public void Cancel(Guid invocationId)
-        {
-        }
-
-        public void CancelDetached(Guid invocationId)
-        {
-        }
-
-        public void CancelAll()
-        {
-        }
-
-        public void CleanupStaleToolCalls(TimeSpan maxAge)
-        {
-        }
-
-        public void ResolveApprovalResult(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
-        {
-        }
-
-        public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
-        {
         }
     }
 }

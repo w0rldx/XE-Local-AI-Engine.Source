@@ -3,10 +3,15 @@ namespace XE_Local_AI_Engine.Client.Services.DocumentIngestion.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
-///     Default <see cref="IConversationUploadIngestor" />. Holds the gate/extract/persist orchestration for a conversation
-///     upload. Stateless apart from its (singleton) collaborators.
+///     Turns one admitted conversation upload into a persisted file: takes the extraction admission lease, buffers the
+///     bytes, runs text extraction or skips it for a vision image, resolves the trusted MIME type, and persists through
+///     <see cref="IConversationUploadedFileStore" />.
 /// </summary>
-public sealed class ConversationUploadIngestor : IConversationUploadIngestor
+/// <remarks>
+///     All of that happens inside the lease. This type owns the accepted-image allowlist, so the upload endpoint only
+///     validates the request and maps the result. Stateless apart from its (singleton) collaborators.
+/// </remarks>
+public sealed class ConversationUploadIngestor
 {
     private const string DefaultMimeType = "application/octet-stream";
 
@@ -21,14 +26,14 @@ public sealed class ConversationUploadIngestor : IConversationUploadIngestor
         [".gif"] = "image/gif"
     };
 
-    private readonly IDocumentExtractionAdmissionGate _extractionGate;
+    private readonly DocumentExtractionAdmissionGate _extractionGate;
     private readonly IDocumentTextExtractor _extractor;
     private readonly IConversationUploadedFileStore _fileStore;
     private readonly INodeChatMutationGuard _mutationGuard;
 
     public ConversationUploadIngestor(IConversationUploadedFileStore fileStore,
         IDocumentTextExtractor extractor,
-        IDocumentExtractionAdmissionGate extractionGate,
+        DocumentExtractionAdmissionGate extractionGate,
         INodeChatMutationGuard mutationGuard)
     {
         ArgumentNullException.ThrowIfNull(mutationGuard);
@@ -41,11 +46,20 @@ public sealed class ConversationUploadIngestor : IConversationUploadIngestor
         _fileStore = fileStore;
     }
 
+    /// <summary>
+    ///     Whether an upload with this extension is accepted at all: either an image admitted for direct vision input or
+    ///     a type the text extractor supports.
+    /// </summary>
     public bool IsSupportedExtension(string extension)
     {
         return ImageMediaTypesByExtension.ContainsKey(extension) || _extractor.IsSupported(extension);
     }
 
+    /// <summary>Ingests and persists one uploaded file, returning its stored metadata.</summary>
+    /// <remarks>
+    ///     Returns <see langword="null" /> when the extraction admission gate is at capacity; the caller must then reject
+    ///     with a retryable busy response rather than piling up in-flight byte copies.
+    /// </remarks>
     public async Task<ConversationUploadedFileInfo?> IngestAsync(Guid conversationId,
         Stream content,
         string originalFileName,
@@ -62,13 +76,15 @@ public sealed class ConversationUploadIngestor : IConversationUploadIngestor
 
         // Aggregate admission bounding the memory-heavy phase this method owns — in-memory copy, extraction, encrypted
         // write — so a burst cannot reach OOM; the lease is held through persistence and a full gate fails fast as busy.
-        if (!_extractionGate.TryAcquire(out var extractionLease))
-        {
-            return null;
-        }
+        var admitted = _extractionGate.TryAcquire(out var extractionLease);
 
         using (extractionLease)
         {
+            if (!admitted)
+            {
+                return null;
+            }
+
             var bytes = await ReadAllBytesAsync(content, cancellationToken);
 
             // Images skip text extraction entirely: the raw bytes are the payload (persisted encrypted by the store),

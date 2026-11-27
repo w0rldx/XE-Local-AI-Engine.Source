@@ -2,6 +2,7 @@ import { NumberInput, SimpleGrid, Stack, Text, Textarea } from "@mantine/core";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { formatCount } from "@/core/formatting/NumberFormatting";
 import { type ChatSamplingOptions, samplingFieldGroups } from "@/core/runtime/ChatSamplingOptions";
 import { FieldWithInfo } from "@/core/ui/components/FieldInfo/FieldInfo";
 
@@ -48,7 +49,7 @@ export function DirectInferenceSamplingFields({
 									placeholder={
 										meta.key === "maxOutputTokens" && defaultMaxOutputTokens !== undefined
 											? t("pages.directInference.maxOutputTokensDefault", "Default: {{tokens}}", {
-													tokens: defaultMaxOutputTokens.toLocaleString(),
+													tokens: formatCount(defaultMaxOutputTokens),
 												})
 											: t("pages.chat.samplingOptions.modelDefault", "Model default")
 									}

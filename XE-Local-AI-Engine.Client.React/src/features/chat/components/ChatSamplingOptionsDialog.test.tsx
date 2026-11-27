@@ -1,46 +1,11 @@
 // @vitest-environment jsdom
 
 import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { samplingFieldGroups } from "@/core/runtime/ChatSamplingOptions";
 import en from "@/locales/en.json";
-import { testMantineTheme } from "@/test/MantineTestRender";
-
-function renderWithProviders(ui: ReactElement) {
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			{ui}
-		</MantineProvider>,
-	);
-}
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-			unobserve = vi.fn();
-			disconnect = vi.fn();
-		},
-	});
-	Object.defineProperty(document, "fonts", {
-		writable: true,
-		value: { ready: Promise.resolve(), addEventListener: vi.fn(), removeEventListener: vi.fn() },
-	});
-}
+import { installJsdomEnvironmentMocks, renderWithMantine, testMantineTheme } from "@/test/MantineTestRender";
 
 describe("ChatSamplingOptionsDialog", () => {
 	beforeEach(() => {
@@ -57,7 +22,7 @@ describe("ChatSamplingOptionsDialog", () => {
 	it("renders all numeric sampling fields when opened", async () => {
 		const { ChatSamplingOptionsDialog } = await import("@/features/chat/components/ChatSamplingOptionsDialog");
 
-		renderWithProviders(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} />);
+		renderWithMantine(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} />);
 
 		expect(screen.getByTestId("chat-sampling-field-temperature")).toBeDefined();
 		expect(screen.getByTestId("chat-sampling-field-topP")).toBeDefined();
@@ -75,7 +40,7 @@ describe("ChatSamplingOptionsDialog", () => {
 	it("reset button is disabled when no overrides are set", async () => {
 		const { ChatSamplingOptionsDialog } = await import("@/features/chat/components/ChatSamplingOptionsDialog");
 
-		renderWithProviders(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} />);
+		renderWithMantine(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} />);
 
 		const resetBtn = screen.getByTestId("chat-sampling-reset-button");
 		expect(resetBtn.hasAttribute("disabled")).toBe(true);
@@ -89,7 +54,7 @@ describe("ChatSamplingOptionsDialog", () => {
 		const { ChatSamplingOptionsDialog } = await import("@/features/chat/components/ChatSamplingOptionsDialog");
 		const { useChatSamplingPreferencesStore } = await import("@/features/chat/stores/ChatSamplingPreferencesStore");
 
-		renderWithProviders(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} />);
+		renderWithMantine(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} />);
 
 		const resetBtn = screen.getByTestId("chat-sampling-reset-button");
 		expect(resetBtn.hasAttribute("disabled")).toBe(false);
@@ -103,7 +68,7 @@ describe("ChatSamplingOptionsDialog", () => {
 		const onClose = vi.fn();
 		const { ChatSamplingOptionsDialog } = await import("@/features/chat/components/ChatSamplingOptionsDialog");
 
-		renderWithProviders(<ChatSamplingOptionsDialog opened={true} onClose={onClose} />);
+		renderWithMantine(<ChatSamplingOptionsDialog opened={true} onClose={onClose} />);
 
 		fireEvent.click(screen.getByTestId("chat-sampling-close-button"));
 
@@ -113,7 +78,7 @@ describe("ChatSamplingOptionsDialog", () => {
 	it("does not render when opened=false", async () => {
 		const { ChatSamplingOptionsDialog } = await import("@/features/chat/components/ChatSamplingOptionsDialog");
 
-		renderWithProviders(<ChatSamplingOptionsDialog opened={false} onClose={vi.fn()} />);
+		renderWithMantine(<ChatSamplingOptionsDialog opened={false} onClose={vi.fn()} />);
 
 		expect(screen.queryByTestId("chat-sampling-field-temperature")).toBeNull();
 	});
@@ -121,7 +86,7 @@ describe("ChatSamplingOptionsDialog", () => {
 	it("renders maxOutputTokens and numCtx fields when maxContextTokens is provided", async () => {
 		const { ChatSamplingOptionsDialog } = await import("@/features/chat/components/ChatSamplingOptionsDialog");
 
-		renderWithProviders(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} maxContextTokens={4096} />);
+		renderWithMantine(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} maxContextTokens={4096} />);
 
 		// The fields must be present when a context limit is provided; the cap is enforced
 		// internally by clampMax (unit-tested separately). Mantine does not propagate the
@@ -133,7 +98,7 @@ describe("ChatSamplingOptionsDialog", () => {
 	it("slider fields (e.g. temperature) render a slider element", async () => {
 		const { ChatSamplingOptionsDialog } = await import("@/features/chat/components/ChatSamplingOptionsDialog");
 
-		renderWithProviders(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} />);
+		renderWithMantine(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} />);
 
 		// temperature has slider:true → the Mantine Slider root has role="slider"
 		expect(screen.getByTestId("chat-sampling-slider-temperature")).toBeDefined();
@@ -145,7 +110,7 @@ describe("ChatSamplingOptionsDialog", () => {
 	it("seed field does NOT render a slider", async () => {
 		const { ChatSamplingOptionsDialog } = await import("@/features/chat/components/ChatSamplingOptionsDialog");
 
-		renderWithProviders(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} />);
+		renderWithMantine(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} />);
 
 		// seed has slider:false — no slider testid for seed
 		expect(screen.queryByTestId("chat-sampling-slider-seed")).toBeNull();
@@ -156,7 +121,7 @@ describe("ChatSamplingOptionsDialog", () => {
 	it("puts an info card beside every field without changing the inputs' names", async () => {
 		const { ChatSamplingOptionsDialog } = await import("@/features/chat/components/ChatSamplingOptionsDialog");
 
-		renderWithProviders(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} />);
+		renderWithMantine(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} />);
 
 		for (const meta of samplingFieldGroups.flatMap((group) => group.fields)) {
 			expect(screen.getByTestId(`chat-sampling-info-${meta.key}`)).toBeDefined();
@@ -175,7 +140,7 @@ describe("ChatSamplingOptionsDialog", () => {
 		const { ChatSamplingOptionsDialog } = await import("@/features/chat/components/ChatSamplingOptionsDialog");
 		const { useChatSamplingPreferencesStore } = await import("@/features/chat/stores/ChatSamplingPreferencesStore");
 
-		renderWithProviders(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} />);
+		renderWithMantine(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} />);
 
 		// Reset only temperature
 		const fieldResetBtn = screen.getByTestId("chat-sampling-reset-temperature");
@@ -190,7 +155,7 @@ describe("ChatSamplingOptionsDialog", () => {
 	it("per-field reset button is disabled when the field is unset", async () => {
 		const { ChatSamplingOptionsDialog } = await import("@/features/chat/components/ChatSamplingOptionsDialog");
 
-		renderWithProviders(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} />);
+		renderWithMantine(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} />);
 
 		// With no overrides, every per-field reset is disabled
 		const fieldResetBtn = screen.getByTestId("chat-sampling-reset-temperature");
@@ -202,7 +167,7 @@ describe("ChatSamplingOptionsDialog", () => {
 		const { ChatSamplingOptionsDialog } = await import("@/features/chat/components/ChatSamplingOptionsDialog");
 		const { useChatSamplingPreferencesStore } = await import("@/features/chat/stores/ChatSamplingPreferencesStore");
 
-		renderWithProviders(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} />);
+		renderWithMantine(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} />);
 
 		// Mantine NumberInput passes a number once a valid value is committed; simulate directly
 		// via store to verify coercion path without relying on DOM event details.
@@ -213,7 +178,7 @@ describe("ChatSamplingOptionsDialog", () => {
 	it("cloud model: the local-runtime-only knobs are disabled and carry the unsupported hint", async () => {
 		const { ChatSamplingOptionsDialog } = await import("@/features/chat/components/ChatSamplingOptionsDialog");
 
-		renderWithProviders(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} cloudModelSelected={true} />);
+		renderWithMantine(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} cloudModelSelected={true} />);
 
 		// topK / minP / repeatPenalty / repeatLastN only reach llama.cpp; the OpenAI-shaped cloud paths
 		// have no wire field for them, so the dialog must say so rather than accept a value that is thrown away.
@@ -237,7 +202,7 @@ describe("ChatSamplingOptionsDialog", () => {
 			const onSave = vi.fn().mockResolvedValue(undefined);
 			const onClose = vi.fn();
 
-			renderWithProviders(
+			renderWithMantine(
 				<ChatSamplingOptionsDialog
 					opened={true}
 					onClose={onClose}
@@ -259,7 +224,7 @@ describe("ChatSamplingOptionsDialog", () => {
 			localStorage.setItem("xe-node-chat-sampling-options", JSON.stringify({ temperature: 1.5 }));
 			const { ChatSamplingOptionsDialog } = await import("@/features/chat/components/ChatSamplingOptionsDialog");
 
-			renderWithProviders(
+			renderWithMantine(
 				<ChatSamplingOptionsDialog
 					opened={true}
 					onClose={vi.fn()}
@@ -276,7 +241,7 @@ describe("ChatSamplingOptionsDialog", () => {
 			const { ChatSamplingOptionsDialog } = await import("@/features/chat/components/ChatSamplingOptionsDialog");
 			const onSave = vi.fn().mockResolvedValue(undefined);
 
-			renderWithProviders(
+			renderWithMantine(
 				<ChatSamplingOptionsDialog
 					opened={true}
 					onClose={vi.fn()}
@@ -292,7 +257,7 @@ describe("ChatSamplingOptionsDialog", () => {
 			const { ChatSamplingOptionsDialog } = await import("@/features/chat/components/ChatSamplingOptionsDialog");
 			const onSave = vi.fn().mockResolvedValue(undefined);
 			const conversation = { options: { temperature: 0.3 }, loaded: true, onSave };
-			const view = renderWithProviders(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} conversation={conversation} />);
+			const view = renderWithMantine(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} conversation={conversation} />);
 
 			fireEvent.click(screen.getByTestId("chat-sampling-reset-temperature"));
 			expect((screen.getByTestId("chat-sampling-field-temperature") as HTMLInputElement).value).toBe("");
@@ -312,7 +277,7 @@ describe("ChatSamplingOptionsDialog", () => {
 			const { ChatSamplingOptionsDialog } = await import("@/features/chat/components/ChatSamplingOptionsDialog");
 			const onSave = vi.fn().mockResolvedValue(undefined);
 
-			renderWithProviders(
+			renderWithMantine(
 				<ChatSamplingOptionsDialog
 					opened={true}
 					onClose={vi.fn()}
@@ -333,7 +298,7 @@ describe("ChatSamplingOptionsDialog", () => {
 			const onSave = vi.fn().mockRejectedValue(new Error("The node refused these settings."));
 			const onClose = vi.fn();
 
-			renderWithProviders(
+			renderWithMantine(
 				<ChatSamplingOptionsDialog
 					opened={true}
 					onClose={onClose}
@@ -356,7 +321,7 @@ describe("ChatSamplingOptionsDialog", () => {
 			const { ChatSamplingOptionsDialog } = await import("@/features/chat/components/ChatSamplingOptionsDialog");
 			const onSave = vi.fn().mockResolvedValue(undefined);
 
-			renderWithProviders(
+			renderWithMantine(
 				<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} conversation={{ options: {}, loaded: true, onSave }} />,
 			);
 			fireEvent.change(screen.getByTestId("chat-sampling-field-stop"), { target: { value: text } });
@@ -369,7 +334,7 @@ describe("ChatSamplingOptionsDialog", () => {
 	it("local model: no field is marked unsupported", async () => {
 		const { ChatSamplingOptionsDialog } = await import("@/features/chat/components/ChatSamplingOptionsDialog");
 
-		renderWithProviders(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} />);
+		renderWithMantine(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} />);
 
 		for (const key of ["topK", "minP", "repeatPenalty", "repeatLastN"]) {
 			expect(screen.getByTestId(`chat-sampling-field-${key}`).hasAttribute("disabled")).toBe(false);

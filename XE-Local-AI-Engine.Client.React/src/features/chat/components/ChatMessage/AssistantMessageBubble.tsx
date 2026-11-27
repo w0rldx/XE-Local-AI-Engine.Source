@@ -48,8 +48,7 @@ export function AssistantMessageBubble({
 	showTurnThroughput,
 }: AssistantMessageBubbleProps) {
 	const { t, i18n } = useTranslation();
-	const throughputLabel =
-		showTurnThroughput && !isStreaming ? turnThroughputLabel(message.throughput, t, i18n.language) : undefined;
+	const throughputLabel = showTurnThroughput && !isStreaming ? turnThroughputLabel(message.throughput, t) : undefined;
 	const failureHeadline = chatFailureHeadline(t, i18n, failureCategory);
 	const reducedMotion = useReducedMotion();
 	// When this turn's answer is being read aloud, silence the screen reader on the answer block to avoid a

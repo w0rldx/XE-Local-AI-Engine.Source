@@ -10,7 +10,6 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders.Auth;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
-using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Tutorial;
 using XE_Local_AI_Engine.Client.Services.Tutorial.Implementation;
@@ -25,7 +24,7 @@ internal static class AddNodeAuthExtensions
         ArgumentNullException.ThrowIfNull(configuration);
 
         builder.Services.AddSingleton<ITokenStore, TokenStore>();
-        builder.Services.AddSingleton<INodeOperatorSecretProvider, NodeOperatorSecretProvider>();
+        builder.Services.AddSingleton<NodeOperatorSecretProvider>();
         // The persisted desktop node.key is a password-wrapped vault only when the host set NodeVault:Managed (it generated or
         // unwrapped the secret itself); an env/secrets-file/Aspire secret stays operator custody, so the null vault answers.
         if (configuration.GetValue<bool>(NodeVault.ManagedConfigurationKey))
@@ -78,7 +77,7 @@ internal static class AddNodeAuthExtensions
 
         // Singleton: owns the cross-request pending Entra ID device-code sign-in state the Operator status endpoint polls,
         // mirroring ICodexLoginCoordinator; its success callback invalidates the active-cloud snapshot, so the next send uses it.
-        builder.Services.AddSingleton<IEntraDeviceCodeSignInCoordinator>(serviceProvider => new EntraDeviceCodeSignInCoordinator(serviceProvider.GetRequiredService<ICloudCredentialStore>(),
+        builder.Services.AddSingleton(serviceProvider => new EntraDeviceCodeSignInCoordinator(serviceProvider.GetRequiredService<ICloudCredentialStore>(),
             serviceProvider.GetRequiredService<IEntraTokenCacheStore>(),
             serviceProvider.GetRequiredService<IEntraLiveCredentialCache>(),
             serviceProvider.GetRequiredService<ILogger<EntraDeviceCodeSignInCoordinator>>(),
@@ -86,7 +85,7 @@ internal static class AddNodeAuthExtensions
 
         // Singleton: owns the cross-request pending Entra ID authorization-code sign-in state the Operator status
         // endpoint polls, mirroring the device-code coordinator above.
-        builder.Services.AddSingleton<IEntraAuthCodeSignInCoordinator>(serviceProvider => new EntraAuthCodeSignInCoordinator(serviceProvider.GetRequiredService<ICloudCredentialStore>(),
+        builder.Services.AddSingleton(serviceProvider => new EntraAuthCodeSignInCoordinator(serviceProvider.GetRequiredService<ICloudCredentialStore>(),
             serviceProvider.GetRequiredService<IEntraAuthCodeAccountStore>(),
             serviceProvider.GetRequiredService<IEntraLiveCredentialCache>(),
             serviceProvider.GetRequiredService<IEntraAuthCodeRedeemer>(),

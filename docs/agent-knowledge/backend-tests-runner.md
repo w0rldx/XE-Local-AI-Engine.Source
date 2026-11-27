@@ -85,7 +85,7 @@ lock, or the parallelism limits.
 
 ### A worker that idles on a background gate is not reliably woken: poll in a bounded loop
 
-**Rule:** a worker agent that starts the backend gate or `pnpm run acceptance` in the background must not end its turn waiting for the completion notice; it polls the gate's log or lock (`scripts/build-lock-status.sh`) in a bounded loop with a finite deadline and reports the final line itself. **Prevents:** a lane that looks finished to the coordinator while its gate result was never read, and a worker parked for an hour on a gate that ended in ten minutes. **Authority:** `scripts/build-lock-status.sh`; "Verify against the whole module, not just the class you touched" above.
+**Rule:** a worker agent that starts the backend gate or a gate lane (`scripts/run-gate-lane.sh`) in the background must not end its turn waiting for the completion notice; it polls the gate's log or lock (`scripts/build-lock-status.sh`) in a bounded loop with a finite deadline and reports the final line itself. **Prevents:** a lane that looks finished to the coordinator while its gate result was never read, and a worker parked for an hour on a gate that ended in ten minutes. **Authority:** `scripts/build-lock-status.sh`; "Verify against the whole module, not just the class you touched" above.
 
 ## Flakes and parallelism
 

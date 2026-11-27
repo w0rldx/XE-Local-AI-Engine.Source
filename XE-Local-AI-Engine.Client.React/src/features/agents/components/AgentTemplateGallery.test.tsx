@@ -78,35 +78,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 import { agentDefinitionsQueryIds } from "@/core/agents/queries/useAgentDefinitions";
 import { listAgentTemplatesQueryKey } from "@/core/api/generated/@tanstack/react-query.gen";
 import { AgentTemplateGallery } from "@/features/agents/components/AgentTemplateGallery";
-import { testMantineTheme } from "@/test/MantineTestRender";
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-	Object.defineProperty(document, "fonts", {
-		writable: true,
-		value: { ready: Promise.resolve(), addEventListener: vi.fn(), removeEventListener: vi.fn() },
-	});
-}
+import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 
 function renderGallery(queryClient: QueryClient) {
 	return render(

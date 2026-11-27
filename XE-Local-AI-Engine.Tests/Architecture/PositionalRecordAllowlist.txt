@@ -288,7 +288,6 @@ XE-Local-AI-Engine.Client.Persistence/Stores/ITrainingEvaluationStore.cs|Trainin
 XE-Local-AI-Engine.Client.Application/Services/Containers/Bridge/ContainerBridgeGrant.cs|ContainerBridgeGrant
 XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Catalog/ExternalAppCatalogContracts.cs|ApplicationManifest
 XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Catalog/ExternalAppCatalogContracts.cs|ExternalAppCatalogSnapshot
-XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Catalog/IExternalAppCatalogCacheStore.cs|StoredExternalAppCatalogCache
 XE-Local-AI-Engine.Client.Application/Services/ExternalApps/ExternalAppServiceContracts.cs|InstallCommand
 XE-Local-AI-Engine.Client.Application/Services/ExternalApps/ExternalAppServiceContracts.cs|UpdateCommand
 XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Implementation/DeploymentPlannerModels.cs|DeploymentPlan

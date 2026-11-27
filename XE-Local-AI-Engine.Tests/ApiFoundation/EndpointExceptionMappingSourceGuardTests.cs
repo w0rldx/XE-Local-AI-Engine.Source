@@ -24,7 +24,7 @@ public sealed class EndpointExceptionMappingSourceGuardTests
     [Test]
     public void EndpointCatches_AreLimitedToTheReviewedContextualBatchAndRecoverySites()
     {
-        var root = FindRepositoryRoot();
+        var root = RepositoryPaths.Root;
         AssertCatchAllowlist(Path.Combine(root, "XE-Local-AI-Engine.Client", "Endpoints", "Training"), TrainingCatchAllowlist);
         AssertCatchAllowlist(Path.Combine(root, "XE-Local-AI-Engine.Client", "Endpoints", "Benchmarks"), BenchmarkCatchAllowlist);
     }
@@ -32,7 +32,7 @@ public sealed class EndpointExceptionMappingSourceGuardTests
     [Test]
     public void GlobalHandlers_UseTypedFamiliesWithoutRouteOrKeyNotFoundHeuristics()
     {
-        var root = FindRepositoryRoot();
+        var root = RepositoryPaths.Root;
         var exceptionHandling = Path.Combine(root, "XE-Local-AI-Engine.Client", "ExceptionHandling");
         var training = File.ReadAllText(Path.Combine(exceptionHandling, "TrainingExceptionHandler.cs"));
         var benchmark = File.ReadAllText(Path.Combine(exceptionHandling, "BenchmarkExceptionHandler.cs"));
@@ -48,7 +48,7 @@ public sealed class EndpointExceptionMappingSourceGuardTests
     [Test]
     public void GlobalHandlers_RegisterResourceNotFoundBeforeTheDefaultHandler()
     {
-        var root = FindRepositoryRoot();
+        var root = RepositoryPaths.Root;
         var composition = File.ReadAllText(Path.Combine(root, "XE-Local-AI-Engine.Client", "ConfigureServices.cs"));
         var notFoundHandler = composition.IndexOf(".AddExceptionHandler<ResourceNotFoundExceptionHandler>()", StringComparison.Ordinal);
         var defaultHandler = composition.IndexOf(".AddExceptionHandler<DefaultExceptionHandler>()", StringComparison.Ordinal);
@@ -61,7 +61,7 @@ public sealed class EndpointExceptionMappingSourceGuardTests
     [Test]
     public void WorkSessionEndpoints_DoNotTranslateRawKeyNotFoundExceptionsToNotFound()
     {
-        var root = FindRepositoryRoot();
+        var root = RepositoryPaths.Root;
         var workSessionEndpoints = Path.Combine(root, "XE-Local-AI-Engine.Client", "Endpoints", "WorkSessions");
         var offenders = Directory.EnumerateFiles(workSessionEndpoints, "*.cs", SearchOption.AllDirectories)
                                  .Where(path => File.ReadAllText(path).Contains("catch (KeyNotFoundException)", StringComparison.Ordinal))
@@ -76,7 +76,7 @@ public sealed class EndpointExceptionMappingSourceGuardTests
     [Test]
     public void GlobalHandlers_RegisterTheDevelopmentHandlersBeforeTheDefaultHandler()
     {
-        var root = FindRepositoryRoot();
+        var root = RepositoryPaths.Root;
         var composition = File.ReadAllText(Path.Combine(root, "XE-Local-AI-Engine.Client", "ConfigureServices.cs"));
         var defaultHandler = composition.IndexOf(".AddExceptionHandler<DefaultExceptionHandler>()", StringComparison.Ordinal);
 
@@ -102,7 +102,7 @@ public sealed class EndpointExceptionMappingSourceGuardTests
     [Test]
     public void DevelopmentEndpoints_TranslateNoRawKeyNotFoundExceptions()
     {
-        var root = FindRepositoryRoot();
+        var root = RepositoryPaths.Root;
         var endpoints = Path.Combine(root, "XE-Local-AI-Engine.Client", "Endpoints", "Development");
         AssertEx.True(Directory.Exists(endpoints), "The Development endpoint folder must exist for this guard to mean anything.");
 
@@ -125,7 +125,7 @@ public sealed class EndpointExceptionMappingSourceGuardTests
     [Test]
     public void DevelopmentEndpointCatches_AreLimitedToTheTypesWithNoSingleGlobalStatus()
     {
-        var root = FindRepositoryRoot();
+        var root = RepositoryPaths.Root;
         AssertCatchAllowlist(Path.Combine(root, "XE-Local-AI-Engine.Client", "Endpoints", "Development"),
             new Dictionary<string, int>(StringComparer.Ordinal)
             {
@@ -164,24 +164,4 @@ public sealed class EndpointExceptionMappingSourceGuardTests
 
     private static int CountCatches(string source) =>
         source.Split("catch (", StringSplitOptions.None).Length - 1;
-
-    private static string FindRepositoryRoot()
-    {
-        foreach (var seed in new[]
-                 {
-                     Directory.GetCurrentDirectory(),
-                     AppContext.BaseDirectory
-                 })
-        {
-            for (var directory = new DirectoryInfo(seed); directory is not null; directory = directory.Parent)
-            {
-                if (File.Exists(Path.Combine(directory.FullName, "XE-Local-AI-Engine.slnx")))
-                {
-                    return directory.FullName;
-                }
-            }
-        }
-
-        throw new DirectoryNotFoundException("The repository root containing XE-Local-AI-Engine.slnx was not found.");
-    }
 }

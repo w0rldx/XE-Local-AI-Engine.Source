@@ -256,16 +256,6 @@ export interface BenchmarkRunThroughput {
 	segmentCount: number | null;
 }
 
-export const noBenchmarkRunThroughput: BenchmarkRunThroughput = {
-	ttftMs: null,
-	promptTokens: null,
-	promptTokensPerSecond: null,
-	generationTokens: null,
-	generationTokensPerSecond: null,
-	cachedPromptTokens: null,
-	segmentCount: null,
-};
-
 export interface BenchmarkRunSummary {
 	id: string;
 	projectId: string;

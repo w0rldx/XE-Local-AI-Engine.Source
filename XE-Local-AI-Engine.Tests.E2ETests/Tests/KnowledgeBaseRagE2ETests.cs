@@ -7,6 +7,7 @@ using Microsoft.Playwright;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
+using XE_Local_AI_Engine.Client.Testing.Git;
 using XE_Local_AI_Engine.Testing.FakeOpenAiGateway;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -415,6 +416,7 @@ public sealed class KnowledgeBaseRagE2ETests : XESerialE2ETestBase
                 CreateNoWindow = true
             }
         };
+        TestGitEnvironment.Isolate(process.StartInfo);
         foreach (var argument in arguments)
         {
             process.StartInfo.ArgumentList.Add(argument);

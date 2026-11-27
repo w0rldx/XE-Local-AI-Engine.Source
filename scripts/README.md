@@ -15,6 +15,7 @@ Stopping a dev host safely: [README-dev-stop.md](README-dev-stop.md).
 - [`dev-stop-select.py`](dev-stop-select.py) — Select processes provably attached to one Aspire AppHost from a /proc snapshot.
 - [`dev-stop.sh`](dev-stop.sh) — Stop only the Aspire instance registered for this checkout/worktree's AppHost.
 - [`docs-inventory-check.py`](docs-inventory-check.py) — Fail when the docs have fallen behind an inventory the code owns, or agent-knowledge outgrows its caps.
+- [`gate-flakes.py`](gate-flakes.py) — List backend gate flakes from the gate history: tests that failed on a clean tip that also passed unchanged.
 - [`generate-release-notes.sh`](generate-release-notes.sh) — Generate GitHub release notes (markdown) from conventional commits since the previous release tag, for feeding into `vpk pack --releaseNotes`.
 - [`generate-scripts-readme.py`](generate-scripts-readme.py) — Regenerate scripts/README.md, the one-line index of every top-level script and subfolder under scripts/.
 - [`gpu-smoke-driver.py`](gpu-smoke-driver.py) — HTTP driver for scripts/run-gpu-smoke-local.sh.
@@ -27,11 +28,13 @@ Stopping a dev host safely: [README-dev-stop.md](README-dev-stop.md).
 - [`openapi-breaking-check.py`](openapi-breaking-check.py) — Fail when the committed OpenAPI contract loses something a client could depend on, unless acknowledged.
 - [`openapi-live-check.sh`](openapi-live-check.sh) — Compare the committed frontend client with a freshly started desktop backend.
 - [`python-validation.sh`](python-validation.sh) — repo Python quality gate (ruff / pyrefly / pytest / bandit)
+- [`ratchet-baseline-check.py`](ratchet-baseline-check.py) — Fail when a branch widens a shrink-only allowlist or baseline against its merge base with develop.
 - [`read-release-version.py`](read-release-version.py) — Read and validate the application version from the canonical release manifest.
 - [`regen-after-merge.sh`](regen-after-merge.sh) — regenerate and stage the generated and sorted frontend files after a merge.
 - [`run-backend-tests.sh`](run-backend-tests.sh) — THE local backend gate: one build, then every enrolled test project.
 - [`run-docker-smoke-local.sh`](run-docker-smoke-local.sh) — OPT-IN real-daemon smoke for the container runtime and the sandbox.
 - [`run-e2e-local.sh`](run-e2e-local.sh) — OPT-IN local runner for the Playwright E2E suite.
+- [`run-gate-lane.sh`](run-gate-lane.sh) — Run one gate lane beside the backend gate, under the build lock, and record it in the gate history.
 - [`run-gpu-smoke-local.sh`](run-gpu-smoke-local.sh) — OPT-IN live GPU smoke for a real, locally started node.
 - [`run-model-matrix-local.sh`](run-model-matrix-local.sh) — OPT-IN live model matrix: pinned GGUF models, scenario checks through a real local node.
 - [`run-release-contract-tests.sh`](run-release-contract-tests.sh) — Auto-enroll every release/compliance contract test and reject vacuous green runs.
@@ -47,7 +50,7 @@ Stopping a dev host safely: [README-dev-stop.md](README-dev-stop.md).
 
 - [`compliance/`](compliance/) — Holds `bundle_input_evidence.py`, `capture_bundle_inputs.targets`, `create_bundle_input_manifest.py`, `generate_backend_license_corpus.py`, `nuget-license-overrides.json`, `reconcile_payload_spdx.py` and more.
 - [`lab/`](lab/) — Holds `profiles/`.
-- [`lib/`](lib/) — Holds `build-lock-common.sh`, `discover-llama-server.sh`, `git-env.sh`, `mise-path.sh`, `proc-tree.sh`, `smoke-ledger.sh` and more.
+- [`lib/`](lib/) — Holds `build-lock-common.sh`, `discover-llama-server.sh`, `git-env.sh`, `git_env.py`, `mise-path.sh`, `proc-tree.sh` and more.
 - [`model-matrix/`](model-matrix/) — Holds `models.json`.
 - [`performance/`](performance/) — Holds `capture_inference_evidence.py`, `capture_windows_vram.ps1`, `inference_evidence/`, `run_scheduling_grid.py`, `tests/`.
 - [`release/`](release/) — Holds `dev-build-identity.py`, `verify-release-authority.py`, `verify-release-envelope.py`.

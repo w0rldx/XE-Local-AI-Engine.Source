@@ -127,6 +127,20 @@ describe("nodeChatConnection", () => {
 		expect(signalRMock.builder.configureLogging).toHaveBeenCalledWith(LogLevel.Warning);
 	});
 
+	it("sends a W3C traceparent header to the chat hub URL", async () => {
+		const { nodeChatConnection } = await loadModules();
+		signalRMock.connection.start.mockImplementation(async () => {
+			signalRMock.connection.state = "Connected";
+		});
+
+		await nodeChatConnection.ensureConnection();
+		const [url, options] = signalRMock.builder.withUrl.mock.calls[0] as [string, { headers?: Record<string, string> }];
+
+		expect(url).toContain("chat/hub");
+		expect(Object.keys(options.headers ?? {})).toEqual(["traceparent"]);
+		expect(options.headers?.["traceparent"]).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$/);
+	});
+
 	it("uses an existing valid token without refreshing", async () => {
 		const { nodeChatConnection, useNodeAuthStore } = await loadModules();
 		signalRMock.connection.start.mockImplementation(async () => {

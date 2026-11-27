@@ -23,7 +23,6 @@ import {
 	graphWorkflowPauseDecisionKinds,
 	graphWorkflowRunStatuses,
 	graphWorkflowTabs,
-	isTerminalGraphWorkflowNodeRunStatus,
 	isTerminalGraphWorkflowRunStatus,
 	narrowGraphWorkflowDefinitionKind,
 	narrowGraphWorkflowFailureClass,
@@ -229,15 +228,6 @@ describe("graphWorkflowEventTypeLabelKey", () => {
 describe("terminal-status helpers", () => {
 	it("treats only the three settled run statuses as terminal", () => {
 		expect(graphWorkflowRunStatuses.filter(isTerminalGraphWorkflowRunStatus)).toEqual(["Completed", "Failed", "Cancelled"]);
-	});
-
-	it("treats only the four settled node-run statuses as terminal", () => {
-		expect(graphWorkflowNodeRunStatuses.filter(isTerminalGraphWorkflowNodeRunStatus)).toEqual([
-			"Succeeded",
-			"Failed",
-			"Skipped",
-			"Cancelled",
-		]);
 	});
 });
 

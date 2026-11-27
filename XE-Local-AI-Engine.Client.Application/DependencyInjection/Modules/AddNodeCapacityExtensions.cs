@@ -20,7 +20,7 @@ internal static class AddNodeCapacityExtensions
     ///     Registers the capacity gate and the sub-agent spawn path the server-side spawn tool runs through.
     /// </summary>
     /// <remarks>
-    ///     Lifetimes are load-bearing. <c>IPendingFootprintLedger</c> and <c>ISpawnSerializer</c> are Singletons: they own
+    ///     Lifetimes are load-bearing. <c>IPendingFootprintLedger</c> and <c>SpawnSerializer</c> are Singletons: they own
     ///     the process-wide decide-commit gate, the in-flight reservation total and the per-(model,role) serialization map,
     ///     which must outlive the per-spawn DI scopes. <c>ICapacityService</c> and <c>SubAgentSpawnService</c> are Scoped
     ///     because each spawn tool body resolves them from a fresh scope, while the spawn handler is a Singleton, since
@@ -58,7 +58,7 @@ internal static class AddNodeCapacityExtensions
                .ValidateOnStart();
         builder.Services.AddSingleton<IValidateOptions<SpawnOptions>, SpawnOptionsValidator>();
 
-        builder.Services.AddSingleton<ISpawnSerializer, SpawnSerializer>();
+        builder.Services.AddSingleton<SpawnSerializer>();
         builder.Services.AddScoped<IMcpWorkspaceExecutionSessionFactory, McpWorkspaceExecutionSessionFactory>();
         builder.Services.AddScoped<IMcpExecutionBindingResolver, McpExecutionBindingResolver>();
         builder.Services.AddScoped<IUnattendedApprovalAuditRecorder, UnattendedApprovalAuditRecorder>();

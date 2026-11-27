@@ -29,8 +29,6 @@ internal static class AddNodeTrainingDatasetExtensions
         builder.Services.AddScoped<TrainingDatasetService>();
         // Scoped, not singleton: the runner consumes the scoped IModelCapabilityResolver for its reasoning-mode gate.
         builder.Services.AddScoped<IStructuredAgentRunner, StructuredAgentRunner>();
-        builder.Services.AddSingleton<IToolMockEngine, ToolMockEngine>();
-        builder.Services.AddSingleton<IToolMockStaticVerifier, ToolMockStaticVerifier>();
         builder.Services.AddOptions<DatasetGenerationEventBufferOptions>();
         builder.Services.AddOptions<DatasetGenerationQueueOptions>();
         builder.Services.AddSingleton<IDatasetGenerationEventBuffer, DatasetGenerationEventBuffer>();

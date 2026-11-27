@@ -588,7 +588,13 @@ public sealed class ApplicationCatalogProviderTests : IDisposable
         var store = new ExternalAppCatalogCacheStore(new FakeNodeDataDirectory(_dataRoot), NullLogger<ExternalAppCatalogCacheStore>.Instance);
         using (store)
         {
-            await store.SaveAsync(new StoredExternalAppCatalogCache(rawJson, DateTimeOffset.UnixEpoch, sourceUrl, etag), CancellationToken.None);
+            await store.SaveAsync(new StoredExternalAppCatalogCache
+            {
+                RawJson = rawJson,
+                FetchedAtUtc = DateTimeOffset.UnixEpoch,
+                SourceUrl = sourceUrl,
+                ETag = etag
+            }, CancellationToken.None);
         }
     }
 

@@ -257,6 +257,10 @@ type. **Prevents:** a run-time throw, or a silent zero-row answer that looks lik
 payload enum lists, never hub method signatures; a signature change needs its own test. **Authority:**
 `scripts/CheckSignalrProxySync.mjs`.
 
+### A browser hub socket needs the echo, the mapping callback and UseWebSockets before authentication
+
+**Rule:** every `MapHub` in `Program.MapNodeHubs` passes `ConfigureHubTransport`, the node echoes `xe.bearer`, and `app.UseWebSockets()` stays immediately before `app.UseAuthentication()`. Prove a pipeline-order change on real Kestrel (`HubBearerSubprotocolKestrelTests`), never on TestHost, which installs its own WebSocket feature, so `HubBearerSubprotocolTests` stays green when the order breaks. Keep both SPA hub builders at `LogLevel.Warning`. **Prevents:** every browser socket dropping to long polling while the hub reports connected (no echo, a hub mapped without the callback, or `UseWebSockets` after authentication), and a builder at Information printing the socket URL with the token. **Authority:** `NodeJwtBearerEvents.MessageReceived`, `Program.ConfigureHubTransport`, `EndpointAuthorizationPolicyTests.EveryHub_EchoesTheBearerSubprotocolAndNothingElse`, `HubBearerTransport.ts`.
+
 ## Frontend tests and tooling
 
 ### SignalR wraps a negotiate failure, so a start error carries no `statusCode`

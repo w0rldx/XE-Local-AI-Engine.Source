@@ -1,47 +1,11 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { cleanup, render, screen } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { cleanup, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { ChatInputArea } from "@/features/chat/components/ChatInputArea";
-import { testMantineTheme } from "@/test/MantineTestRender";
-
-function renderWithProviders(ui: ReactElement) {
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			{ui}
-		</MantineProvider>,
-	);
-}
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-			unobserve = vi.fn();
-			disconnect = vi.fn();
-		},
-	});
-	Object.defineProperty(document, "fonts", {
-		writable: true,
-		value: { ready: Promise.resolve(), addEventListener: vi.fn(), removeEventListener: vi.fn() },
-	});
-}
+import { installJsdomEnvironmentMocks, renderWithMantine } from "@/test/MantineTestRender";
 
 // DeveloperModeStore hydrates from localStorage at module-init, but it also exposes a setter that writes
 // through to storage — so these tests drive the flag through the setter rather than seeding storage and
@@ -87,7 +51,7 @@ describe("ChatInputArea sampling options trigger", () => {
 	it("hides the sampling options trigger when developer mode is OFF", () => {
 		setDeveloperMode(false);
 
-		renderWithProviders(<ChatInputArea {...baseProps()} />);
+		renderWithMantine(<ChatInputArea {...baseProps()} />);
 
 		expect(screen.queryByTestId("chat-sampling-options-trigger")).toBeNull();
 	});
@@ -95,7 +59,7 @@ describe("ChatInputArea sampling options trigger", () => {
 	it("shows the sampling options trigger when developer mode is ON", () => {
 		setDeveloperMode(true);
 
-		renderWithProviders(<ChatInputArea {...baseProps()} />);
+		renderWithMantine(<ChatInputArea {...baseProps()} />);
 
 		expect(screen.getByTestId("chat-sampling-options-trigger")).toBeDefined();
 	});
@@ -103,7 +67,7 @@ describe("ChatInputArea sampling options trigger", () => {
 	it("trigger button is not disabled and has expected aria-label", () => {
 		setDeveloperMode(true);
 
-		renderWithProviders(<ChatInputArea {...baseProps()} />);
+		renderWithMantine(<ChatInputArea {...baseProps()} />);
 
 		const trigger = screen.getByTestId("chat-sampling-options-trigger");
 		// The button should be enabled (not disabled) so it can be clicked.

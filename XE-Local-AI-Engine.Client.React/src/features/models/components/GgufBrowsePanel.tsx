@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
+import { formatCount } from "@/core/formatting/NumberFormatting";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import {
 	fitVerdictColor,
@@ -219,12 +220,12 @@ export function GgufBrowsePanel({
 		{
 			key: "downloads",
 			header: t("pages.models.gguf.browse.columns.downloads", "Downloads"),
-			cell: (repository) => repository.downloads.toLocaleString(),
+			cell: (repository) => formatCount(repository.downloads),
 		},
 		{
 			key: "likes",
 			header: t("pages.models.gguf.browse.columns.likes", "Likes"),
-			cell: (repository) => repository.likes.toLocaleString(),
+			cell: (repository) => formatCount(repository.likes),
 		},
 		{
 			key: "updated",

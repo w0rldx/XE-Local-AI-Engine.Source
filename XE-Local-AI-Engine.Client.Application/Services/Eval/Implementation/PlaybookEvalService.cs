@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
-///     Default <see cref="IPlaybookEvalService" />: it re-runs the real agent loop over the golden set with the
+///     Golden-conversation evaluation, offline and batch: it re-runs the real agent loop over the golden set with the
 ///     candidate prompt against the current baseline and persists a plaintext result on the action.
 /// </summary>
 /// <remarks>
@@ -24,7 +24,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 ///     never the shared cloud singleton, and passed into both the runner and the judge, so golden text and agent
 ///     output never leave the node. It is offline and batch only, never on the chat hot path.
 /// </remarks>
-internal sealed class PlaybookEvalService : IPlaybookEvalService
+public sealed class PlaybookEvalService
 {
     /// <summary>
     ///     <see cref="PlaybookEvalCaseResult.ScoredBy" /> value for a golden case whose stored input turns are unusable
@@ -90,6 +90,16 @@ internal sealed class PlaybookEvalService : IPlaybookEvalService
         _modelTrustResolver = modelTrustResolver;
     }
 
+    /// <summary>
+    ///     Runs the eval for the pending action <paramref name="actionId" /> owned by <paramref name="agentId" /> and
+    ///     records the result on it.
+    /// </summary>
+    /// <remarks>
+    ///     The outcome is <see cref="PlaybookEvalOutcome.Recorded" /> with the persisted result, or
+    ///     <see cref="PlaybookEvalOutcome.NotPending" /> when the action is not, or stopped being, a pending suggestion.
+    /// </remarks>
+    /// <exception cref="Agents.PlaybookActionNotFoundException">No action of <paramref name="agentId" /> has <paramref name="actionId" />.</exception>
+    /// <exception cref="Agents.AgentDefinitionNotFoundException">The owning agent is gone.</exception>
     public async Task<PlaybookEvalOutcome> RunEvalAsync(Guid agentId, Guid actionId, CancellationToken cancellationToken = default)
     {
         // Same ownership + Suggested + Analysis guard as the review paths: a missing/cross-agent action throws its

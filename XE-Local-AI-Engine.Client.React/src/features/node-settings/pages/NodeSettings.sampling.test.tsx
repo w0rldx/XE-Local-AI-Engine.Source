@@ -1,49 +1,15 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { installJsdomEnvironmentMocks } from "@/test/MantineTestRender";
+import { renderWithProviders } from "@/test/RenderWithProviders";
 
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-			unobserve = vi.fn();
-			disconnect = vi.fn();
-		},
-	});
-	Object.defineProperty(document, "fonts", {
-		writable: true,
-		value: { ready: Promise.resolve(), addEventListener: vi.fn(), removeEventListener: vi.fn() },
-	});
-}
-
-async function renderWithProviders(ui: ReactElement) {
+async function renderWithConfirm(ui: ReactElement) {
 	const { ConfirmProvider } = await import("@/core/ui/components/ConfirmProvider/ConfirmProvider");
-	const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-	return render(
-		<QueryClientProvider client={qc}>
-			<MantineProvider env="test" theme={testMantineTheme}>
-				<ConfirmProvider>{ui}</ConfirmProvider>
-			</MantineProvider>
-		</QueryClientProvider>,
-	);
+	return renderWithProviders(<ConfirmProvider>{ui}</ConfirmProvider>);
 }
 
 // Mock the generated API hooks so NodeSettings renders without a real backend.
@@ -150,7 +116,7 @@ describe("NodeSettings developer-mode switch", () => {
 	it("renders the developer-mode switch", async () => {
 		const { NodeSettings } = await import("@/features/node-settings/pages/NodeSettings");
 
-		await renderWithProviders(<NodeSettings />);
+		await renderWithConfirm(<NodeSettings />);
 
 		expect(screen.getByTestId("developer-mode-switch")).toBeDefined();
 	});
@@ -159,7 +125,7 @@ describe("NodeSettings developer-mode switch", () => {
 		localStorage.setItem("xe-developer-mode", "false");
 		const { NodeSettings } = await import("@/features/node-settings/pages/NodeSettings");
 
-		await renderWithProviders(<NodeSettings />);
+		await renderWithConfirm(<NodeSettings />);
 
 		const switchEl = screen.getByTestId("developer-mode-switch");
 		// Mantine Switch renders a checkbox role input
@@ -171,7 +137,7 @@ describe("NodeSettings developer-mode switch", () => {
 		localStorage.setItem("xe-developer-mode", "true");
 		const { NodeSettings } = await import("@/features/node-settings/pages/NodeSettings");
 
-		await renderWithProviders(<NodeSettings />);
+		await renderWithConfirm(<NodeSettings />);
 
 		const switchEl = screen.getByTestId("developer-mode-switch");
 		const checkbox = switchEl.querySelector("input[type='checkbox']") ?? switchEl;
@@ -182,7 +148,7 @@ describe("NodeSettings developer-mode switch", () => {
 		const { NodeSettings } = await import("@/features/node-settings/pages/NodeSettings");
 		const { useDeveloperModeStore } = await import("@/core/dev-tools/stores/DeveloperModeStore");
 
-		await renderWithProviders(<NodeSettings />);
+		await renderWithConfirm(<NodeSettings />);
 
 		const switchEl = screen.getByTestId("developer-mode-switch");
 		const checkbox = switchEl.querySelector("input[type='checkbox']") ?? switchEl;

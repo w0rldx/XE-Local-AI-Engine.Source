@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.ModelLab;
 using XE_Local_AI_Engine.Tests.Testing;
 using static ModelLabAttentionTests;
-using static ModelLabExperimentServiceTests;
+using static ModelLabTestSupport;
 
 /// <summary>A trace's logit lens: the job's fields and cap, the lens lines beside the hook records in one blob, their check, and the read route.</summary>
 [Category(TestCategories.Integration)]
@@ -84,9 +84,9 @@ public sealed class ModelLabLensTests
         process.Finish(CompleteRun, exitCode: 0);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
-        var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
+        var record = AssertEx.NotNull(await host.Reader.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
         AssertEx.Equal(ModelLabExperimentStatus.Succeeded, record.Status, record.ErrorMessage ?? "no error");
-        AssertEx.Equal(ModelLabTraceReadStatus.NotFound, (await host.Service.ReadLensAsync(record.Id, CancellationToken.None)).Status);
+        AssertEx.Equal(ModelLabTraceReadStatus.NotFound, (await host.Reader.ReadLensAsync(record.Id, CancellationToken.None)).Status);
     }
 
     [Test]
@@ -377,7 +377,7 @@ public sealed class ModelLabLensTests
         var id = await RunAsync(host, process, recordAttention: false);
         if (tamper)
         {
-            var record = AssertEx.NotNull(await host.Service.GetAsync(id, CancellationToken.None));
+            var record = AssertEx.NotNull(await host.Reader.GetAsync(id, CancellationToken.None));
             var blob = Path.Combine(Scope(host, id), record.TraceBlobId!.Value.ToString("N") + ".blob");
             var bytes = await File.ReadAllBytesAsync(blob);
             bytes[^1] ^= 0xFF;

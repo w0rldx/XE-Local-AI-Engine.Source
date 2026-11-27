@@ -293,7 +293,13 @@ public sealed class NodeStartupSettingsTests : IDisposable
     private static void WriteCatalogCache(string dataDirectory, string rawJson, string sourceUrl)
     {
         var directory = Directory.CreateDirectory(Path.Combine(dataDirectory, "external-apps"));
-        var cache = new StoredExternalAppCatalogCache(rawJson, DateTimeOffset.UnixEpoch, sourceUrl, ETag: null);
+        var cache = new StoredExternalAppCatalogCache
+        {
+            RawJson = rawJson,
+            FetchedAtUtc = DateTimeOffset.UnixEpoch,
+            SourceUrl = sourceUrl,
+            ETag = null
+        };
         File.WriteAllText(Path.Combine(directory.FullName, "catalog-remote-cache.json"),
             JsonSerializer.Serialize(cache, WebJson));
     }

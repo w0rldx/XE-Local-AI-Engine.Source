@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, within } from "@testing-library/react";
 import i18next from "i18next";
 import { HttpResponse, http } from "msw";
 import { beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
@@ -13,6 +13,7 @@ import { TraceExperimentView } from "@/features/modelLab/components/TraceExperim
 import { TraceStepper } from "@/features/modelLab/components/TraceStepper";
 import { loadModelLabStrings } from "@/features/modelLab/models/ModelLabStrings";
 import { toTraceTable } from "@/features/modelLab/models/ModelLabTrace";
+import { chooseOption } from "@/test/ChooseOption";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
@@ -355,19 +356,6 @@ function stubAttention(respond: () => Response = () => attentionResponse(attenti
 
 function attentionResponse(rows: unknown[]): Response {
 	return HttpResponse.json({ layer: 7, heads: 4, kvHeads: 2, topKeys: 2, rows, truncated: true, droppedRecords: 1 });
-}
-
-async function chooseOption(label: string, option: string): Promise<void> {
-	const select = screen.getByRole("combobox", { name: label });
-	fireEvent.click(select);
-	const listbox = await waitFor(() => {
-		const element = document.getElementById(select.getAttribute("aria-controls") ?? "");
-		if (element === null) {
-			throw new Error("the dropdown is not open yet");
-		}
-		return element;
-	});
-	fireEvent.click(within(listbox).getByRole("option", { name: option, hidden: true }));
 }
 
 // Where Tab goes next: the following element in document order that takes focus from the keyboard.

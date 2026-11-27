@@ -10,9 +10,9 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Chat;
 /// <summary>The runs bound to one conversation, newest first, with the parked input and the steerable node of a live one.</summary>
 public sealed class ListGraphWorkflowConversationRunsEndpoint : Endpoint<ListGraphWorkflowConversationRunsRequest, ListGraphWorkflowConversationRunsResponse>
 {
-    private readonly IGraphWorkflowChatService _chat;
+    private readonly GraphWorkflowChatService _chat;
 
-    public ListGraphWorkflowConversationRunsEndpoint(IGraphWorkflowChatService chat)
+    public ListGraphWorkflowConversationRunsEndpoint(GraphWorkflowChatService chat)
     {
         ArgumentNullException.ThrowIfNull(chat);
         _chat = chat;

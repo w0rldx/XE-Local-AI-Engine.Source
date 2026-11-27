@@ -26,7 +26,7 @@ using XE_Local_AI_Engine.Tests.Capacity;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Training;
 using XE_Local_AI_Engine.Tests.Training.Runs;
-using static ModelLabExperimentServiceTests;
+using static ModelLabTestSupport;
 using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
@@ -53,7 +53,7 @@ public sealed class ModelLabWarmSessionTests
         AssertEx.True(host.Supervisor.IsKeepWarmSuppressed(), "And the lease.");
         AssertEx.True(host.Ledger.Reserved.GpuBytes > 0, "And its reservation, so no VRAM is unaccounted.");
         AssertEx.False(process.HasExited);
-        AssertEx.Equal(ModelLabExperimentStatus.Succeeded, (await host.Service.GetAsync(id, CancellationToken.None))!.Status);
+        AssertEx.Equal(ModelLabExperimentStatus.Succeeded, (await host.Reader.GetAsync(id, CancellationToken.None))!.Status);
         AssertEx.Equal(expected: 1, ReceiptFiles(host).Length, "The worker's identity is on disk while it lives.");
         AssertEx.Equal(ModelLabExperimentDeleteOutcome.Deleted, await host.Service.DeleteAsync(id, CancellationToken.None), "The row let go of its receipt when its job ended.");
     }
@@ -79,7 +79,7 @@ public sealed class ModelLabWarmSessionTests
         AssertEx.Equal(attempts, gate.ExclusiveAttempts, "A warm start never touches the gate.");
         AssertEx.Equal(expected: 0, holder.PreemptionRequestCount, "Nor raises demand.");
         AssertEx.Equal(expected: 2, process.WrittenLines.Count(static line => line.Contains("\"op\":\"run\"", StringComparison.Ordinal)), "Both jobs ran in the one process.");
-        AssertEx.Equal(ModelLabExperimentStatus.Succeeded, (await host.Service.GetAsync(second.ExperimentId!.Value, CancellationToken.None))!.Status);
+        AssertEx.Equal(ModelLabExperimentStatus.Succeeded, (await host.Reader.GetAsync(second.ExperimentId!.Value, CancellationToken.None))!.Status);
         AssertEx.Equal(RuntimeResidentState.Idle, host.Service.GetResident()!.State);
     }
 
@@ -131,7 +131,7 @@ public sealed class ModelLabWarmSessionTests
         process.Finish(CompleteRun, exitCode: 0);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
-        AssertEx.Equal(ModelLabExperimentStatus.Succeeded, (await host.Service.GetAsync(id, CancellationToken.None))!.Status);
+        AssertEx.Equal(ModelLabExperimentStatus.Succeeded, (await host.Reader.GetAsync(id, CancellationToken.None))!.Status);
         AssertEx.Null(residentAtEnd, "The latched demand turns the job's end into an eviction, never Idle.");
         AssertEx.True(process.EvictRequested);
         AssertEx.Null(host.Gate.ExclusiveKind);
@@ -237,7 +237,7 @@ public sealed class ModelLabWarmSessionTests
         process.SayRaw($$"""{"event":"done","cancelled":false,"token":"not-this-spawn","jobId":"{{process.JobId}}"}""");
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
-        var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
+        var record = AssertEx.NotNull(await host.Reader.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
         AssertEx.Equal(ModelLabExperimentStatus.Failed, record.Status);
         // Taken as the job's done, it would have failed for the result files nobody wrote; the watchdog's reason shows it was ignored.
         AssertEx.Contains(record.ErrorMessage!, "stopped reporting", StringComparison.Ordinal);
@@ -257,7 +257,7 @@ public sealed class ModelLabWarmSessionTests
         process.SayRaw($$"""{"event":"progress","step":1,"totalSteps":2,"token":"{{process.Request!.RunToken}}","jobId":"{{Guid.NewGuid()}}"}""");
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
-        var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
+        var record = AssertEx.NotNull(await host.Reader.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
         AssertEx.Equal(ModelLabExperimentStatus.Failed, record.Status);
         AssertEx.Contains(record.ErrorMessage!, "broke its protocol", StringComparison.Ordinal);
         AssertEx.True(process.Killed);
@@ -291,7 +291,7 @@ public sealed class ModelLabWarmSessionTests
         AssertEx.True(host.Service.Cancel(start.ExperimentId!.Value));
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
-        AssertEx.Equal(ModelLabExperimentStatus.Cancelled, (await host.Service.GetAsync(start.ExperimentId.Value, CancellationToken.None))!.Status);
+        AssertEx.Equal(ModelLabExperimentStatus.Cancelled, (await host.Reader.GetAsync(start.ExperimentId.Value, CancellationToken.None))!.Status);
         AssertEx.True(process.WrittenLines.Any(static line => line.Contains("\"op\":\"cancel\"", StringComparison.Ordinal)), "The cancel goes over stdin, not as a signal.");
         AssertEx.False(process.Killed);
         AssertEx.False(process.HasExited);
@@ -316,7 +316,7 @@ public sealed class ModelLabWarmSessionTests
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
         AssertEx.True(process.Killed);
-        AssertEx.Equal(ModelLabExperimentStatus.Cancelled, (await host.Service.GetAsync(start.ExperimentId.Value, CancellationToken.None))!.Status);
+        AssertEx.Equal(ModelLabExperimentStatus.Cancelled, (await host.Reader.GetAsync(start.ExperimentId.Value, CancellationToken.None))!.Status);
         AssertEx.Null(host.Service.GetResident());
         AssertEx.Null(host.Gate.ExclusiveKind);
     }
@@ -331,7 +331,7 @@ public sealed class ModelLabWarmSessionTests
         process.Finish(["""{"event":"error","category":"out-of-memory","message":"The GPU ran out of memory during the trace."}"""], exitCode: 0);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
-        AssertEx.Equal("The GPU ran out of memory during the trace.", (await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None))!.ErrorMessage!);
+        AssertEx.Equal("The GPU ran out of memory during the trace.", (await host.Reader.GetAsync(start.ExperimentId!.Value, CancellationToken.None))!.ErrorMessage!);
         AssertEx.True(process.EvictRequested, "Only a done keeps a worker.");
         AssertEx.True(process.HasExited);
         AssertEx.Null(host.Gate.ExclusiveKind);
@@ -546,7 +546,7 @@ public sealed class ModelLabWarmSessionTests
         AssertEx.True(process.Killed, "A worker with no recorded identity is killed.");
         AssertEx.True(process.HasExited, "Its exit is seen, so its holds are given back in full.");
         AssertEx.False(process.WrittenLines.Any(static line => line.Contains("\"op\":\"run\"", StringComparison.Ordinal)), "It never got the job.");
-        var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
+        var record = AssertEx.NotNull(await host.Reader.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
         AssertEx.Equal(ModelLabExperimentStatus.Failed, record.Status);
         AssertEx.Contains(record.ErrorMessage!, "identity could not be recorded", StringComparison.Ordinal);
         AssertEx.Null(host.Service.GetResident(), "No session stays idle or warm.");
@@ -590,7 +590,7 @@ public sealed class ModelLabWarmSessionTests
 
         first.Finish(CompleteRun, exitCode: 0);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
-        AssertEx.Equal(ModelLabExperimentStatus.Succeeded, (await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None))!.Status, "The job ran on.");
+        AssertEx.Equal(ModelLabExperimentStatus.Succeeded, (await host.Reader.GetAsync(start.ExperimentId!.Value, CancellationToken.None))!.Status, "The job ran on.");
         AssertEx.True(first.EvictRequested && first.HasExited, "The refused eject was latched and served at the job's end.");
         AssertEx.Null(host.Service.GetResident(), "Never idle.");
 
@@ -619,7 +619,7 @@ public sealed class ModelLabWarmSessionTests
         process.Finish([.. CompleteRun, """{"event":"done","cancelled":false}"""], exitCode: 0);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
-        var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
+        var record = AssertEx.NotNull(await host.Reader.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
         AssertEx.Equal(ModelLabExperimentStatus.Failed, record.Status);
         AssertEx.Contains(record.ErrorMessage!, "broke its protocol", StringComparison.Ordinal);
         AssertEx.True(process.Killed);
@@ -642,7 +642,7 @@ public sealed class ModelLabWarmSessionTests
         process.Finish(CompleteRun, exitCode: 0);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
-        var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
+        var record = AssertEx.NotNull(await host.Reader.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
         AssertEx.Equal(ModelLabExperimentStatus.Failed, record.Status);
         AssertEx.Contains(record.ErrorMessage!, "did not report ready", StringComparison.Ordinal);
         AssertEx.True(process.Killed);
@@ -661,7 +661,7 @@ public sealed class ModelLabWarmSessionTests
         process.Finish(CompleteRun, exitCode: 1);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
-        var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
+        var record = AssertEx.NotNull(await host.Reader.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
         AssertEx.Equal(ModelLabExperimentStatus.Failed, record.Status);
         AssertEx.Contains(record.ErrorMessage!, "exited after its job before reporting ready", StringComparison.Ordinal);
         AssertEx.Null(host.Service.GetResident());
@@ -681,7 +681,7 @@ public sealed class ModelLabWarmSessionTests
         process.Finish(CompleteRun, exitCode: 0);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
-        AssertEx.Equal(ModelLabExperimentStatus.Succeeded, (await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None))!.Status);
+        AssertEx.Equal(ModelLabExperimentStatus.Succeeded, (await host.Reader.GetAsync(start.ExperimentId!.Value, CancellationToken.None))!.Status);
         await AssertEx.EventuallyAsync(() => host.Service.GetResident() is null, TestBudgets.Contended, "The exited worker's session ends.");
     }
 
@@ -706,7 +706,7 @@ public sealed class ModelLabWarmSessionTests
         process.Finish(CompleteRun, exitCode: 0);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
-        AssertEx.Equal(ModelLabExperimentStatus.Succeeded, (await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None))!.Status);
+        AssertEx.Equal(ModelLabExperimentStatus.Succeeded, (await host.Reader.GetAsync(start.ExperimentId!.Value, CancellationToken.None))!.Status);
         AssertEx.True(process.EvictRequested && process.HasExited, "The refusal's demand turned the trace's end into an eviction.");
         AssertEx.Null(host.Service.GetResident(), "Never idle.");
         AssertEx.Null(host.Gate.ExclusiveKind);
@@ -787,7 +787,7 @@ public sealed class ModelLabWarmSessionTests
         AssertEx.False(process.Killed);
         process.Finish(CompleteRun, exitCode: 0);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
-        AssertEx.Equal(ModelLabExperimentStatus.Succeeded, (await host.Service.GetAsync(first.ExperimentId!.Value, CancellationToken.None))!.Status);
+        AssertEx.Equal(ModelLabExperimentStatus.Succeeded, (await host.Reader.GetAsync(first.ExperimentId!.Value, CancellationToken.None))!.Status);
     }
 
     [Test]
@@ -1093,7 +1093,7 @@ public sealed class ModelLabWarmSessionTests
         process.Finish(CompleteRun, exitCode: 0);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
-        AssertEx.Equal(ModelLabExperimentStatus.Succeeded, (await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None))!.Status, "The job ran on.");
+        AssertEx.Equal(ModelLabExperimentStatus.Succeeded, (await host.Reader.GetAsync(start.ExperimentId!.Value, CancellationToken.None))!.Status, "The job ran on.");
         AssertEx.True(process.EvictRequested && process.HasExited, "The refused delete was latched and served at the job's end.");
         AssertEx.Null(host.Service.GetResident(), "Never idle.");
     }
@@ -1144,7 +1144,7 @@ public sealed class ModelLabWarmSessionTests
         await using var lease = await waiting.WaitAsync(TestBudgets.Contended);
 
         AssertEx.NotNull(lease, "The waiter gets the gate as the job ends, not when the warm time runs out.");
-        AssertEx.Equal(ModelLabExperimentStatus.Succeeded, (await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None))!.Status);
+        AssertEx.Equal(ModelLabExperimentStatus.Succeeded, (await host.Reader.GetAsync(start.ExperimentId!.Value, CancellationToken.None))!.Status);
         AssertEx.True(process.EvictRequested && process.HasExited);
         AssertEx.Null(host.Service.GetResident());
     }
@@ -1214,7 +1214,7 @@ public sealed class ModelLabWarmSessionTests
         AssertEx.False(host.Supervisor.IsKeepWarmSuppressed());
         AssertEx.Equal(expected: 0L, host.Ledger.Reserved.GpuBytes);
         AssertEx.True(second.ExperimentId.HasValue, second.RefusalMessage ?? "The claimed start was published, so it ran as a job.");
-        AssertEx.Equal(ModelLabExperimentStatus.Cancelled, (await host.Service.GetAsync(second.ExperimentId!.Value, CancellationToken.None))!.Status);
+        AssertEx.Equal(ModelLabExperimentStatus.Cancelled, (await host.Reader.GetAsync(second.ExperimentId!.Value, CancellationToken.None))!.Status);
     }
 
     /// <summary>A start after the stop is refused before it can claim the idle session.</summary>
@@ -1256,7 +1256,7 @@ public sealed class ModelLabWarmSessionTests
         process.Finish(CompleteRun, exitCode: 0);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
-        AssertEx.Equal(ModelLabExperimentStatus.Succeeded, (await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None))!.Status);
+        AssertEx.Equal(ModelLabExperimentStatus.Succeeded, (await host.Reader.GetAsync(start.ExperimentId!.Value, CancellationToken.None))!.Status);
         AssertEx.True(process.EvictRequested && process.HasExited, "The latched demand turned the trace's end into an eviction.");
         AssertEx.Null(host.Service.GetResident(), "Never idle.");
         AssertEx.Null(host.Gate.ExclusiveKind);

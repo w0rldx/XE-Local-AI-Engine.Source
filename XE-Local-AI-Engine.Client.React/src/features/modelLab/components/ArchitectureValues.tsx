@@ -159,7 +159,7 @@ interface ArchitectureValuesProps {
 
 // Read-only values, each with what it rests on and an (i) that says what it is.
 export function ArchitectureValues({ values, mtpDeclared }: ArchitectureValuesProps) {
-	const { t, i18n } = useTranslation();
+	const { t } = useTranslation();
 	const texts = valueTexts(t, mtpDeclared);
 	const shown = values.filter((item) => item.value !== null && item.value !== undefined);
 	if (shown.length === 0) {
@@ -178,7 +178,7 @@ export function ArchitectureValues({ values, mtpDeclared }: ArchitectureValuesPr
 						testId={`model-lab-architecture-value-info-${item.key}`}
 					/>
 					<Text size="sm" fw={600} data-testid={`model-lab-architecture-value-text-${item.key}`}>
-						{typeof item.value === "number" ? formatTraceValue(item.value, i18n.language) : item.value}
+						{typeof item.value === "number" ? formatTraceValue(item.value) : item.value}
 					</Text>
 					<BasisBadge basis={item.basis} data-testid={`model-lab-architecture-value-basis-${item.key}`} />
 				</Group>

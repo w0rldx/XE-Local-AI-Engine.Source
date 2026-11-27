@@ -2,22 +2,20 @@
 
 import "@/i18n";
 
-import { MantineProvider, Modal } from "@mantine/core";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { Modal } from "@mantine/core";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DialogTextTitleBar } from "@/core/ui/components/DialogTextTitleBar/DialogTextTitleBar";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { renderWithMantine } from "@/test/MantineTestRender";
 
 // The title is a Modal.Title (so Mantine can name the dialog), which only renders inside a Modal: the bar's one host.
-function renderWithProviders(ui: ReactElement) {
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			<Modal opened={true} onClose={vi.fn()} withCloseButton={false}>
-				{ui}
-			</Modal>
-		</MantineProvider>,
+function renderInModal(ui: ReactElement) {
+	return renderWithMantine(
+		<Modal opened={true} onClose={vi.fn()} withCloseButton={false}>
+			{ui}
+		</Modal>,
 	);
 }
 
@@ -44,7 +42,7 @@ describe("DialogTextTitleBar", () => {
 	// carried before: a German session announced an English word, and it disagreed with its own tooltip.
 	it("renders the title and a close button named from the bundle", () => {
 		const handleClose = vi.fn();
-		renderWithProviders(<DialogTextTitleBar title="My dialog" handleClose={handleClose} />);
+		renderInModal(<DialogTextTitleBar title="My dialog" handleClose={handleClose} />);
 
 		expect(screen.getByText("My dialog")).toBeTruthy();
 		expect(screen.queryByRole("button", { name: "close" })).toBeNull();
@@ -55,7 +53,7 @@ describe("DialogTextTitleBar", () => {
 
 	// An unspaced title (a document's file name) widened the dialog past a phone's edge and pushed Close off-screen.
 	it("lets a long unspaced title shrink and break instead of widening the bar", () => {
-		renderWithProviders(<DialogTextTitleBar title="softwarearchitecturewithc10andnet6.pdf" handleClose={vi.fn()} />);
+		renderInModal(<DialogTextTitleBar title="softwarearchitecturewithc10andnet6.pdf" handleClose={vi.fn()} />);
 
 		const title = screen.getByText("softwarearchitecturewithc10andnet6.pdf");
 		expect(title.style.minWidth).toBe("0px");
@@ -63,7 +61,7 @@ describe("DialogTextTitleBar", () => {
 	});
 
 	it("does not render the fullscreen toggle by default", () => {
-		renderWithProviders(<DialogTextTitleBar title="My dialog" handleClose={vi.fn()} />);
+		renderInModal(<DialogTextTitleBar title="My dialog" handleClose={vi.fn()} />);
 
 		expect(screen.queryByRole("button", { name: "Fullscreen" })).toBeNull();
 		expect(screen.queryByRole("button", { name: "Exit fullscreen" })).toBeNull();
@@ -71,7 +69,7 @@ describe("DialogTextTitleBar", () => {
 
 	it("renders the fullscreen toggle and invokes the callback when enabled", () => {
 		const onToggleFullScreen = vi.fn();
-		renderWithProviders(
+		renderInModal(
 			<DialogTextTitleBar
 				title="My dialog"
 				handleClose={vi.fn()}
@@ -87,7 +85,7 @@ describe("DialogTextTitleBar", () => {
 	});
 
 	it("shows the exit-fullscreen affordance when already fullscreen", () => {
-		renderWithProviders(
+		renderInModal(
 			<DialogTextTitleBar
 				title="My dialog"
 				handleClose={vi.fn()}

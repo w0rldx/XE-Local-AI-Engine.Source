@@ -24,7 +24,7 @@ import signal
 import sys
 from typing import Any
 
-from modellablib import JobError, frame_bytes
+from modellablib import JobError, is_int, write_frame
 from trainlib import CANCELLED_EXIT_CODE
 
 # Separate from modellablib.CONTRACT_VERSION: the tracer and this script change independently.
@@ -68,10 +68,6 @@ class ResultTooLargeError(ValueError):
     """An output over its cap: the "result_too_large" error category."""
 
 
-def _is_int(value):
-    return isinstance(value, int) and not isinstance(value, bool)
-
-
 def _require_fields(value, fields, where):
     if not isinstance(value, dict):
         raise JobError(f"{where} is not a JSON object.")
@@ -82,7 +78,7 @@ def _require_fields(value, fields, where):
 
 
 def _require_int(value, name, low, high):
-    if not _is_int(value):
+    if not is_int(value):
         raise JobError(f"{name} is not an integer.")
     if not low <= value <= high:
         raise JobError(f"{name} {value} is outside {low}..{high}.")
@@ -100,7 +96,7 @@ def _inside(path, directory, name):
 def validate_job(job, job_directory):
     """The job as the script uses it, or JobError: exact keys at every level, typed and in-range knobs."""
     _require_fields(job, _JOB_FIELDS, "The job")
-    if not _is_int(job["contractVersion"]) or job["contractVersion"] != CONTRACT_VERSION:
+    if not is_int(job["contractVersion"]) or job["contractVersion"] != CONTRACT_VERSION:
         raise JobError(f"The job's contractVersion is not {CONTRACT_VERSION}.")
     if job["kind"] != KIND:
         raise JobError(f"The job's kind is not {KIND}.")
@@ -384,9 +380,7 @@ def serialized(value, cap, name):
 
 
 def emit(event, **fields):
-    data = frame_bytes(event, os.environ.get("XE_TRAINING_RUN_TOKEN"), fields)
-    while data:  # a pipe write interrupted by a signal can be partial
-        data = data[os.write(1, data) :]
+    write_frame(event, fields)
 
 
 def _failure(error):

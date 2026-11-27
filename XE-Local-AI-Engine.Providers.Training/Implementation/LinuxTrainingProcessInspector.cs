@@ -42,7 +42,7 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
     private readonly TimeProvider _timeProvider;
 
     public LinuxTrainingProcessInspector(TimeProvider timeProvider, ILogger<LinuxTrainingProcessInspector> logger)
-        : this(timeProvider, logger, ReadStat, Kill, TrainerPidFdOps.Real)
+        : this(timeProvider, logger, ReadStat, LinuxKill.Send, TrainerPidFdOps.Real)
     {
     }
 
@@ -467,9 +467,4 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
     [LibraryImport("libc", EntryPoint = "getpgrp")]
     [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
     private static partial int GetProcessGroup();
-
-    // int kill(pid_t pid, int sig); — a negative pid signals the process group abs(pid).
-    [LibraryImport("libc", EntryPoint = "kill", SetLastError = true)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
-    private static partial int Kill(int pid, int sig);
 }

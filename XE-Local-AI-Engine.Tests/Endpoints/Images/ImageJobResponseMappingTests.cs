@@ -11,6 +11,7 @@ public sealed class ImageJobResponseMappingTests
 {
     [Test]
     [Arguments(ImageJobFailureReason.ProcessExited, "ProcessExited")]
+    [Arguments(ImageJobFailureReason.ModelUnloadedWhileStarting, "ModelUnloadedWhileStarting")]
     [Arguments(null, null)]
     public void ToResponse_SendsTheFailureReasonName(ImageJobFailureReason? reason, string? expected)
     {

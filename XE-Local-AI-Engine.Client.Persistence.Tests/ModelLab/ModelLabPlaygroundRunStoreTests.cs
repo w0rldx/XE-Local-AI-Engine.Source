@@ -15,7 +15,7 @@ public sealed class ModelLabPlaygroundRunStoreTests : IDisposable
 {
     private const string Summary = """{"formatVersion":1,"template":"tiny-mlp-v1","secret":"summary-plaintext"}""";
 
-    private readonly INodeSqliteKeyHolder _keyHolder = new FixedKeyHolder();
+    private readonly INodeSqliteKeyHolder _keyHolder = new FixedNodeSqliteKeyHolder(RandomNumberGenerator.GetBytes(32));
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
 
     private string DatabasePath => Path.Combine(_rootPath, "playground.sqlite");
@@ -56,7 +56,7 @@ public sealed class ModelLabPlaygroundRunStoreTests : IDisposable
     public async Task List_IsNewestFirst_AndDelete_ReportsWhetherARowWent()
     {
         await using var context = await CreateDatabaseAsync();
-        var store = new ModelLabPlaygroundRunStore(context, new SteppingClock());
+        var store = new ModelLabPlaygroundRunStore(context, new SteppingTimeProvider());
         var older = await CreateAsync(store);
         var newer = await CreateAsync(store);
 
@@ -72,7 +72,7 @@ public sealed class ModelLabPlaygroundRunStoreTests : IDisposable
     {
         var interceptor = new DeleteTheFirstTargetFirst();
         await using var context = await CreateDatabaseAsync(interceptor);
-        var store = new ModelLabPlaygroundRunStore(context, new SteppingClock());
+        var store = new ModelLabPlaygroundRunStore(context, new SteppingTimeProvider());
         var ids = new List<Guid>();
         for (var index = 0; index < 5; index++)
         {
@@ -94,7 +94,7 @@ public sealed class ModelLabPlaygroundRunStoreTests : IDisposable
     {
         var failSecond = new FailSecondDelete();
         await using var context = await CreateDatabaseAsync(failSecond);
-        var store = new ModelLabPlaygroundRunStore(context, new SteppingClock());
+        var store = new ModelLabPlaygroundRunStore(context, new SteppingTimeProvider());
         for (var index = 0; index < 3; index++)
         {
             _ = await CreateAsync(store);
@@ -192,23 +192,5 @@ public sealed class ModelLabPlaygroundRunStoreTests : IDisposable
 
             return base.NonQueryExecutingAsync(command, eventData, result, cancellationToken);
         }
-    }
-
-    private sealed class FixedKeyHolder : INodeSqliteKeyHolder
-    {
-        public ReadOnlyMemory<byte> Key { get; } = RandomNumberGenerator.GetBytes(32);
-
-        public void Dispose()
-        {
-        }
-    }
-
-    /// <summary>Each read is later than the last, so creation order is the sort order.</summary>
-    private sealed class SteppingClock : TimeProvider
-    {
-        private long _ticks = DateTimeOffset.UnixEpoch.Ticks;
-
-        public override DateTimeOffset GetUtcNow() =>
-            new(Interlocked.Add(ref _ticks, TimeSpan.TicksPerSecond), TimeSpan.Zero);
     }
 }

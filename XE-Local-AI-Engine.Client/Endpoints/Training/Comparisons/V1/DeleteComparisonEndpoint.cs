@@ -8,9 +8,9 @@ using XE_Local_AI_Engine.Client.Services.Training.Comparison;
 
 public sealed class DeleteComparisonEndpoint : Endpoint<DeleteComparisonRequest>
 {
-    private readonly IComparisonReportService _comparisons;
+    private readonly ComparisonReportService _comparisons;
 
-    public DeleteComparisonEndpoint(IComparisonReportService comparisons)
+    public DeleteComparisonEndpoint(ComparisonReportService comparisons)
     {
         ArgumentNullException.ThrowIfNull(comparisons);
         _comparisons = comparisons;

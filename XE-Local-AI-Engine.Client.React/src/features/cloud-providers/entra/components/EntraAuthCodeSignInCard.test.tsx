@@ -45,22 +45,7 @@ const { toastMock } = vi.hoisted(() => ({ toastMock: { success: vi.fn(), error: 
 vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastMock }));
 
 import { EntraAuthCodeSignInCard } from "@/features/cloud-providers/entra/components/EntraAuthCodeSignInCard";
-import { testMantineTheme } from "@/test/MantineTestRender";
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	vi.spyOn(window, "open").mockImplementation(() => null);
-}
+import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 
 // A fresh element built for every render/rerender call — a new QueryClient per call is fine since the
 // QueryClientProvider itself never unmounts, so EntraAuthCodeSignInCard's local state survives a rerender.
@@ -82,6 +67,7 @@ function renderCard() {
 describe("EntraAuthCodeSignInCard", () => {
 	beforeEach(() => {
 		installJsdomEnvironmentMocks();
+		vi.spyOn(window, "open").mockImplementation(() => null);
 		mockHooks.statusFn.mockReturnValue(undefined);
 		mockHooks.signInResult = undefined;
 		mockHooks.signInIsError = false;

@@ -1,7 +1,5 @@
 # Audio Transcription (whisper.cpp)
 
-> Reviewed: 2026-10-02 · Code-grounded.
-
 **What this page covers.** Local audio transcription with whisper.cpp, supervised as a `whisper-server` child process
 like `llama-server` and `sd-server`. A transcription session is an encrypted row with its segments; the audio itself
 is never persisted beyond one engine-owned temporary file per transcription. The code lives in `Providers.WhisperCpp`,
@@ -1045,10 +1043,9 @@ the feature — the capture sources, the worklet, the hub hook and the live pane
 The **managed source build** is the one part of this feature whose UI does *not* live in `features/transcription/`:
 `WhisperRuntimeSourceBuildCard` sits in `features/node-settings/components/` beside `SourceBuildCard` (llama.cpp) and
 `ImageRuntimeSourceBuildCard` (stable-diffusion.cpp), rendered on the Node Settings page, because that is where the
-other two managed-build lanes are. All three are visible to **every** operator: they were Developer-Mode gated until
-2026-09-19, when that gate was removed on the owner's ruling — the routes behind them are Operator-authorized and do
-nothing until Build is pressed, and hiding the only GPU-transcription path a Linux + NVIDIA box has behind a mode its
-operator has no reason to enable made the feature unfindable. It calls the five
+other two managed-build lanes are. All three are visible to **every** operator, with no Developer-Mode gate: the routes behind them are
+Operator-authorized and do nothing until Build is pressed, and hiding the only GPU-transcription path a Linux + NVIDIA box has behind a mode its
+operator has no reason to enable would make the feature unfindable. It calls the five
 `transcription/runtime/source-build*` routes through `queries/useWhisperRuntime.ts`, and shares
 `CudaBuildLogView`, `SourceBuildPrerequisiteList` and the helpers in `models/SourceBuildModels.ts` with the other two
 cards — each keeps its own i18n subtree, so the prerequisite list takes the key prefix as a prop. It differs from

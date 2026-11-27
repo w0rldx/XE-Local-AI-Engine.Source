@@ -36,7 +36,7 @@ public sealed class AgentExecutionLogDispatchedTierTests : IDisposable
         await using var context = await CreateDatabaseAsync("envelope-dispatch-stores.sqlite");
         _ = context.AgentExecutionLogs.Add(EnvelopeRow(dispatchedTier: "fast", authoredEffort: "auto"));
         _ = await context.SaveChangesAsync();
-        var store = new AgentExecutionLogStore(context, new FixedTimeProvider(FixedNow));
+        var store = new AgentExecutionLogStore(context, new ManualTimeProvider(FixedNow));
 
         var envelope = (await store.ListRunEnvelopesAsync(conversationId: null, limit: 10)).Single();
 
@@ -51,7 +51,7 @@ public sealed class AgentExecutionLogDispatchedTierTests : IDisposable
         await using var context = await CreateDatabaseAsync("envelope-dispatch-nulls.sqlite");
         _ = context.AgentExecutionLogs.Add(EnvelopeRow(dispatchedTier: null, authoredEffort: null));
         _ = await context.SaveChangesAsync();
-        var store = new AgentExecutionLogStore(context, new FixedTimeProvider(FixedNow));
+        var store = new AgentExecutionLogStore(context, new ManualTimeProvider(FixedNow));
 
         var envelope = (await store.ListRunEnvelopesAsync(conversationId: null, limit: 10)).Single();
 
@@ -70,7 +70,7 @@ public sealed class AgentExecutionLogDispatchedTierTests : IDisposable
         await using var context = await CreateDatabaseAsync($"envelope-dispatch-{tier}.sqlite");
         _ = context.AgentExecutionLogs.Add(EnvelopeRow(tier, authoredEffort: "auto"));
         _ = await context.SaveChangesAsync();
-        var store = new AgentExecutionLogStore(context, new FixedTimeProvider(FixedNow));
+        var store = new AgentExecutionLogStore(context, new ManualTimeProvider(FixedNow));
 
         var envelope = (await store.ListRunEnvelopesAsync(conversationId: null, limit: 10)).Single();
 
@@ -83,7 +83,7 @@ public sealed class AgentExecutionLogDispatchedTierTests : IDisposable
         // The kind-0 diagnostics projection was deliberately left alone: these columns never carry a value on a memory
         // row, so widening that record would add two permanently-null fields to a different read view.
         await using var context = await CreateDatabaseAsync("dispatch-memory-projection.sqlite");
-        var store = new AgentExecutionLogStore(context, new FixedTimeProvider(FixedNow));
+        var store = new AgentExecutionLogStore(context, new ManualTimeProvider(FixedNow));
         var agentId = Guid.NewGuid();
 
         _ = await store.AddAsync(new AgentExecutionLogInput
@@ -135,20 +135,5 @@ public sealed class AgentExecutionLogDispatchedTierTests : IDisposable
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
         return context;
-    }
-
-    private sealed class FixedTimeProvider : TimeProvider
-    {
-        private readonly DateTimeOffset _now;
-
-        public FixedTimeProvider(DateTimeOffset now)
-        {
-            _now = now;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return _now;
-        }
     }
 }

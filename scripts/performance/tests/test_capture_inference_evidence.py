@@ -29,6 +29,11 @@ assert SPEC is not None
 assert SPEC.loader is not None
 capture = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(capture)
+GIT_ENV_SPEC = importlib.util.spec_from_file_location("git_env", REPOSITORY_ROOT / "scripts/lib/git_env.py")
+assert GIT_ENV_SPEC is not None
+assert GIT_ENV_SPEC.loader is not None
+GIT_ENV = importlib.util.module_from_spec(GIT_ENV_SPEC)
+GIT_ENV_SPEC.loader.exec_module(GIT_ENV)
 
 
 def digest(path: Path) -> str:
@@ -36,13 +41,39 @@ def digest(path: Path) -> str:
 
 
 def git(cwd: Path, *arguments: str) -> str:
+    """Run git on a fixture repository, never on an index, repository or config file the caller exported."""
     completed = subprocess.run(
         ["git", "-C", str(cwd), *arguments],
         text=True,
         capture_output=True,
         check=True,
+        env=GIT_ENV.fixture_env(),
     )
     return completed.stdout.strip()
+
+
+def historical_repository(test: unittest.TestCase, repository: Path) -> Path:
+    """Commit the pins and ``.gitignore`` of a historical worktree to a new repository at ``repository``. The rest of
+    ``test`` runs in the fixture environment too, so the capture's own git probes cannot read or refresh an index or
+    repository the caller exported."""
+    test.enterContext(mock.patch.dict(os.environ, GIT_ENV.fixture_env(), clear=True))
+    repository.mkdir()
+    git(repository, "init", "-q")
+    git(repository, "config", "user.email", "capture@example.invalid")
+    git(repository, "config", "user.name", "Capture Test")
+    (repository / ".gitignore").write_text("bin/\n", encoding="utf-8")
+    pins = repository / "Directory.Packages.props"
+    pins.write_text(
+        "<Project><ItemGroup>"
+        '<PackageVersion Include="Microsoft.Agents.AI" Version="1.15.0" />'
+        '<PackageVersion Include="Microsoft.Extensions.AI" Version="10.8.1" />'
+        '<PackageVersion Include="OpenAI" Version="2.12.0" />'
+        "</ItemGroup></Project>",
+        encoding="utf-8",
+    )
+    git(repository, "add", ".gitignore", "Directory.Packages.props")
+    git(repository, "commit", "-qm", "historical baseline")
+    return pins
 
 
 def framework_baseline_spec(root: Path, repository: Path, marker: Path) -> dict:
@@ -708,25 +739,49 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
             self.assertEqual("Vulkan", artifact["coverage"]["unvalidated"][0]["target"])
             self.assertEqual(10, artifact["commands"][0]["aggregates"]["ttft_ms"]["median"])
 
+    def test_the_fixture_repository_leaves_the_callers_git_config_index_and_hooks_alone(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            caller = root / "caller"
+            caller.mkdir()
+            git(caller, "init", "-q")
+            (caller / "staged.txt").write_text("staged", encoding="utf-8")
+            git(caller, "add", "staged.txt")
+            caller_config = root / "caller.gitconfig"
+            caller_config.write_text(
+                "[user]\n\temail = operator@example.invalid\n\tname = Operator\n", encoding="utf-8"
+            )
+            hooks = root / "hooks"
+            hooks.mkdir()
+            ran = root / "ran"
+            for name, body in (("pre-commit", "exit 0"), ("sign", "exit 1")):
+                (hooks / name).write_text(f"#!/bin/sh\necho {name} >>'{ran}'\n{body}\n", encoding="utf-8")
+                (hooks / name).chmod(0o755)
+            before = {path: path.read_bytes() for path in (caller_config, caller / ".git" / "index")}
+            exported = {
+                "GIT_CONFIG": str(caller_config),
+                "GIT_INDEX_FILE": str(caller / ".git" / "index"),
+                "GIT_CONFIG_PARAMETERS": f"'core.hooksPath'='{hooks}'",
+                "GIT_CONFIG_COUNT": "2",
+                "GIT_CONFIG_KEY_0": "commit.gpgSign",
+                "GIT_CONFIG_VALUE_0": "true",
+                "GIT_CONFIG_KEY_1": "gpg.program",
+                "GIT_CONFIG_VALUE_1": str(hooks / "sign"),
+            }
+            self.enterContext(mock.patch.dict(os.environ, exported))
+
+            historical_repository(self, root / "fixture")
+
+            self.assertEqual(before, {path: path.read_bytes() for path in before})
+            self.assertFalse(ran.exists(), "a hook or signing program the caller configured ran")
+            self.assertEqual("capture@example.invalid", git(root / "fixture", "config", "--local", "user.email"))
+            self.assertEqual("historical baseline", git(root / "fixture", "log", "-1", "--format=%s"))
+
     def test_framework_command_verifies_historical_worktree_pins_and_assemblies_before_execution(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
             repository = root / "historical-worktree"
-            repository.mkdir()
-            git(repository, "init", "-q")
-            git(repository, "config", "user.email", "capture@example.invalid")
-            git(repository, "config", "user.name", "Capture Test")
-            (repository / ".gitignore").write_text("bin/\n", encoding="utf-8")
-            (repository / "Directory.Packages.props").write_text(
-                "<Project><ItemGroup>"
-                '<PackageVersion Include="Microsoft.Agents.AI" Version="1.15.0" />'
-                '<PackageVersion Include="Microsoft.Extensions.AI" Version="10.8.1" />'
-                '<PackageVersion Include="OpenAI" Version="2.12.0" />'
-                "</ItemGroup></Project>",
-                encoding="utf-8",
-            )
-            git(repository, "add", ".gitignore", "Directory.Packages.props")
-            git(repository, "commit", "-qm", "historical baseline")
+            historical_repository(self, repository)
             marker = root / "executed"
             spec = framework_baseline_spec(root, repository, marker)
             spec_path = root / "spec.json"
@@ -753,21 +808,7 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
             repository = root / "historical-worktree"
-            repository.mkdir()
-            git(repository, "init", "-q")
-            git(repository, "config", "user.email", "capture@example.invalid")
-            git(repository, "config", "user.name", "Capture Test")
-            (repository / ".gitignore").write_text("bin/\n", encoding="utf-8")
-            (repository / "Directory.Packages.props").write_text(
-                "<Project><ItemGroup>"
-                '<PackageVersion Include="Microsoft.Agents.AI" Version="1.15.0" />'
-                '<PackageVersion Include="Microsoft.Extensions.AI" Version="10.8.1" />'
-                '<PackageVersion Include="OpenAI" Version="2.12.0" />'
-                "</ItemGroup></Project>",
-                encoding="utf-8",
-            )
-            git(repository, "add", ".gitignore", "Directory.Packages.props")
-            git(repository, "commit", "-qm", "historical baseline")
+            historical_repository(self, repository)
             first_commit = git(repository, "rev-parse", "HEAD")
             (repository / "tracked.txt").write_text("next", encoding="utf-8")
             git(repository, "add", "tracked.txt")
@@ -787,22 +828,7 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
             repository = root / "historical-worktree"
-            repository.mkdir()
-            git(repository, "init", "-q")
-            git(repository, "config", "user.email", "capture@example.invalid")
-            git(repository, "config", "user.name", "Capture Test")
-            (repository / ".gitignore").write_text("bin/\n", encoding="utf-8")
-            pins = repository / "Directory.Packages.props"
-            pins.write_text(
-                "<Project><ItemGroup>"
-                '<PackageVersion Include="Microsoft.Agents.AI" Version="1.15.0" />'
-                '<PackageVersion Include="Microsoft.Extensions.AI" Version="10.8.1" />'
-                '<PackageVersion Include="OpenAI" Version="2.12.0" />'
-                "</ItemGroup></Project>",
-                encoding="utf-8",
-            )
-            git(repository, "add", ".gitignore", "Directory.Packages.props")
-            git(repository, "commit", "-qm", "historical baseline")
+            pins = historical_repository(self, repository)
             marker = root / "executed"
             spec = framework_baseline_spec(root, repository, marker)
             spec_path = root / "spec.json"

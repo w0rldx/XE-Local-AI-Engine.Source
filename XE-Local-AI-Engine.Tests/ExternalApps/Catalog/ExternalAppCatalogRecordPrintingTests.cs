@@ -25,10 +25,13 @@ public sealed class ExternalAppCatalogRecordPrintingTests
             FetchedAtUtc: null,
             SourceUrl: null,
             LastRefreshFailure: null);
-        var cache = new StoredExternalAppCatalogCache(SampleCatalogManifest.RawJson,
-            DateTimeOffset.UnixEpoch,
-            "https://catalog.test/applications.json",
-            ETag: null);
+        var cache = new StoredExternalAppCatalogCache
+        {
+            RawJson = SampleCatalogManifest.RawJson,
+            FetchedAtUtc = DateTimeOffset.UnixEpoch,
+            SourceUrl = "https://catalog.test/applications.json",
+            ETag = null
+        };
 
         AssertEx.NotEmpty(manifest.Id);
         AssertEx.NotEmpty(manifest.ManifestSha256);

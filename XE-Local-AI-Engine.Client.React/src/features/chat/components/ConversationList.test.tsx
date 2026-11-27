@@ -3,21 +3,12 @@
 import { MantineProvider } from "@mantine/core";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import i18next from "i18next";
-import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ConversationList } from "@/features/chat/components/ConversationList";
 import type { ChatConversationModel, ChatConversationSearchModel } from "@/features/chat/models/ChatModels";
 import de from "@/locales/de.json";
-import { testMantineTheme } from "@/test/MantineTestRender";
-
-function renderWithProviders(ui: ReactElement) {
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			{ui}
-		</MantineProvider>,
-	);
-}
+import { installJsdomEnvironmentMocks, renderWithMantine, testMantineTheme } from "@/test/MantineTestRender";
 
 function conversation(overrides: Partial<ChatConversationModel> = {}): ChatConversationModel {
 	return {
@@ -30,30 +21,6 @@ function conversation(overrides: Partial<ChatConversationModel> = {}): ChatConve
 	};
 }
 
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-}
-
 describe("ConversationList origin badge", () => {
 	beforeEach(() => {
 		installJsdomEnvironmentMocks();
@@ -64,7 +31,7 @@ describe("ConversationList origin badge", () => {
 	});
 
 	it("renders a Remote badge for remote-origin conversations", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ConversationList
 				conversations={[conversation({ id: "remote-1", origin: "remote" })]}
 				onCreateConversation={vi.fn()}
@@ -77,7 +44,7 @@ describe("ConversationList origin badge", () => {
 	});
 
 	it("does not render a Remote badge for local conversations", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ConversationList
 				conversations={[conversation({ id: "local-1", origin: "local" })]}
 				onCreateConversation={vi.fn()}
@@ -100,7 +67,7 @@ describe("ConversationList management actions", () => {
 	});
 
 	it("hides the actions menu for remote-origin (view-only) conversations", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ConversationList
 				conversations={[conversation({ id: "remote-1", origin: "remote" })]}
 				onCreateConversation={vi.fn()}
@@ -117,7 +84,7 @@ describe("ConversationList management actions", () => {
 
 	it("invokes onTogglePin with the negated pin state", async () => {
 		const onTogglePin = vi.fn();
-		renderWithProviders(
+		renderWithMantine(
 			<ConversationList
 				conversations={[conversation({ id: "local-1", origin: "local", isPinned: false })]}
 				onCreateConversation={vi.fn()}
@@ -135,7 +102,7 @@ describe("ConversationList management actions", () => {
 
 	it("invokes onToggleArchive with the negated archive state", async () => {
 		const onToggleArchive = vi.fn();
-		renderWithProviders(
+		renderWithMantine(
 			<ConversationList
 				conversations={[conversation({ id: "local-1", origin: "local", isArchived: false })]}
 				onCreateConversation={vi.fn()}
@@ -153,7 +120,7 @@ describe("ConversationList management actions", () => {
 
 	it("invokes onDelete with skipConfirm=false for a plain click", async () => {
 		const onDelete = vi.fn();
-		renderWithProviders(
+		renderWithMantine(
 			<ConversationList
 				conversations={[conversation({ id: "local-1", origin: "local" })]}
 				onCreateConversation={vi.fn()}
@@ -171,7 +138,7 @@ describe("ConversationList management actions", () => {
 
 	it("invokes onDelete with skipConfirm=true when the delete item is Shift-clicked", async () => {
 		const onDelete = vi.fn();
-		renderWithProviders(
+		renderWithMantine(
 			<ConversationList
 				conversations={[conversation({ id: "local-1", origin: "local" })]}
 				onCreateConversation={vi.fn()}
@@ -189,7 +156,7 @@ describe("ConversationList management actions", () => {
 
 	it("surfaces a Shift-click hint on the delete item without changing the skip behavior", async () => {
 		const onDelete = vi.fn();
-		renderWithProviders(
+		renderWithMantine(
 			<ConversationList
 				conversations={[conversation({ id: "local-1", origin: "local" })]}
 				onCreateConversation={vi.fn()}
@@ -208,7 +175,7 @@ describe("ConversationList management actions", () => {
 	});
 
 	it("does not render the delete item for remote-origin (view-only) conversations", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ConversationList
 				conversations={[conversation({ id: "remote-1", origin: "remote" })]}
 				onCreateConversation={vi.fn()}
@@ -224,7 +191,7 @@ describe("ConversationList management actions", () => {
 	it("commits a rename on Enter and does not re-select the conversation while editing", async () => {
 		const onRename = vi.fn();
 		const onSelect = vi.fn();
-		renderWithProviders(
+		renderWithMantine(
 			<ConversationList
 				conversations={[conversation({ id: "local-1", origin: "local", title: "Old title" })]}
 				onCreateConversation={vi.fn()}
@@ -247,7 +214,7 @@ describe("ConversationList management actions", () => {
 
 	it("keeps the rename open on an Enter that confirms an IME composition and commits on a plain Enter", async () => {
 		const onRename = vi.fn();
-		renderWithProviders(
+		renderWithMantine(
 			<ConversationList
 				conversations={[conversation({ id: "local-1", origin: "local", title: "Old title" })]}
 				onCreateConversation={vi.fn()}
@@ -272,7 +239,7 @@ describe("ConversationList management actions", () => {
 	});
 
 	it("filters conversations by the search query against title and preview", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ConversationList
 				conversations={[
 					conversation({ id: "alpha", title: "Alpha planning" }),
@@ -293,7 +260,7 @@ describe("ConversationList management actions", () => {
 	});
 
 	it("shows the server's content matches, snippet included, in place of the local filter once they arrive", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ConversationList
 				conversations={[conversation({ id: "alpha", title: "Alpha planning" })]}
 				searchQuery="granada"
@@ -317,7 +284,7 @@ describe("ConversationList management actions", () => {
 	});
 
 	it("previews a title-only hit as a title match, not as an empty chat", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ConversationList
 				conversations={[]}
 				searchQuery="tangerine"
@@ -338,7 +305,7 @@ describe("ConversationList management actions", () => {
 	});
 
 	it("says results may be incomplete while the node is still indexing", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ConversationList
 				conversations={[]}
 				searchQuery="granada"
@@ -355,7 +322,7 @@ describe("ConversationList management actions", () => {
 	});
 
 	it("ignores stale server results once the search box is cleared", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ConversationList
 				conversations={[conversation({ id: "alpha", title: "Alpha planning" })]}
 				searchQuery=""
@@ -374,7 +341,7 @@ describe("ConversationList management actions", () => {
 
 	it("hides archived conversations until show-archived is enabled", () => {
 		const archivedConversation = conversation({ id: "archived-1", isArchived: true });
-		const { rerender } = renderWithProviders(
+		const { rerender } = renderWithMantine(
 			<ConversationList
 				conversations={[archivedConversation]}
 				showArchived={false}
@@ -406,7 +373,7 @@ describe("ConversationList management actions", () => {
 	// The row itself stays a plain container — an ARIA button around the actions menu would make those nested
 	// controls presentational. The title is the real button, so the keyboard reaches it natively.
 	it("makes the conversation title a real button named after the conversation", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ConversationList
 				conversations={[conversation({ id: "local-1", title: "A conversation" })]}
 				onCreateConversation={vi.fn()}
@@ -419,7 +386,7 @@ describe("ConversationList management actions", () => {
 	});
 
 	it("names an untitled conversation rather than exposing a nameless row", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ConversationList
 				conversations={[conversation({ id: "local-1", title: "   " })]}
 				onCreateConversation={vi.fn()}
@@ -435,7 +402,7 @@ describe("ConversationList management actions", () => {
 	// activation would select twice.
 	it("selects the conversation exactly once when the title button is activated", () => {
 		const onSelect = vi.fn();
-		renderWithProviders(
+		renderWithMantine(
 			<ConversationList
 				conversations={[conversation({ id: "local-1", title: "A conversation" })]}
 				onCreateConversation={vi.fn()}
@@ -450,7 +417,7 @@ describe("ConversationList management actions", () => {
 	});
 
 	it("marks the selected conversation with aria-current", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ConversationList
 				conversations={[conversation({ id: "local-1", title: "A conversation" })]}
 				selectedConversationId="local-1"
@@ -467,7 +434,7 @@ describe("ConversationList management actions", () => {
 	// row's own click path.
 	it("does not select the conversation when a space is typed in the rename input", async () => {
 		const onSelect = vi.fn();
-		renderWithProviders(
+		renderWithMantine(
 			<ConversationList
 				conversations={[conversation({ id: "local-1", origin: "local", title: "Old title" })]}
 				onCreateConversation={vi.fn()}
@@ -489,7 +456,7 @@ describe("ConversationList management actions", () => {
 	// Activating the actions icon opens the menu; it must not also select the row the menu belongs to.
 	it("does not select the conversation when the nested actions control is activated", () => {
 		const onSelect = vi.fn();
-		renderWithProviders(
+		renderWithMantine(
 			<ConversationList
 				conversations={[conversation({ id: "local-1", origin: "local" })]}
 				onCreateConversation={vi.fn()}
@@ -516,7 +483,7 @@ describe("ConversationList truncated page footer", () => {
 
 	it("offers Show all when the page is truncated and calls onShowAll", () => {
 		const onShowAll = vi.fn();
-		renderWithProviders(
+		renderWithMantine(
 			<ConversationList
 				conversations={[conversation()]}
 				truncated={true}
@@ -534,7 +501,7 @@ describe("ConversationList truncated page footer", () => {
 	});
 
 	it("shows no footer when the page is not truncated", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ConversationList
 				conversations={[conversation()]}
 				onShowAll={vi.fn()}
@@ -560,7 +527,7 @@ describe("ConversationList new conversation button", () => {
 	// It creates an ordinary conversation, so it must not read as the Plain mode beside it.
 	it("is labelled New chat and creates a conversation", () => {
 		const onCreateConversation = vi.fn();
-		renderWithProviders(
+		renderWithMantine(
 			<ConversationList
 				conversations={[]}
 				onCreateConversation={onCreateConversation}
@@ -589,7 +556,7 @@ describe("ConversationList export and import", () => {
 		["json", "Export as JSON"],
 	] as const)("exports one chat as %s from its menu, a remote one included", async (format, label) => {
 		const onExport = vi.fn();
-		renderWithProviders(
+		renderWithMantine(
 			<ConversationList
 				conversations={[conversation({ id: "remote-1", origin: "remote" })]}
 				onCreateConversation={vi.fn()}
@@ -611,7 +578,7 @@ describe("ConversationList export and import", () => {
 	it("exports every chat and opens a JSON picker whose file goes to the import", async () => {
 		const onExportAll = vi.fn();
 		const onImportFile = vi.fn();
-		renderWithProviders(
+		renderWithMantine(
 			<ConversationList
 				conversations={[]}
 				onCreateConversation={vi.fn()}
@@ -638,7 +605,7 @@ describe("ConversationList export and import", () => {
 	});
 
 	it("disables the import while one is running", async () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ConversationList
 				conversations={[]}
 				onCreateConversation={vi.fn()}
@@ -656,7 +623,7 @@ describe("ConversationList export and import", () => {
 	});
 
 	it("offers no export or import when the page wires none", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ConversationList conversations={[]} onCreateConversation={vi.fn()} onSelect={vi.fn()} onToggleCollapse={vi.fn()} />,
 		);
 
@@ -729,7 +696,7 @@ describe("ConversationList placeholder title", () => {
 		// The app loads the German bundle lazily after the switch; preloading it keeps the first render from racing it.
 		i18next.addResourceBundle("de", "translation", de, true, true);
 		await act(() => i18next.changeLanguage("de"));
-		renderWithProviders(
+		renderWithMantine(
 			<ConversationList
 				conversations={[
 					conversation({ id: "placeholder", title: "New conversation" }),

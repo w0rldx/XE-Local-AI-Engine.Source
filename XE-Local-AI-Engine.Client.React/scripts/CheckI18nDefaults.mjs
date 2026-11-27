@@ -12,10 +12,14 @@
 // run; it is never the state a change lands in.
 //
 // Drift is checked only where a default exists, because there is nothing to compare otherwise.
+//
+// Numbers, dates and relative times follow the UI language through `src/core/formatting/`, whose helpers also survive
+// a malformed stored tag; an `Intl` formatter or a `toLocale*String` call anywhere else reads the browser locale or
+// throws during render, so it fails here too.
 
 import { readdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
@@ -23,7 +27,8 @@ const frontendRoot = resolve(scriptDirectory, "..");
 const ts = createRequire(join(frontendRoot, "package.json"))("typescript");
 
 // Tests are excluded deliberately: a test's own `t()` default is fixture text, not shipped copy. The generated
-// client and the generated route tree are never hand-edited, so drift there would be unfixable in place.
+// client and the generated route tree are never hand-edited, so drift there would be unfixable in place. Patterns
+// match the path below the source root, so a checkout path that happens to contain `test/` excludes nothing.
 const excluded = [/\.test\.tsx?$/, /[\\/]test[\\/]/, /[\\/]core[\\/]api[\\/]generated[\\/]/, /[\\/]routeTree\.gen\.ts$/];
 
 // i18next stores a pluralised key under suffixed siblings; the bare key it is called with never exists on its own.
@@ -168,6 +173,52 @@ export function findLiteralMessages(source, fileName = "source.tsx") {
 	return sites;
 }
 
+const intlFormatters = new Set(["NumberFormat", "DateTimeFormat", "RelativeTimeFormat"]);
+const localeMethods = new Set(["toLocaleString", "toLocaleDateString", "toLocaleTimeString"]);
+
+/** Every `Intl` formatter construction and `toLocale*String` call in one file, which belong in core/formatting. */
+export function findLocaleFormatting(source, fileName = "source.tsx") {
+	const sourceFile = ts.createSourceFile(
+		fileName,
+		source,
+		ts.ScriptTarget.Latest,
+		true,
+		fileName.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+	);
+	const sites = [];
+
+	function visit(node) {
+		if (ts.isNewExpression(node) || ts.isCallExpression(node)) {
+			const callee = node.expression;
+			let call;
+			if (
+				ts.isPropertyAccessExpression(callee) &&
+				ts.isIdentifier(callee.expression) &&
+				callee.expression.text === "Intl" &&
+				intlFormatters.has(callee.name.text)
+			) {
+				call = `Intl.${callee.name.text}`;
+			} else if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(callee) && localeMethods.has(callee.name.text)) {
+				call = callee.name.text;
+			}
+			if (call !== undefined) {
+				sites.push({ line: sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1, call });
+			}
+		}
+		ts.forEachChild(node, visit);
+	}
+
+	visit(sourceFile);
+	return sites;
+}
+
+const formattingHome = /^[\\/]core[\\/]formatting[\\/]/;
+
+/** The path below the source root with a leading separator, which the exclusion and formatting-home patterns read. */
+function belowRoot(sourceRoot, file) {
+	return sep + relative(sourceRoot, file);
+}
+
 /**
  * Splits one file's call sites into drifted defaults and keys the bundle does not have. Every literal key is checked
  * for presence; drift is only meaningful where the call carries a default to disagree with.
@@ -195,7 +246,7 @@ function sourceFilesUnder(directory) {
 	return readdirSync(directory, { recursive: true, withFileTypes: true })
 		.filter((entry) => entry.isFile() && /\.tsx?$/.test(entry.name))
 		.map((entry) => join(entry.parentPath, entry.name))
-		.filter((file) => !excluded.some((pattern) => pattern.test(file)))
+		.filter((file) => !excluded.some((pattern) => pattern.test(belowRoot(directory, file))))
 		.sort();
 }
 
@@ -213,11 +264,15 @@ export function checkI18nDefaults({
 	const drifted = [];
 	const missing = [];
 	const literals = [];
+	const localeFormatting = [];
 	for (const file of files) {
 		const source = readFileSync(file, "utf8");
 		const result = findI18nDefaultDrift(source, bundle, file);
 		const at = (site) => `${relative(root, file)}:${site.line}`;
 		literals.push(...findLiteralMessages(source, file).map((site) => `${at(site)} ${site.call}`));
+		if (!formattingHome.test(belowRoot(sourceRoot, file))) {
+			localeFormatting.push(...findLocaleFormatting(source, file).map((site) => `${at(site)} ${site.call}`));
+		}
 		drifted.push(
 			...result.drifted.map(
 				(site) => `${at(site)} ${site.key}\n    code:   ${site.codeDefault}\n    bundle: ${site.bundleValue}`,
@@ -225,18 +280,29 @@ export function checkI18nDefaults({
 		);
 		missing.push(...result.missing.map((site) => `${at(site)} ${site.key}`));
 	}
-	return { files: files.length, drifted, missing, literals, failOnMissing };
+	return { files: files.length, drifted, missing, literals, localeFormatting, failOnMissing };
 }
 
 const isMain = process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1]);
 if (isMain) {
-	const { files, drifted, missing, literals, failOnMissing } = checkI18nDefaults();
+	const { files, drifted, missing, literals, localeFormatting, failOnMissing } = checkI18nDefaults();
 	if (literals.length > 0) {
 		process.stderr.write(`CheckI18nDefaults: ERROR — ${literals.length} untranslated literal message(s):\n`);
 		for (const entry of literals) {
 			process.stderr.write(`  ${entry}\n`);
 		}
 		process.stderr.write('Fix: pass t("key", "default") instead of the literal, with the key in en.json and de.json.\n');
+	}
+	if (localeFormatting.length > 0) {
+		process.stderr.write(
+			`CheckI18nDefaults: ERROR — ${localeFormatting.length} locale formatting call(s) outside src/core/formatting/:\n`,
+		);
+		for (const entry of localeFormatting) {
+			process.stderr.write(`  ${entry}\n`);
+		}
+		process.stderr.write(
+			"Fix: use formatNumber/formatCount (NumberFormatting.ts) or formatTimestamp/formatTime (TimeFormatting.ts).\n",
+		);
 	}
 	if (missing.length > 0) {
 		// A warning run stays a one-liner: the list is long today and would bury the drift failures below it.
@@ -260,10 +326,10 @@ if (isMain) {
 			"\nFix: make the two agree — adopt the bundle string in code, or update en.json (and de.json) to the code's wording.\n",
 		);
 	}
-	if (drifted.length > 0 || literals.length > 0 || (failOnMissing && missing.length > 0)) {
+	if (drifted.length > 0 || literals.length > 0 || localeFormatting.length > 0 || (failOnMissing && missing.length > 0)) {
 		process.exit(1);
 	}
 	process.stdout.write(
-		`CheckI18nDefaults: OK — every literal t() key in ${files} files exists in en.json, every in-code default matches it, and no apiErrorMessage/toast message is a bare literal.\n`,
+		`CheckI18nDefaults: OK — every literal t() key in ${files} files exists in en.json, every in-code default matches it, no apiErrorMessage/toast message is a bare literal, and no locale formatting call sits outside src/core/formatting/.\n`,
 	);
 }

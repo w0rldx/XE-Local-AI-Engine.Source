@@ -9,6 +9,7 @@ using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Instructions;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -1560,20 +1561,10 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
     /// </summary>
     private static string TruncateUtf8(string text, int maxBytes)
     {
-        var bytes = Encoding.UTF8.GetBytes(text);
-        if (bytes.Length <= maxBytes)
-        {
-            return text;
-        }
-
-        // Back off the cut while it lands on a UTF-8 continuation byte, which is the middle of a character.
-        var cut = maxBytes;
-        while (cut > 0 && (bytes[cut] & 0xC0) == 0x80)
-        {
-            cut--;
-        }
-
-        return $"{Encoding.UTF8.GetString(bytes, index: 0, cut)}\n… truncated, {bytes.Length - cut} bytes omitted";
+        var kept = Utf8Truncation.TruncateToUtf8ByteBudget(text, maxBytes);
+        return kept.Length == text.Length
+            ? text
+            : $"{kept}\n… truncated, {Encoding.UTF8.GetByteCount(text) - Encoding.UTF8.GetByteCount(kept)} bytes omitted";
     }
 
     /// <summary>The input document this node run reads, over the SATISFIED inbound edges the admission judged.</summary>

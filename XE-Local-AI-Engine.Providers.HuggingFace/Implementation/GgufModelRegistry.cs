@@ -295,37 +295,6 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
         }
     }
 
-    /// <summary>
-    ///     Removes EVERY entry whose backing file resolves to <paramref name="localPath" />, atomically. Returns the
-    ///     count removed; idempotent (no match is a no-op).
-    /// </summary>
-    /// <remarks>
-    ///     A first download can have registered one file under two names (a filename alias plus the canonical repo id),
-    ///     and deleting through either identity must leave no manifest entry pointing at the now-removed file.
-    /// </remarks>
-    public async Task<int> RemoveByLocalPathAsync(string localPath, CancellationToken ct)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(localPath);
-
-        var normalizedPath = NormalizeLocalPath(localPath);
-        await _lock.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            var entries = (await LoadEntriesAsync(ct).ConfigureAwait(false)).ToList();
-            var removed = entries.RemoveAll(existing => PathComparer.Equals(NormalizeLocalPath(existing.LocalPath), normalizedPath));
-            if (removed > 0)
-            {
-                await WriteManifestAsync(entries, ct).ConfigureAwait(false);
-            }
-
-            return removed;
-        }
-        finally
-        {
-            _lock.Release();
-        }
-    }
-
     // Reads the manifest, self-healing to a directory rescan when it is missing or corrupt. Caller holds the lock.
     private async Task<IReadOnlyList<GgufModelRegistryEntry>> LoadEntriesAsync(CancellationToken ct)
     {

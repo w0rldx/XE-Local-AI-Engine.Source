@@ -16,7 +16,7 @@ public sealed class ModelLabExperimentStoreTests : IDisposable
 {
     private const string Prompt = "the secret prompt under test";
 
-    private readonly INodeSqliteKeyHolder _keyHolder = new FixedKeyHolder();
+    private readonly INodeSqliteKeyHolder _keyHolder = new FixedNodeSqliteKeyHolder(RandomNumberGenerator.GetBytes(32));
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
 
     public void Dispose()
@@ -232,7 +232,7 @@ public sealed class ModelLabExperimentStoreTests : IDisposable
     [Test]
     public async Task Trim_RemovesTheOldestFinishedRows_AndNeverARunningOne()
     {
-        var clock = new SteppingClock();
+        var clock = new SteppingTimeProvider();
         await using var context = await CreateDatabaseAsync();
         var store = new ModelLabExperimentStore(context, clock);
         var ids = new List<Guid>();
@@ -261,7 +261,7 @@ public sealed class ModelLabExperimentStoreTests : IDisposable
     [Test]
     public async Task Trim_LeavesAFinishedRowThatStillHoldsAReceipt()
     {
-        var clock = new SteppingClock();
+        var clock = new SteppingTimeProvider();
         await using var context = await CreateDatabaseAsync();
         var store = new ModelLabExperimentStore(context, clock);
         var oldest = Guid.NewGuid();
@@ -375,7 +375,7 @@ public sealed class ModelLabExperimentStoreTests : IDisposable
     [Test]
     public async Task Trim_KeepsEveryPinnedRow_AndTheNewestUnpinnedOnes()
     {
-        var clock = new SteppingClock();
+        var clock = new SteppingTimeProvider();
         await using var context = await CreateDatabaseAsync();
         var store = new ModelLabExperimentStore(context, clock);
         var ids = new List<Guid>();
@@ -422,7 +422,7 @@ public sealed class ModelLabExperimentStoreTests : IDisposable
     {
         var pinLate = new PinBeforeFirstDelete();
         await using var context = await CreateDatabaseAsync(pinLate);
-        var store = new ModelLabExperimentStore(context, new SteppingClock());
+        var store = new ModelLabExperimentStore(context, new SteppingTimeProvider());
         for (var i = 0; i < 4; i++)
         {
             _ = await CreateFinishedAsync(store);
@@ -443,7 +443,7 @@ public sealed class ModelLabExperimentStoreTests : IDisposable
     {
         var failSecond = new FailSecondDelete();
         await using var context = await CreateDatabaseAsync(failSecond);
-        var store = new ModelLabExperimentStore(context, new SteppingClock());
+        var store = new ModelLabExperimentStore(context, new SteppingTimeProvider());
         for (var i = 0; i < 3; i++)
         {
             _ = await CreateFinishedAsync(store);
@@ -615,23 +615,5 @@ public sealed class ModelLabExperimentStoreTests : IDisposable
 
             return await base.SavingChangesAsync(eventData, result, cancellationToken);
         }
-    }
-
-    private sealed class FixedKeyHolder : INodeSqliteKeyHolder
-    {
-        public ReadOnlyMemory<byte> Key { get; } = RandomNumberGenerator.GetBytes(32);
-
-        public void Dispose()
-        {
-        }
-    }
-
-    /// <summary>Each read is later than the last, so creation order is the sort order.</summary>
-    private sealed class SteppingClock : TimeProvider
-    {
-        private long _ticks = DateTimeOffset.UnixEpoch.Ticks;
-
-        public override DateTimeOffset GetUtcNow() =>
-            new(Interlocked.Add(ref _ticks, TimeSpan.TicksPerSecond), TimeSpan.Zero);
     }
 }

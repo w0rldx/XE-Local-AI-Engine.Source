@@ -19,13 +19,12 @@ public sealed class BenchmarkRuntimeSnapshotTests
     [Test]
     public void Eligibility_StripsMandatoryAskUserOnly()
     {
-        var policy = new BenchmarkEligibilityPolicy();
         var runtime = CreateRuntime([
             Tool(AskUserTool.ToolName, ToolCategory.Orchestration, requiresApproval: true),
             Tool("read_clock", ToolCategory.ReadLocal, requiresApproval: false)
         ]);
 
-        var result = policy.Apply(runtime);
+        var result = BenchmarkEligibilityPolicy.Apply(runtime);
 
         AssertEx.Equal(expected: 1, result.AllowedTools.Count);
         AssertEx.Equal("read_clock", result.AllowedTools[0].Name);
@@ -34,15 +33,14 @@ public sealed class BenchmarkRuntimeSnapshotTests
     [Test]
     public void Eligibility_RejectsApprovalOrNonReadTools()
     {
-        var policy = new BenchmarkEligibilityPolicy();
-        _ = AssertEx.Throws<BenchmarkEligibilityException>(() => policy.Apply(CreateRuntime([Tool("write", ToolCategory.WriteExecute, requiresApproval: false)])));
-        _ = AssertEx.Throws<BenchmarkEligibilityException>(() => policy.Apply(CreateRuntime([Tool("read", ToolCategory.ReadLocal, requiresApproval: true)])));
+        _ = AssertEx.Throws<BenchmarkEligibilityException>(() => BenchmarkEligibilityPolicy.Apply(CreateRuntime([Tool("write", ToolCategory.WriteExecute, requiresApproval: false)])));
+        _ = AssertEx.Throws<BenchmarkEligibilityException>(() => BenchmarkEligibilityPolicy.Apply(CreateRuntime([Tool("read", ToolCategory.ReadLocal, requiresApproval: true)])));
     }
 
     [Test]
     public void Snapshot_RoundTripsCompleteRuntimeAndRejectsTamper()
     {
-        var factory = new BenchmarkRuntimeSnapshotFactory(new BenchmarkEligibilityPolicy());
+        var factory = new BenchmarkRuntimeSnapshotFactory();
         var model = CreateModel();
         var snapshot = factory.Create(new BenchmarkRuntimeSnapshotInput
         {

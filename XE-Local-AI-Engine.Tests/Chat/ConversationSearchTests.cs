@@ -554,26 +554,11 @@ public sealed class ConversationSearchTests : IDisposable
         _ = await dbContext.Database.ExecuteSqlRawAsync("UPDATE messages SET message_id = {0} WHERE conversation_id = {1};", [messageId, conversationId]);
     }
 
-    private async Task<ServiceProvider> BuildProviderAsync(string fileName)
-    {
-        Directory.CreateDirectory(_rootPath);
-        var databasePath = Path.Combine(_rootPath, fileName);
-        var services = new ServiceCollection();
+    private Task<ServiceProvider> BuildProviderAsync(string fileName) =>
         // While the test arms failures, each DbContext resolution throws once: a transient failure of a whole pass.
-        services.AddScoped<INodeSqliteKeyHolder>(_ => Interlocked.Decrement(ref _failingContextResolutions) >= 0
+        NodeChatTestProvider.BuildAsync(Path.Combine(_rootPath, fileName), pooled: true, _ => Interlocked.Decrement(ref _failingContextResolutions) >= 0
             ? throw new InvalidOperationException("Simulated transient database failure.")
             : new NullNodeSqliteKeyHolder());
-        services.AddDbContext<NodeChatDbContext>(options => options.UseSqlite($"Data Source={databasePath}"));
-        services.AddSingleton<NodeChatPersistenceWriter>();
-
-        var provider = services.BuildServiceProvider(true);
-        await using var scope = provider.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        await dbContext.Database.EnsureDeletedAsync();
-        await dbContext.Database.EnsureCreatedAsync();
-
-        return provider;
-    }
 
     private static NodeChatPersistenceService CreateService(ServiceProvider provider) =>
         new(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);

@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client.Endpoints.Agents.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Client.Services.Monitoring;
+using XE_Local_AI_Engine.Client.Services.Monitoring.Implementation;
 
 /// <summary>
 ///     Read-only cohort monitoring for an agent's Enabled playbook actions (relevance retrieval and cohort
@@ -20,11 +20,11 @@ using XE_Local_AI_Engine.Client.Services.Monitoring;
 public sealed class GetAgentPlaybookMonitorEndpoint : Endpoint<GetAgentPlaybookMonitorRequest, AgentPlaybookMonitorResponse>
 {
     private readonly IAgentDefinitionService _agentDefinitions;
-    private readonly IPlaybookMonitorService _playbookMonitorService;
+    private readonly PlaybookMonitorService _playbookMonitorService;
     private readonly PlaybookRetrievalOptions _retrievalOptions;
 
     public GetAgentPlaybookMonitorEndpoint(IAgentDefinitionService agentDefinitions,
-        IPlaybookMonitorService playbookMonitorService,
+        PlaybookMonitorService playbookMonitorService,
         IOptions<PlaybookRetrievalOptions> retrievalOptions)
     {
         ArgumentNullException.ThrowIfNull(agentDefinitions);

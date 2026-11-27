@@ -1,13 +1,11 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { cleanup, render, screen } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { cleanup, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ToolCatalogEntry } from "@/core/tools/models/ToolCatalogModels";
 import { ToolsPage } from "@/features/tools/pages/ToolsPage";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { installJsdomEnvironmentMocks, renderWithMantine } from "@/test/MantineTestRender";
 
 const { useToolCatalogMock } = vi.hoisted(() => ({
 	useToolCatalogMock: vi.fn(),
@@ -40,42 +38,6 @@ const catalogTools: ToolCatalogEntry[] = [
 	},
 ];
 
-function renderWithProviders(ui: ReactElement) {
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			{ui}
-		</MantineProvider>,
-	);
-}
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-	Object.defineProperty(document, "fonts", {
-		writable: true,
-		value: { ready: Promise.resolve(), addEventListener: vi.fn(), removeEventListener: vi.fn() },
-	});
-}
-
 describe("ToolsPage", () => {
 	beforeEach(() => {
 		installJsdomEnvironmentMocks();
@@ -88,19 +50,19 @@ describe("ToolsPage", () => {
 	});
 
 	it("renders the tools page container", () => {
-		renderWithProviders(<ToolsPage />);
+		renderWithMantine(<ToolsPage />);
 
 		expect(screen.getByTestId("tools-page")).toBeTruthy();
 	});
 
 	it("renders the LocalToolsOverview panel inside the page", () => {
-		renderWithProviders(<ToolsPage />);
+		renderWithMantine(<ToolsPage />);
 
 		expect(screen.getByTestId("local-tools-overview")).toBeTruthy();
 	});
 
 	it("lists the fetched catalog tools on the page", () => {
-		renderWithProviders(<ToolsPage />);
+		renderWithMantine(<ToolsPage />);
 
 		for (const tool of catalogTools) {
 			expect(screen.getByTestId(`local-tool-row-${tool.name}`)).toBeTruthy();
@@ -108,7 +70,7 @@ describe("ToolsPage", () => {
 	});
 
 	it("shows auto-execute badges for all built-in tools", () => {
-		renderWithProviders(<ToolsPage />);
+		renderWithMantine(<ToolsPage />);
 
 		for (const tool of catalogTools) {
 			const badge = screen.getByTestId(`local-tool-approval-badge-${tool.name}`);

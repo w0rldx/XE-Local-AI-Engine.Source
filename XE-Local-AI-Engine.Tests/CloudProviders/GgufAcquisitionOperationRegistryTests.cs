@@ -84,7 +84,7 @@ public sealed class GgufAcquisitionOperationRegistryTests
     [Test]
     public void TerminalRetention_CountCapEvictsOldestTerminalButNeverActive()
     {
-        var time = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
+        var time = new RewindableClock(DateTimeOffset.UnixEpoch);
         var registry = new GgufAcquisitionOperationRegistry(time, TimeSpan.FromHours(1), maxTerminalCount: 2);
         var active = registry.Start(GgufAcquisitionOperationKind.Download, "active:Q4_K_M");
         var first = registry.RecordTerminal(GgufAcquisitionOperationKind.Download, "first:Q4_K_M", GgufAcquisitionPhase.Completed);
@@ -101,7 +101,7 @@ public sealed class GgufAcquisitionOperationRegistryTests
     [Test]
     public void TerminalRetention_MaxAgeExpiresTerminalButNeverActive()
     {
-        var time = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
+        var time = new RewindableClock(DateTimeOffset.UnixEpoch);
         var registry = new GgufAcquisitionOperationRegistry(time, TimeSpan.FromMinutes(5), maxTerminalCount: 256);
         var terminal = registry.RecordTerminal(GgufAcquisitionOperationKind.Download, "terminal:Q4_K_M", GgufAcquisitionPhase.Completed);
         var active = registry.Start(GgufAcquisitionOperationKind.Import, "active:Q4_K_M");
@@ -115,7 +115,7 @@ public sealed class GgufAcquisitionOperationRegistryTests
     [Test]
     public void Updates_AreStrictlyMonotonicWhenClockDoesNotAdvanceOrMovesBackward()
     {
-        var time = new ManualTimeProvider(DateTimeOffset.UnixEpoch.AddHours(1));
+        var time = new RewindableClock(DateTimeOffset.UnixEpoch.AddHours(1));
         var registry = new GgufAcquisitionOperationRegistry(time);
         var registration = registry.Start(GgufAcquisitionOperationKind.Download, "model:Q4_K_M");
         var downloading = registry.Update(registration.Status.OperationId, GgufAcquisitionPhase.Downloading);
@@ -128,11 +128,12 @@ public sealed class GgufAcquisitionOperationRegistryTests
         AssertEx.True(committing.UpdatedAtUtc < completed.UpdatedAtUtc);
     }
 
-    private sealed class ManualTimeProvider : TimeProvider
+    /// <summary>A wall clock a test can move backward, which the shared <see cref="ManualTimeProvider" /> refuses.</summary>
+    private sealed class RewindableClock : TimeProvider
     {
         private DateTimeOffset _utcNow;
 
-        public ManualTimeProvider(DateTimeOffset utcNow)
+        public RewindableClock(DateTimeOffset utcNow)
         {
             _utcNow = utcNow;
         }

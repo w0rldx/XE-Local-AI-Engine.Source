@@ -1,6 +1,6 @@
 # Code Organization Conventions
 
-> Reviewed: 2026-10-02 · Code-grounded.
+> Reviewed: 2026-11-26 · Code-grounded.
 > Updated 2026-08-07: endpoint areas now fold DTOs/mappers/validators into `V1/{Dtos,Mappers,Validators}/`
 > subfolders (only endpoints stay at the top level); `Dtos/` keeps a flat namespace by design.
 > Updated 2026-09-17: the backend sections below state the **C# baseline** — conventional constructors,
@@ -148,21 +148,23 @@ endpoint infrastructure, not a category worth a folder of one. An endpoint's **o
 
 ### One top-level type per file — the family files are the exception
 
-A `.cs` file declares one top-level type, named after the file. Four shapes are exceptions, and nothing else is:
+A `.cs` file declares one top-level type, named after the file. Five shapes are exceptions, and nothing else is:
 
 - a **family file** — `*Dtos.cs`, `*Contracts.cs`, `*ServiceModels.cs`, `*Models.cs` — which groups a related
   family on purpose (see the section below);
 - an **interface beside its single implementation**, `IFoo` and `Foo`;
 - one **primary type beside only enums and delegates**, the vocabulary it takes or returns;
-- an **`I*Store.cs` / `I*Service.cs`** declaring that interface plus its own command, snapshot, result and
-  exception types — functionally a family file named after its contract, which a split would scatter.
+- a file of **enums only**;
+- an **`I<Name>.cs` contract bundle** declaring `interface I<Name>` plus its own command, snapshot, result and
+  exception types — functionally a family file named after its contract, which a split would scatter. Its classes
+  and structs hold data only (no public method), except in an `I*Store.cs` or `I*Service.cs`.
 
 Everything else is drift in one of two directions: a DTO inlined in an `*Endpoint.cs`, or a stray type riding
 along in a `*Service.cs`. Both move out — the DTO to the area's `Dtos/` folder (the namespace stays flat, so
 this is a pure move), the stray type to the service's sibling `*ServiceModels.cs`.
 
 `FilePlacementConventionTests` fails the gate on any production file that declares more than one top-level type
-without one of those four shapes, against `XE-Local-AI-Engine.Tests/Architecture/FilePlacementAllowlist.txt` —
+without one of those five shapes, against `XE-Local-AI-Engine.Tests/Architecture/FilePlacementAllowlist.txt` —
 one `file|count` line per file still carrying inherited debt, shrink-only in both directions, so the commit that
 splits a file lowers or deletes its line and the room cannot be spent twice. It reads source, because IL carries
 no file identity, and counts brace depth so a nested type is never mistaken for a top-level one.
@@ -496,7 +498,10 @@ build's test gate, not the reviewer's memory:
 | A public **`*Options`** class in a `Providers.*` project lives in `…Providers.<Name>.Options`. | `PlacementConventionTests.ProviderOptionsClasses_ResideInTheProviderOptionsNamespace` |
 | In the host: a FastEndpoints endpoint lives in a `.V1` namespace, a `*Mapper` in `.V1.Mappers`, an `IValidator` in `.V1.Validators`. | `PlacementConventionTests.ClientEndpointsMappersAndValidators_ResideInTheirVersionedNamespaces` |
 | A service implementation file under `Client.Application/Services/{AgentHome,Benchmarks,Capacity,Development,DocumentIngestion,Inference,Integrations,Knowledge,Models,Training,WorkSessions}/` declares the service and nothing else — its records and enums go in a sibling `*Models` / `*ServiceModels` / `*Contracts` / `*Dtos` file. | `ServiceModelColocationTests.ServiceImplementationFiles_DoNotAlsoDeclareContractTypes` |
-| A production `.cs` file declares one top-level type, unless it is a family file, an `IFoo`+`Foo` pair, one type beside only enums and delegates, or an `I*Store.cs`/`I*Service.cs` contract bundle. | `FilePlacementConventionTests.ProductionProjects_DeclareOneTopLevelTypePerFile` |
+| A production `.cs` file declares one top-level type, unless it is a family file, an `IFoo`+`Foo` pair, one type beside only enums and delegates, enums only, or an `I<Name>.cs` contract bundle. | `FilePlacementConventionTests.ProductionProjects_DeclareOneTopLevelTypePerFile` |
+| **File size**: a production `.cs` file stays at or under 1000 lines. A file already over it is listed in `FileSizeAllowlist.txt` with a ceiling (its size when listed, rounded up to a multiple of 50) it may not pass; the list only shrinks, and `XE_FILE_SIZE_SHRINK=1` lowers the ceilings. A file that grows past the limit is split at a real seam in that commit, or the split is rejected with a recorded reason. | `FileSizeRatchetTests.ProductionFiles_StayUnderTheLineLimitOrTheirCeiling` |
+| **No single-implementation interface** in `Client.Application`: an interface it declares has two production implementations, an `IEnumerable<T>` consumer, an implementation outside `Client.Application`, or a test that substitutes or fakes it. Anything else is listed with its reason in `SingleImplementationInterfaceAllowlist.txt`, shrink-only. | `SingleImplementationInterfaceTests.ClientApplicationInterfaces_HaveMoreThanOneImplementationOrAListedReason` |
+| A **test class is not a support host**: no file reads `NameTests.Member` from a `*Tests` class declared in another file; the shared member moves to a support type. Today's edges sit in `TestClassHostAllowlist.txt`, shrink-only. | `TestClassHostConventionTests.NoFileUsesATestClassAsItsSupportHost` |
 | An endpoint class is alone in a file named after it; no plural `*Endpoints.cs` may declare one. | `EndpointConventionTests.EveryEndpointTypeIsDeclaredInExactlyOneFileNamedAfterIt`, `…PluralEndpointFilesAreOnlyTheNamedGroupingExceptions` |
 | A concrete store that a publishing decorator wraps (`GraphWorkflowStore`, and `AgentWorkSessionStore` pre-emptively) is named only in the DI module that registers it, so no caller resolves the undecorated store and skips its events. | `ConcreteStoreConstructionArchitectureTests.ProductionCallers_NameAConcreteStoreOnlyWhereItIsRegistered` |
 | The model-provider map is reached only through `ICoordinatedModelProviderMapStore`: `IModelProviderMapStore` / `ModelProviderMapStore` are named only by the facade and its DI module, and that module registers the shared lock domain and coordinators. | `ProviderMapCoordinationArchitectureTests.ProductionCallers_CannotBypassCoordinatedProviderMapFacade`, `…ProductionComposition_RegistersSharedCoordinationDomainAndFacades` |
@@ -715,7 +720,13 @@ fallback.
 ### `pnpm run lint` is the gate; `react-doctor` is advisory
 
 The enforced gate is `pnpm run lint` (`tsc --noEmit` + `biome` + `stylelint` +
-`CheckEventCurrentTargetInUpdaters`) and must be green. **`npx react-doctor` is advisory only** — its
+`CheckEventCurrentTargetInUpdaters`) and must be green. Over production `src/` (tests, test folders and generated
+code excluded) Biome enforces `noExcessiveLinesPerFile` at 500 lines (blank and comment-only lines do not count)
+and `noNestedComponentDefinitions`. The files over 500 lines today are turned off in their own `biome.json`
+override; `scripts/BiomeFileLengthOffList.test.mjs` fails when a listed file is back under the limit, so that list
+only shrinks. `pnpm run knip` runs Knip twice: the default run, and a production run (`--production`, the `!`
+patterns in `Knip.ts`) that reports a production export only a test imports. Its baseline
+`config/knip-production-baseline.json` is shrink-only; a deliberate test seam carries `@internal`. **`npx react-doctor` is advisory only** — its
 score has no overlap with the gate; a low score with green lint means "review the findings," not "build
 broken." Config is `doctor.config.jsonc` (JSONC for comments; a `.json` with `//` fails biome).
 

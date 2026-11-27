@@ -4,8 +4,9 @@ import { IconChevronLeft, IconChevronRight } from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { formatNumber } from "@/core/formatting/NumberFormatting";
 import { BasisBadge } from "@/features/modelLab/components/ArchitectureExplanation";
-import { moveFocusAmongButtons } from "@/features/modelLab/models/ModelLabFocus";
+import { moveFocusAmongButtons, useRovingTabStop } from "@/features/modelLab/models/ModelLabFocus";
 import {
 	missingPhase,
 	type PlaygroundCheck,
@@ -15,17 +16,11 @@ import {
 	type PlaygroundTensor,
 	type PlaygroundTrace,
 	playgroundPhases,
+	playgroundValue,
 	rows,
 	updateCheck,
 	visitSumCheck,
 } from "@/features/modelLab/models/ModelLabPlayground";
-
-// Recorded numbers keep every bit; the page shows four significant digits and the full value on hover.
-function useNumber(): (value: number | null) => string {
-	const { t, i18n } = useTranslation();
-	const format = new Intl.NumberFormat(i18n.language, { maximumSignificantDigits: 4 });
-	return (value) => (value === null ? t("pages.modelLab.playground.notFinite", "not finite") : format.format(value));
-}
 
 function useGapText(): (gap: PlaygroundGap) => string {
 	const { t } = useTranslation();
@@ -51,12 +46,12 @@ function useGapText(): (gap: PlaygroundGap) => string {
 // One saved playground run replayed step by step. Every value is from the recorded trace; nothing runs again.
 export function PlaygroundStepper({ trace }: { trace: PlaygroundTrace }) {
 	const { t } = useTranslation();
-	const number = useNumber();
 	const [at, setAt] = useState(0);
 	const [phase, setPhase] = useState<PlaygroundPhase>("forward");
 	const total = trace.recorded.length;
 	const current = Math.min(at, Math.max(total - 1, 0));
 	const step = trace.recorded[current];
+	const lossStop = useRovingTabStop(current, total);
 	const { outcome, config } = trace;
 	const phaseLabels: Record<PlaygroundPhase, string> = {
 		forward: t("pages.modelLab.playground.phase.forward.label", "Forward"),
@@ -118,13 +113,15 @@ export function PlaygroundStepper({ trace }: { trace: PlaygroundTrace }) {
 									variant={index === current ? "filled" : "default"}
 									ff="monospace"
 									aria-current={index === current ? "step" : undefined}
+									tabIndex={lossStop.tabIndexFor(index)}
+									onFocus={() => lossStop.onFocusAt(index)}
 									onClick={() => setAt(index)}
 									aria-label={t("pages.modelLab.playground.lossButton", "Step {{step}}: loss {{loss}}", {
 										step: item.step + 1,
-										loss: number(item.loss.value),
+										loss: playgroundValue(item.loss.value, t),
 									})}
 								>
-									{number(item.loss.value)}
+									{playgroundValue(item.loss.value, t)}
 								</Button>
 							))}
 						</Group>
@@ -268,17 +265,23 @@ interface ChipsProps {
 	"data-testid": string;
 }
 
-// A row of toggle buttons; the arrow keys move between them.
+// A row of toggle buttons with one Tab stop; the arrow keys move between them.
 function Chips({ label, items, value, onChange, "data-testid": testId }: ChipsProps) {
+	const stop = useRovingTabStop(
+		items.findIndex((item) => item.value === value),
+		items.length,
+	);
 	return (
 		<Group gap={4} role="group" aria-label={label} onKeyDown={moveFocusAmongButtons} data-testid={testId}>
-			{items.map((item) => (
+			{items.map((item, index) => (
 				<Button
 					key={item.value}
 					size="compact-xs"
 					variant={item.value === value ? "filled" : "default"}
 					ff="monospace"
 					aria-pressed={item.value === value}
+					tabIndex={stop.tabIndexFor(index)}
+					onFocus={() => stop.onFocusAt(index)}
 					onClick={() => onChange(item.value)}
 				>
 					{item.label}
@@ -338,14 +341,13 @@ function ForwardView({ trace, step }: { trace: PlaygroundTrace; step: Playground
 
 function LossView({ trace, step }: { trace: PlaygroundTrace; step: PlaygroundStep }) {
 	const { t } = useTranslation();
-	const number = useNumber();
 	return (
 		<Stack gap="xs">
 			<Group gap="xs">
 				<Text size="sm" data-testid="model-lab-playground-loss">
 					{t("pages.modelLab.playground.lossValue", "Loss {{loss}}, accuracy {{accuracy}} over all {{count}} points", {
-						loss: number(step.loss.value),
-						accuracy: number(step.loss.accuracy),
+						loss: playgroundValue(step.loss.value, t),
+						accuracy: playgroundValue(step.loss.accuracy, t),
 						count: trace.data.count,
 					})}
 				</Text>
@@ -479,10 +481,9 @@ function UpdateView({ trace, step }: { trace: PlaygroundTrace; step: PlaygroundS
 }
 
 function CheckLine({ title, check, testId }: { title: string; check: PlaygroundCheck; testId: string }) {
-	const { t, i18n } = useTranslation();
+	const { t } = useTranslation();
 	const gapText = useGapText();
-	const scientific = (value: number): string =>
-		new Intl.NumberFormat(i18n.language, { notation: "scientific", maximumSignificantDigits: 2 }).format(value);
+	const scientific = (value: number): string => formatNumber(value, { notation: "scientific", maximumSignificantDigits: 2 });
 	return (
 		<Stack gap={2} data-testid={testId}>
 			<Group gap="xs">
@@ -521,7 +522,6 @@ interface PointTableProps {
 // Values at the probe points: one row per point, named by its coordinates.
 function PointTable({ trace, title, value, columns }: PointTableProps) {
 	const { t } = useTranslation();
-	const number = useNumber();
 	const width = value[0]?.length ?? 0;
 	return (
 		<ValueTable
@@ -532,7 +532,7 @@ function PointTable({ trace, title, value, columns }: PointTableProps) {
 				return {
 					label: t("pages.modelLab.playground.point", "Point {{index}} ({{x}})", {
 						index: point,
-						x: (trace.data.x[point] ?? []).map(number).join(", "),
+						x: (trace.data.x[point] ?? []).map((value) => playgroundValue(value, t)).join(", "),
 					}),
 					cells,
 				};
@@ -548,7 +548,7 @@ interface ValueTableProps {
 }
 
 function ValueTable({ title, header, rows: tableRows }: ValueTableProps) {
-	const number = useNumber();
+	const { t } = useTranslation();
 	return (
 		<Stack gap={4} data-testid="model-lab-playground-values">
 			<Group gap="xs">
@@ -576,7 +576,7 @@ function ValueTable({ title, header, rows: tableRows }: ValueTableProps) {
 								{row.cells.map((cell, at) => (
 									// biome-ignore lint/suspicious/noArrayIndexKey: a column is its position in the tensor.
 									<Table.Td key={at} ta="right" title={cell === null ? undefined : String(cell)}>
-										{number(cell)}
+										{playgroundValue(cell, t)}
 									</Table.Td>
 								))}
 							</Table.Tr>

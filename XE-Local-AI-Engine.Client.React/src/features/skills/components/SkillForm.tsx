@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import { AssistActions } from "@/core/assist/components/AssistActions/AssistActions";
 import type { AssistDraft } from "@/core/assist/models/AssistModels";
+import { formatCount } from "@/core/formatting/NumberFormatting";
 import {
 	SKILL_BODY_GUIDANCE_LINES,
 	SKILL_BODY_GUIDANCE_TOKENS,
@@ -244,8 +245,8 @@ export function SkillForm({
 			/>
 			<Text size="xs" c={bodyBudget.isOverGuidance ? "orange" : "dimmed"} data-testid="skill-form-body-budget">
 				{t("pages.skills.form.body.budget", "{{lines}} lines · ~{{tokens}} tokens", {
-					lines: bodyBudget.lines.toLocaleString(),
-					tokens: bodyBudget.estimatedTokens.toLocaleString(),
+					lines: formatCount(bodyBudget.lines),
+					tokens: formatCount(bodyBudget.estimatedTokens),
 				})}
 				{bodyBudget.isOverGuidance
 					? ` · ${t(

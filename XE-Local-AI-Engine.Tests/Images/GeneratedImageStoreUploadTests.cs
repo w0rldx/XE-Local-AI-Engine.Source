@@ -297,16 +297,4 @@ public sealed class GeneratedImageStoreUploadTests : IDisposable
         await dbContext.Database.EnsureCreatedAsync();
         return provider;
     }
-
-    /// <summary>Advances one second per read, so rows written in sequence get strictly increasing timestamps.</summary>
-    private sealed class SteppingTimeProvider : TimeProvider
-    {
-        private DateTimeOffset _now = DateTimeOffset.UnixEpoch.AddYears(56);
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            _now = _now.AddSeconds(1);
-            return _now;
-        }
-    }
 }

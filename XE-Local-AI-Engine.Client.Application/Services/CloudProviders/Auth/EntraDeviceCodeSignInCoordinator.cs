@@ -13,7 +13,7 @@ using Azure.Identity;
 ///     silently refresh from when OS-native encrypted persistence is unavailable. Mirrors
 ///     <c>CodexLoginCoordinator</c>'s pending-login shape.
 /// </remarks>
-public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoordinator, IDisposable
+public sealed class EntraDeviceCodeSignInCoordinator : IDisposable
 {
     private const string TokenCachePersistenceName = "XE-Local-AI-Engine.Client.AzureFoundry.EntraId";
 
@@ -70,7 +70,15 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
         _onSignInSucceeded = onSignInSucceeded;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    ///     Starts (superseding any in-flight attempt) a device-code sign-in against the stored connection's tenant /
+    ///     client / scope and returns once the user code is available.
+    /// </summary>
+    /// <remarks>
+    ///     The exchange completes in the background; poll <see cref="Status" />. Throws
+    ///     <see cref="InvalidOperationException" /> when no Entra ID connection with a tenant id and client id is
+    ///     stored.
+    /// </remarks>
     public async Task<EntraDeviceCodeSignInHandle> StartAsync(CancellationToken cancellationToken)
     {
         var connection = await LoadEntraConnectionOrThrowAsync(cancellationToken);
@@ -123,12 +131,15 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
         };
     }
 
-    /// <inheritdoc />
-    public EntraDeviceCodeSignInStatus GetStatus()
+    /// <summary>The current sign-in status snapshot. Carries no token material.</summary>
+    public EntraDeviceCodeSignInStatus Status
     {
-        lock (_gate)
+        get
         {
-            return _status;
+            lock (_gate)
+            {
+                return _status;
+            }
         }
     }
 

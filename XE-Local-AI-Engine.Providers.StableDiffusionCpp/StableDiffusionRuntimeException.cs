@@ -41,4 +41,10 @@ public sealed class StableDiffusionRuntimeException : Exception
     ///     display-safe instruction.
     /// </summary>
     public bool LoadedModelCapReached { get; init; }
+
+    /// <summary>
+    ///     Whether the model's daemon was unloaded again while the generation was starting, before anything was
+    ///     submitted. The message is then a fixed, display-safe instruction to retry.
+    /// </summary>
+    public bool ModelUnloadedWhileStarting { get; init; }
 }

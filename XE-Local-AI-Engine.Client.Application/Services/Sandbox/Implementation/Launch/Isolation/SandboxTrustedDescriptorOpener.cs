@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isola
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Opens <see cref="SandboxTrustedDescriptor" />s through an <c>openat2(2)</c> walk that refuses to traverse a symlink or leave the
@@ -21,12 +22,6 @@ internal static class SandboxTrustedDescriptorOpener
     private const long OpenAt2SystemCall = 437;
 
     private const int OpenHowBytes = 24;
-
-    // O_PATH: open the inode without opening the file. It is the right mode for a bind source — no read permission is
-    // implied, nothing is held open for I/O, and both statx(AT_EMPTY_PATH) and bwrap's --bind-fd accept it.
-    private const ulong OpenPath = 0x200000;
-    private const ulong OpenDirectory = 0x10000;
-    private const ulong OpenCloseOnExec = 0x80000;
 
     // RESOLVE_NO_SYMLINKS refuses the open if ANY component, the final one included, is a symlink; RESOLVE_BENEATH refuses anything that
     // would escape the starting descriptor. Together the walk cannot leave the tree it was pointed at.
@@ -183,8 +178,7 @@ internal static class SandboxTrustedDescriptorOpener
 
     private static OwnedDescriptor OpenRoot()
     {
-        var rootBytes = NullTerminated("/");
-        var descriptor = open(rootBytes, (int)(OpenPath | OpenDirectory | OpenCloseOnExec));
+        var descriptor = LinuxOpenFlags.Open("/", LinuxOpenFlags.PathOnly | LinuxOpenFlags.Directory | LinuxOpenFlags.CloseOnExec);
 
         return descriptor < 0
             ? throw new SandboxIsolationUnavailableException($"the filesystem root could not be opened (errno {Marshal.GetLastPInvokeError()})")
@@ -193,7 +187,9 @@ internal static class SandboxTrustedDescriptorOpener
 
     private static OwnedDescriptor OpenBeneath(int directoryDescriptor, string component, string parentPath, bool closeOnExec, bool directory)
     {
-        var flags = OpenPath | (directory ? OpenDirectory : 0) | (closeOnExec ? OpenCloseOnExec : 0);
+        // O_PATH opens the inode, not the file: no read permission is implied, nothing is held open for I/O, and both
+        // statx(AT_EMPTY_PATH) and bwrap's --bind-fd accept it, which is what a bind source needs.
+        var flags = (ulong)(LinuxOpenFlags.PathOnly | (directory ? LinuxOpenFlags.Directory : 0) | (closeOnExec ? LinuxOpenFlags.CloseOnExec : 0));
         var how = new byte[OpenHowBytes];
         BitConverter.TryWriteBytes(how.AsSpan(start: 0), flags);
         BitConverter.TryWriteBytes(how.AsSpan(start: 8), value: 0UL);
@@ -256,10 +252,6 @@ internal static class SandboxTrustedDescriptorOpener
         [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         private static extern int close(int fileDescriptor);
     }
-
-    [DllImport("libc", EntryPoint = "open", SetLastError = true)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
-    private static extern int open(byte[] pathname, int flags);
 
     // glibc exposes no openat2 wrapper, so the raw syscall entry point is used. The variadic declaration is safe to
     // pin to this arity on both supported architectures: integer arguments are passed in registers either way.

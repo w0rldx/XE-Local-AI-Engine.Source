@@ -1,5 +1,5 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.6.4/schema.json",
+	"$schema": "https://biomejs.dev/schemas/2.6.8/schema.json",
 	"vcs": {
 		"enabled": true,
 		"clientKind": "git",
@@ -979,6 +979,81 @@
 			"includes": ["**/*Worklet.js"],
 			"javascript": {
 				"globals": ["AudioWorkletProcessor", "registerProcessor", "sampleRate", "currentTime", "currentFrame"]
+			}
+		},
+		{
+			"includes": ["src/**"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"paths": {
+									"@microsoft/signalr": {
+										"importNames": ["HubConnectionBuilder"],
+										"message": "Build hub connections with buildHubConnection (core/api/signalr/BuildHubConnection.ts): it keeps the token out of the URL and the console."
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"src/**/*.ts",
+				"src/**/*.tsx",
+				"!src/**/*.test.ts",
+				"!src/**/*.test.tsx",
+				"!src/test/**",
+				"!src/**/test/**",
+				"!src/core/api/generated/**",
+				"!src/routeTree.gen.ts"
+			],
+			"linter": {
+				"rules": {
+					"correctness": {
+						"noNestedComponentDefinitions": "error"
+					},
+					"style": {
+						"noExcessiveLinesPerFile": {
+							"level": "error",
+							"options": {
+								"maxLines": 500,
+								"skipBlankLines": true
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"src/core/operations/hooks/useJobOperations.ts",
+				"src/features/chat/api/NodeChatStreamState.ts",
+				"src/features/chat/hooks/useChatStreamController.ts",
+				"src/features/graphWorkflows/models/GraphWorkflowCanvasConversion.ts",
+				"src/features/graphWorkflows/models/GraphWorkflowValidation.ts",
+				"src/features/node-settings/models/NodeSettingsFieldsModel.ts"
+			],
+			"linter": {
+				"rules": {
+					"style": {
+						"noExcessiveLinesPerFile": "off"
+					}
+				}
+			}
+		},
+		{
+			"includes": ["src/core/api/signalr/BuildHubConnection.ts"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": "off"
+					}
+				}
 			}
 		}
 	],

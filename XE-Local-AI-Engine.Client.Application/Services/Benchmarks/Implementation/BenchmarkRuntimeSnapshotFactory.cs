@@ -17,18 +17,10 @@ public sealed class BenchmarkRuntimeSnapshotFactory : IBenchmarkRuntimeSnapshotF
         PropertyNameCaseInsensitive = false
     };
 
-    private readonly IBenchmarkEligibilityPolicy _eligibilityPolicy;
-
-    public BenchmarkRuntimeSnapshotFactory(IBenchmarkEligibilityPolicy eligibilityPolicy)
-    {
-        ArgumentNullException.ThrowIfNull(eligibilityPolicy);
-        _eligibilityPolicy = eligibilityPolicy;
-    }
-
     public BenchmarkRuntimeSnapshotV1 Create(BenchmarkRuntimeSnapshotInput input)
     {
         ArgumentNullException.ThrowIfNull(input);
-        var eligibleRuntime = _eligibilityPolicy.Apply(input.ResolvedRuntime);
+        var eligibleRuntime = BenchmarkEligibilityPolicy.Apply(input.ResolvedRuntime);
         ValidateModel(input.PrimaryModel);
         ValidateRuntime(input.PrimaryRuntime, input.RequestedContextTokens);
         ValidateSampling(input.PrimarySampling);
@@ -55,14 +47,14 @@ public sealed class BenchmarkRuntimeSnapshotFactory : IBenchmarkRuntimeSnapshotF
         return snapshot;
     }
 
-    private void Validate(BenchmarkRuntimeSnapshotV1 snapshot)
+    private static void Validate(BenchmarkRuntimeSnapshotV1 snapshot)
     {
         if (snapshot.SchemaVersion != 1)
         {
             throw new BenchmarkSnapshotException("Benchmark snapshot schema is not supported.");
         }
 
-        _ = _eligibilityPolicy.Apply(snapshot.ResolvedRuntime);
+        _ = BenchmarkEligibilityPolicy.Apply(snapshot.ResolvedRuntime);
         ValidateRuntime(snapshot.PrimaryRuntime, snapshot.RequestedContextTokens);
         ValidateSampling(snapshot.PrimarySampling);
         ValidateModel(snapshot.PrimaryModel);

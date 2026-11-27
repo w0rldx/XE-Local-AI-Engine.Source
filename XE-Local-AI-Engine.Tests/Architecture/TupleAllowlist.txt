@@ -65,7 +65,7 @@ XE-Local-AI-Engine.Tests/AgentHome/AgentHomeRunLoggerTests.cs|2
 XE-Local-AI-Engine.Tests/AgentHome/AgentHomeToolGatewayTests.cs|7
 XE-Local-AI-Engine.Tests/AgentHome/AgentHomeToolResultContainmentTests.cs|8
 XE-Local-AI-Engine.Tests/AgentHome/HostGitRunnerHardeningTests.cs|2
-XE-Local-AI-Engine.Tests/AgentHome/NodePatchApplyServiceTests.cs|79
+XE-Local-AI-Engine.Tests/AgentHome/NodePatchApplyServiceTests.cs|77
 XE-Local-AI-Engine.Tests/Agents/EmbeddingToolRelevanceSelectorTests.cs|2
 XE-Local-AI-Engine.Tests/Agents/SeedAssemblyContractTests.cs|3
 XE-Local-AI-Engine.Tests/Agents/SubAgentSpawnServiceTests.cs|3
@@ -257,7 +257,7 @@ XE-Local-AI-Engine.Tests/Transcription/TranscriptionTestDoubles.cs|2
 XE-Local-AI-Engine.Tests/WorkSessions/ConversationStepContextBoundTests.cs|12
 XE-Local-AI-Engine.Tests/WorkSessions/WorkSessionCheckpointTests.cs|2
 XE-Local-AI-Engine.Tests/WorkSessions/WorkSessionCloudEgressTests.cs|1
-XE-Local-AI-Engine.Tests/WorkSessions/WorkSessionServiceTests.cs|5
+XE-Local-AI-Engine.Tests/WorkSessions/WorkSessionServiceTests.cs|3
 XE-Local-AI-Engine.Tests/WorkSessions/WorkSessionStepLoopTests.cs|21
 XE-Local-AI-Engine.Tests/WorkSessions/WorkSessionTestSupport.cs|4
 XE-Local-AI-Engine.Tests/WorkSessions/WorkSessionToolHandlerTests.cs|2

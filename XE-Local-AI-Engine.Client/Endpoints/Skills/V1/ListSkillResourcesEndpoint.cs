@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Skills.V1;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Skills.V1.Mappers;
-using XE_Local_AI_Engine.Client.Services.Agents;
+using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
 /// <summary>
@@ -12,9 +12,9 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 /// </summary>
 public sealed class ListSkillResourcesEndpoint : Endpoint<ListSkillResourcesRequest, ListSkillResourcesResponse>
 {
-    private readonly IAgentSkillService _agentSkillService;
+    private readonly AgentSkillService _agentSkillService;
 
-    public ListSkillResourcesEndpoint(IAgentSkillService agentSkillService)
+    public ListSkillResourcesEndpoint(AgentSkillService agentSkillService)
     {
         ArgumentNullException.ThrowIfNull(agentSkillService);
         _agentSkillService = agentSkillService;

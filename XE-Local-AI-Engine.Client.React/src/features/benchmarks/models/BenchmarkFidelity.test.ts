@@ -6,7 +6,6 @@ import {
 	formatKldValue,
 	formatPerplexity,
 	formatTopTokenAgreement,
-	hasFidelityNumbers,
 	isKldComparable,
 } from "@/features/benchmarks/models/BenchmarkFidelity";
 import { benchmarkFidelityFixture, benchmarkRunSummaryFixture } from "@/features/benchmarks/test/BenchmarkTestFixtures";
@@ -86,18 +85,6 @@ describe("fidelityEvidenceEntries", () => {
 
 	it("contributes no rows at all for a run the node never measured", () => {
 		expect(fidelityEvidenceEntries(null)).toEqual([]);
-	});
-});
-
-describe("hasFidelityNumbers", () => {
-	it("counts a perplexity reading on its own — KLD is opt-in, not the point", () => {
-		expect(hasFidelityNumbers(benchmarkFidelityFixture())).toBe(true);
-	});
-
-	it("does not count a stale KLD as something to show", () => {
-		expect(hasFidelityNumbers(benchmarkFidelityFixture({ perplexityMean: null, kldState: "kld-stale", kldMean: 0.03 }))).toBe(
-			false,
-		);
 	});
 });
 

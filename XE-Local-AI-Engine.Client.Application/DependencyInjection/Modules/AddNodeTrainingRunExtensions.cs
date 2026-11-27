@@ -37,7 +37,7 @@ internal static class AddNodeTrainingRunExtensions
         builder.Services.TryAddSingleton<IJobCreatedPublisher, NullJobCreatedPublisher>();
 
         builder.Services.AddScoped<ITrainingOptionDefaultsCalculator, TrainingOptionDefaultsCalculator>();
-        builder.Services.AddScoped<ILicenseGateService, LicenseGateService>();
+        builder.Services.AddScoped<LicenseGateService>();
         builder.Services.AddScoped<ITrainingCapacityGate, TrainingCapacityGate>();
         builder.Services.AddScoped<ITrainingRunService, TrainingRunService>();
         builder.Services.AddScoped<IInstalledBaseModelLinker, InstalledBaseModelLinker>();
@@ -47,7 +47,7 @@ internal static class AddNodeTrainingRunExtensions
         builder.Services.AddScoped<IEvaluationRunService, EvaluationRunService>();
         builder.Services.AddScoped<ITrainingEvaluationInstalledModelLeaseProvider, TrainingEvaluationInstalledModelLeaseProvider>();
         builder.Services.AddScoped<IEvaluationRunExecutor, EvaluationRunExecutor>();
-        builder.Services.AddScoped<IComparisonReportService, ComparisonReportService>();
+        builder.Services.AddScoped<ComparisonReportService>();
 
         // Export/smoke/promotion. The export service is a SINGLETON because it owns background work that outlives the
         // request that started it (and the single-flight hold that goes with it); it opens its own scopes for stores.

@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.AgentHome;
 
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
-using XE_Local_AI_Engine.Tests.Development;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -10,7 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     of that output is the engine's memory in a hostile patch's hands. The trusted apply port has always read bounded;
 ///     this is the same discipline on the shared runner.
 /// </summary>
-[Category(TestCategories.Unit)]
+[Category(TestCategories.Integration)]
 public sealed class HostGitRunnerBoundsTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-host-git-bounds-" + Guid.NewGuid().ToString("N"));
@@ -90,7 +89,7 @@ public sealed class HostGitRunnerBoundsTests : IDisposable
     {
         var repository = Path.Combine(_root, "repo");
         Directory.CreateDirectory(repository);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "init", "--initial-branch=main", ".");
+        await TestGit.RunAsync(repository, "init", "--initial-branch=main", ".");
         await File.WriteAllTextAsync(Path.Combine(repository, "untracked.txt"), "noise\n");
         return repository;
     }

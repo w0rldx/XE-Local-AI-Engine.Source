@@ -643,7 +643,6 @@
 		"nodeSettings": "Node-Einstellungen",
 		"previewGroup": "Vorschau",
 		"recommendations": "Empfehlungen",
-		"schedule": "Terminplaner",
 		"scheduler": "Planer",
 		"settingsGroup": "Einstellungen",
 		"skills": "Skills",
@@ -702,7 +701,6 @@
 			"saveError": "Ihre Auswahl konnte nicht gespeichert werden. Versuchen Sie es erneut.",
 			"title": "Zwei Einstellungen, die Sie ändern können"
 		},
-		"restart": "Tutorial neu starten",
 		"status": {
 			"completed": "Abgeschlossen",
 			"inProgress": "In Bearbeitung",
@@ -4821,6 +4819,7 @@
 					"Generic": "Die Bildgenerierung ist fehlgeschlagen.",
 					"Interrupted": "Durch das Beenden der Anwendung unterbrochen. Senden Sie die Aufgabe erneut, um es noch einmal zu versuchen.",
 					"LoadedModelCapReached": "Die maximale Anzahl lokaler Bildmodelle ist bereits geladen. Entladen Sie ein Modell oder erhöhen Sie das Limit und versuchen Sie es dann erneut.",
+					"ModelUnloadedWhileStarting": "Die Bild-Laufzeit hat das Modell entladen, während die Generierung startete. Versuchen Sie es erneut.",
 					"OutOfMemory": "Der GPU ist beim Laden des Bildmodells der Speicher ausgegangen. Entladen Sie andere Modelle und versuchen Sie es erneut.",
 					"ProcessExited": "Der Bildserver wurde unerwartet beendet. Er startet bei der nächsten Generierung neu.",
 					"SourceImageMissing": "Das Ausgangsbild existiert nicht mehr.",
@@ -5968,7 +5967,6 @@
 				"refreshButton": "Jetzt aktualisieren",
 				"schedulerLink": "Planer",
 				"sections": {
-					"canRun": "Lauffähig (reduzierte Qualität)",
 					"canRunCount": "Lauffähig ({{count}})",
 					"explore": "Trends auf Hugging Face entdecken",
 					"recommended": "Empfohlen für Ihre Hardware"

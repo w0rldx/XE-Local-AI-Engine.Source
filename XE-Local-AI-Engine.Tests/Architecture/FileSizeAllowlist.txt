@@ -1,0 +1,35 @@
+# Line ceilings for production C# files over 1000 lines — the allowlist for FileSizeRatchetTests.
+#
+# Format: <repository-relative file>|<ceiling>, one line per file, sorted. A production file with no line
+# here stays at or under 1000 lines. A listed file stays at or under its ceiling, which was its size when
+# it was listed rounded up to a multiple of 50 (for a file another branch also grows, the larger of the
+# two sizes).
+#
+# The list is SHRINK-ONLY. A file that is gone or back at 1000 lines or fewer fails as stale until its line
+# is deleted. To lower every ceiling to what the tree measures, run the test with XE_FILE_SIZE_SHRINK=1: it
+# never adds a file, never raises a ceiling, and always fails afterwards.
+
+XE-Local-AI-Engine.Client.Application/Services/Capacity/Implementation/ProcessContextAllocationResolver.cs|1100
+XE-Local-AI-Engine.Client.Application/Services/Chat/Implementation/NodeChatStreamService.cs|1200
+XE-Local-AI-Engine.Client.Application/Services/Development/Implementation/DevelopmentWorkspaceProvider.cs|1150
+XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Catalog/ExternalAppCatalogValidator.cs|1450
+XE-Local-AI-Engine.Client.Application/Services/GraphWorkflows/GraphWorkflowGraph.cs|1950
+XE-Local-AI-Engine.Client.Application/Services/GraphWorkflows/Implementation/GraphWorkflowDispatcher.cs|1050
+XE-Local-AI-Engine.Client.Application/Services/GraphWorkflows/Implementation/GraphWorkflowInvocationExecutor.cs|1850
+XE-Local-AI-Engine.Client.Application/Services/Integrations/IntegrationExecutionCoordinator.cs|1350
+XE-Local-AI-Engine.Client.Application/Services/Invocation/Implementation/InvocationRunner.cs|1200
+XE-Local-AI-Engine.Client.Application/Services/Mcp/Implementation/McpServerConnectionManager.cs|1350
+XE-Local-AI-Engine.Client.Application/Services/ModelLab/ModelLabExperimentService.cs|1550
+XE-Local-AI-Engine.Client.Application/Services/NodeSettings/StoredNodeSettings.cs|1450
+XE-Local-AI-Engine.Client.Application/Services/Sandbox/Container/Implementation/DockerDotNetRuntimeClient.cs|2150
+XE-Local-AI-Engine.Client.Application/Services/Sandbox/Container/Implementation/DockerSandboxRuntimeProvider.cs|1250
+XE-Local-AI-Engine.Client.Application/Services/Sandbox/Implementation/ProcessSandboxRuntimeProvider.cs|1550
+XE-Local-AI-Engine.Client.Application/Services/Transcription/Live/LiveTranscriptionSessionRegistry.cs|1250
+XE-Local-AI-Engine.Client/Endpoints/NodeSettings/V1/Dtos/NodeSettingsEndpointDtos.cs|1400
+XE-Local-AI-Engine.Providers.HuggingFace/Implementation/HfDownloadClient.cs|1350
+XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaCppBinaryManager.cs|1450
+XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaCppSourceBuildService.cs|1150
+XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaServerProcessSupervisor.Spawn.cs|1400
+XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaServerProcessSupervisor.cs|1400
+XE-Local-AI-Engine.Providers.StableDiffusionCpp/Implementation/ImageServerProcessSupervisor.cs|1100
+XE-Local-AI-Engine.Providers.WhisperCpp/Implementation/WhisperServerProcessSupervisor.cs|1100

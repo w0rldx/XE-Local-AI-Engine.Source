@@ -4,11 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Fragment, type ReactNode, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { ApiError } from "@/core/api/errors/ApiError";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import {
 	getModelLabArchitectureOptions,
-	getModelLabExperimentRoutingOptions,
 	getModelLabExperimentTraceOptions,
 	listModelLabExperimentsOptions,
 } from "@/core/api/generated/@tanstack/react-query.gen";
@@ -42,6 +40,8 @@ import {
 } from "@/features/modelLab/models/ModelLabHierarchy";
 import { breadcrumbFor } from "@/features/modelLab/models/ModelLabHierarchyLabels";
 import { type ArchitectureDetailPatch, type ModelLabJump, sameExperimentId } from "@/features/modelLab/models/ModelLabNavigation";
+import { isNotFound } from "@/features/modelLab/models/ModelLabPyTorch";
+import { modelLabRoutingOptions } from "@/features/modelLab/models/ModelLabRouting";
 
 interface ArchitectureExplorerProps {
 	// The page's model, block, laid-over trace and explanation level, all from the URL.
@@ -112,11 +112,8 @@ export function ArchitectureExplorer({
 	// Only a family whose graph has a router can have routing: a dense model's overlay never asks for it.
 	const routedArchitecture = data?.templates.some((candidate) => candidate.nodes.some((node) => node.id === "router")) ?? false;
 	const routedOverlay = overlayId !== null && routedArchitecture;
-	// The block detail's and the stepper's query: one cache entry per run, whichever view asks first.
 	const routing = useQuery({
-		...getModelLabExperimentRoutingOptions({ path: { experimentId: overlayId ?? "" } }),
-		// A saved run's routing never changes.
-		staleTime: Number.POSITIVE_INFINITY,
+		...modelLabRoutingOptions(overlayId ?? ""),
 		// A dense or unrouted run answers 404; the stepper is where a real failure is shown and retried.
 		retryOnMount: false,
 		enabled: routedOverlay,
@@ -125,11 +122,7 @@ export function ArchitectureExplorer({
 	const displayed = new Set(data?.blocks.map((candidate) => candidate.index));
 	// Only a confirmed 404 means the run recorded no routing; any other failure is unreadable routing.
 	const routingFailure: RoutingFailure | null =
-		routedOverlay && routing.isError
-			? routing.error instanceof ApiError && routing.error.statusCode === 404
-				? "missing"
-				: "unreadable"
-			: null;
+		routedOverlay && routing.isError ? (isNotFound(routing.error) ? "missing" : "unreadable") : null;
 	// The one routed set the row, the graph and the block detail share: the blocks a saved routing step names that this
 	// file shows. None while the routing fails, even when data cached before a failed refetch survives.
 	const routedBlocks =

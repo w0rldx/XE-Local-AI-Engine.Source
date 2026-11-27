@@ -50,44 +50,74 @@ export function evaluateBundleBudget(measurements, budget) {
 		.map(([name, limit]) => ({ name, limit, actual: measurements[name] }));
 }
 
+// What index.html loads or modulepreloads, i.e. what every visit downloads before the first route renders.
+function eagerUrls(indexHtml) {
+	return [...indexHtml.matchAll(/<(?:script|link)\b[^>]*\b(?:src|href)="([^"]+)"/g)].map((match) => match[1]);
+}
+
+// The eager graph gets its own budget: the application total also counts every route-split chunk, so only this figure
+// moves when code every user downloads grows.
+function measureEagerJavaScriptBytes(distDirectory, indexHtml) {
+	return eagerUrls(indexHtml)
+		.filter((url) => /\.(?:js|mjs)$/.test(url))
+		.reduce((total, url) => total + statSync(join(distDirectory, url.replace(/^\//, ""))).size, 0);
+}
+
 // A lazy asset that index.html loads or modulepreloads is downloaded on every page, so its separate budget would lie.
 // This happened when the monaco chunk group captured Vite's preload helper (see the codeSplitting groups in vite.config.ts).
 export function findEagerlyLoadedLazyAssets(indexHtml) {
-	return [...indexHtml.matchAll(/<(?:script|link)\b[^>]*\b(?:src|href)="([^"]+)"/g)]
-		.map((match) => match[1])
-		.filter((url) =>
-			[lazyEditorAssetPattern, lazySceneViewerAssetPattern, lazyModelLabAssetPattern, lazyMathAssetPattern].some((pattern) =>
-				pattern.test(url),
-			),
-		);
+	return eagerUrls(indexHtml).filter((url) =>
+		[lazyEditorAssetPattern, lazySceneViewerAssetPattern, lazyModelLabAssetPattern, lazyMathAssetPattern].some((pattern) =>
+			pattern.test(url),
+		),
+	);
 }
 
 export function checkBundleBudget({
 	distDirectory = resolve(process.cwd(), "dist"),
 	budgetPath = resolve(process.cwd(), "config/bundle-budget.json"),
 } = {}) {
-	const budget = JSON.parse(readFileSync(budgetPath, "utf8"));
-	const measurements = measureJavaScriptAssets(distDirectory);
-	const eagerLazyAssets = findEagerlyLoadedLazyAssets(readFileSync(join(distDirectory, "index.html"), "utf8"));
-	return { measurements, budget, violations: evaluateBundleBudget(measurements, budget), eagerLazyAssets };
+	// headroomPercent is the margin a budget update adds to the measured value, printed as the suggested limit.
+	const { headroomPercent = 0, ...budget } = JSON.parse(readFileSync(budgetPath, "utf8"));
+	const indexHtml = readFileSync(join(distDirectory, "index.html"), "utf8");
+	const measurements = {
+		...measureJavaScriptAssets(distDirectory),
+		eagerJavaScriptBytes: measureEagerJavaScriptBytes(distDirectory, indexHtml),
+	};
+	// A budget key nothing measures would never fail (undefined > limit is false), so a typo silently drops a budget.
+	const unmeasured = Object.keys(budget).filter((name) => typeof measurements[name] !== "number");
+	if (unmeasured.length > 0) {
+		throw new Error(`${budgetPath} budgets ${unmeasured.join(", ")}, which this check does not measure.`);
+	}
+	return {
+		measurements,
+		budget,
+		headroomPercent,
+		violations: evaluateBundleBudget(measurements, budget),
+		eagerLazyAssets: findEagerlyLoadedLazyAssets(indexHtml),
+	};
 }
 
 const isMain = process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1]);
 if (isMain) {
 	try {
-		const { measurements, violations, budget, eagerLazyAssets } = checkBundleBudget();
-		const app = measurements.applicationJavaScriptBytes;
-		const appBudget = budget.applicationJavaScriptBytes;
-		process.stdout.write(`app: ${app} of ${appBudget} (${((appBudget - app) / 1_000).toFixed(1)} kB headroom)\n`);
+		const { measurements, violations, budget, headroomPercent, eagerLazyAssets } = checkBundleBudget();
+		for (const [name, limit] of Object.entries(budget)) {
+			const actual = measurements[name];
+			process.stdout.write(`${name}: ${actual} of ${limit} (${(((limit - actual) / actual) * 100).toFixed(1)}% headroom)\n`);
+		}
 		process.stdout.write(
 			`Bundle budget: app ${(measurements.applicationJavaScriptBytes / 1_000_000).toFixed(2)} MB, lazy editor ${(measurements.lazyEditorJavaScriptBytes / 1_000_000).toFixed(2)} MB, lazy scene viewer ${(measurements.lazySceneViewerJavaScriptBytes / 1_000_000).toFixed(2)} MB, lazy model lab ${(measurements.lazyModelLabJavaScriptBytes / 1_000_000).toFixed(2)} MB, lazy math ${(measurements.lazyMathJavaScriptBytes / 1_000_000).toFixed(2)} MB. Largest deployed scripts:\n` +
 				`${measurements.largestAssets.map((asset) => `  ${asset.name} ${(asset.bytes / 1_000).toFixed(1)} kB`).join("\n")}\n`,
 		);
 		if (violations.length > 0) {
 			for (const violation of violations) {
-				process.stderr.write(`${violation.name}: ${violation.actual} bytes exceeds ${violation.limit} bytes.\n`);
+				const suggested = Math.ceil((violation.actual * (1 + headroomPercent / 100)) / 1_000) * 1_000;
+				process.stderr.write(
+					`${violation.name}: ${violation.actual} bytes exceeds ${violation.limit} bytes (measured + ${headroomPercent}% = ${suggested}).\n`,
+				);
 			}
-			process.stderr.write("Reduce bundle growth or approve a measured budget update.\n");
+			process.stderr.write("Reduce bundle growth or approve a measured budget update to the suggested value.\n");
 			process.exitCode = 1;
 		}
 		if (eagerLazyAssets.length > 0) {

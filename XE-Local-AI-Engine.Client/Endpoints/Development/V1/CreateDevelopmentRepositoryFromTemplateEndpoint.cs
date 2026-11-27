@@ -8,9 +8,9 @@ using XE_Local_AI_Engine.Client.Services.Development;
 
 public sealed class CreateDevelopmentRepositoryFromTemplateEndpoint : Endpoint<CreateDevelopmentRepositoryFromTemplateRequest, DevelopmentRepositoryFromTemplateResponse>, IDevelopmentEndpoint
 {
-    private readonly IDevelopmentTemplateService _service;
+    private readonly DevelopmentTemplateService _service;
 
-    public CreateDevelopmentRepositoryFromTemplateEndpoint(IDevelopmentTemplateService service)
+    public CreateDevelopmentRepositoryFromTemplateEndpoint(DevelopmentTemplateService service)
     {
         ArgumentNullException.ThrowIfNull(service);
         _service = service;

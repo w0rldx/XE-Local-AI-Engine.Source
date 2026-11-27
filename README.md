@@ -101,7 +101,7 @@ next to data written under a different secret, it says so and names what to dele
 scripts/run-backend-tests.sh              # the backend gate: one Release build, every enrolled test project
 
 cd XE-Local-AI-Engine.Client.React
-pnpm run acceptance                       # validate + coverage thresholds + tooling tests + production bundle
+../scripts/run-gate-lane.sh frontend      # acceptance under the build lock (validate, coverage, tooling tests, bundle); records the lane row the squash guard reads
 ```
 
 [AGENTS.md §Validation](AGENTS.md#validation) is authoritative for the full gate set, including analyzer requirements,
@@ -109,7 +109,7 @@ pnpm run acceptance                       # validate + coverage thresholds + too
 
 ## Publishing and releases
 
-Linux ships a self-contained AppImage and Windows a framework-dependent `Portable.zip` that needs ASP.NET Core 10.0.12+.
+Linux ships a self-contained AppImage and Windows a framework-dependent `Portable.zip` that needs ASP.NET Core 10.0.15+.
 Both open the native desktop shell by default, without a console; the engine log is in `<data dir>/logs`. `--debug`
 keeps a console streaming that log, and CLI modes (`--browser`, `--headless`, `--mcp-only`, `--status`, `--setup`, …)
 keep theirs ([wiki 11 §5](docs/wiki/11-hosting-and-deployment.md)). Run one instance per user-data directory — a second

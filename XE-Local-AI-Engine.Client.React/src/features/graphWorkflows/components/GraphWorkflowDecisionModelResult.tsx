@@ -5,16 +5,16 @@
 import { Group, Progress, Stack, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
+import { formatNumber } from "@/core/formatting/NumberFormatting";
 import { readGraphWorkflowDecisionModelOutput } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 
 export function GraphWorkflowDecisionModelResult({ output }: { readonly output: unknown }) {
-	const { t, i18n } = useTranslation();
+	const { t } = useTranslation();
 	const result = readGraphWorkflowDecisionModelOutput(output);
 	if (!result) {
 		return null;
 	}
-	const percent = new Intl.NumberFormat(i18n.language, { style: "percent", maximumFractionDigits: 1 });
-	const decimal = new Intl.NumberFormat(i18n.language, { maximumFractionDigits: 2 });
+	const percent = (value: number) => formatNumber(value, { style: "percent", maximumFractionDigits: 1 });
 	const levelName = (key: string): string => result.legend?.[key] ?? key;
 	// A choice reads best most-likely first; score levels are ordinal, so they keep the server's (lowest-first) order.
 	const probabilities = Object.entries(result.probabilities ?? {});
@@ -33,7 +33,7 @@ export function GraphWorkflowDecisionModelResult({ output }: { readonly output: 
 			{result.type === "score" && result.score !== null ? (
 				<Text size="sm" data-testid="graph-workflow-node-panel-score">
 					{t("pages.graphWorkflows.nodePanel.decisionScore", "Score {{score}}, nearest level {{level}}", {
-						score: decimal.format(result.score),
+						score: formatNumber(result.score, { maximumFractionDigits: 2 }),
 						level: result.choice ?? "—",
 					})}
 				</Text>
@@ -44,10 +44,10 @@ export function GraphWorkflowDecisionModelResult({ output }: { readonly output: 
 					    "ja" would not match an `Eq "yes"` edge, and recomputing it here could disagree with the server. */}
 					{result.choice === null
 						? t("pages.graphWorkflows.nodePanel.decisionNoulOnly", "P(yes) {{probability}}", {
-								probability: percent.format(result.noul),
+								probability: percent(result.noul),
 							})
 						: t("pages.graphWorkflows.nodePanel.decisionNoul", "P(yes) {{probability}}: {{answer}}", {
-								probability: percent.format(result.noul),
+								probability: percent(result.noul),
 								answer: result.choice,
 							})}
 				</Text>
@@ -63,7 +63,7 @@ export function GraphWorkflowDecisionModelResult({ output }: { readonly output: 
 			{result.confidence !== null ? (
 				<Text size="xs" c="dimmed" data-testid="graph-workflow-node-panel-confidence">
 					{t("pages.graphWorkflows.nodePanel.decisionConfidence", "Confidence {{confidence}}", {
-						confidence: percent.format(result.confidence),
+						confidence: percent(result.confidence),
 					})}
 				</Text>
 			) : null}
@@ -90,7 +90,7 @@ export function GraphWorkflowDecisionModelResult({ output }: { readonly output: 
 								aria-label={levelName(key)}
 							/>
 							<Text size="xs" c="dimmed" style={{ width: "4.5em", textAlign: "right" }}>
-								{percent.format(probability)}
+								{percent(probability)}
 							</Text>
 						</Group>
 					))}

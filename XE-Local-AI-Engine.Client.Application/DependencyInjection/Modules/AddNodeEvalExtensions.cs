@@ -28,7 +28,7 @@ internal static class AddNodeEvalExtensions
         builder.Services.AddSingleton<IPlaybookEvalJudge, DefaultPlaybookEvalJudge>();
         // Eval orchestration: re-runs the real agent loop over the golden set, scores candidate-vs-baseline output, and
         // persists the plaintext EvalResult consumed by the promotion gate.
-        builder.Services.AddScoped<IPlaybookEvalService, PlaybookEvalService>();
+        builder.Services.AddScoped<PlaybookEvalService>();
 
         return builder;
     }

@@ -19,6 +19,6 @@ internal sealed class GraphWorkflowConversationDeletionObserver : IConversationD
     public async Task OnDeletingAsync(Guid conversationId, bool purge, CancellationToken cancellationToken)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
-        await scope.ServiceProvider.GetRequiredService<IGraphWorkflowChatService>().CancelBoundRunAsync(conversationId, cancellationToken);
+        await scope.ServiceProvider.GetRequiredService<GraphWorkflowChatService>().CancelBoundRunAsync(conversationId, cancellationToken);
     }
 }

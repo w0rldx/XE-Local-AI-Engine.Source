@@ -7,14 +7,15 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 
 /// <summary>Downloads a project's complete benchmark record as JSON.</summary>
 public sealed class ExportBenchmarkProjectEndpoint : Endpoint<BenchmarkProjectRouteRequest, BenchmarkExportResponse>
 {
-    private readonly IBenchmarkExportQuery _exports;
+    private readonly BenchmarkExportQuery _exports;
     private readonly TimeProvider _timeProvider;
 
-    public ExportBenchmarkProjectEndpoint(IBenchmarkExportQuery exports, TimeProvider timeProvider)
+    public ExportBenchmarkProjectEndpoint(BenchmarkExportQuery exports, TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(exports);
         ArgumentNullException.ThrowIfNull(timeProvider);

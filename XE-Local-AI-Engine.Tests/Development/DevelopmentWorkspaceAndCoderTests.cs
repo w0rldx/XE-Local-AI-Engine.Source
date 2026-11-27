@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
-using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Runtime.Versioning;
@@ -24,6 +23,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
+using static DevelopmentTestDoubles;
 using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
 using OS = TUnit.Core.Enums.OS;
 
@@ -91,6 +91,42 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         AssertEx.False(DevelopmentWorkspaceSecurity.Confine("tests/evil/git~1. ", allowRoot: false).IsAccepted);
         AssertEx.False(DevelopmentWorkspaceSecurity.Confine("tests/evil/.git::$INDEX_ALLOCATION/HEAD", allowRoot: false).IsAccepted);
         AssertEx.False(DevelopmentWorkspaceSecurity.Confine("tests/a:b.py", allowRoot: false).IsAccepted);
+    }
+
+    /// <summary>
+    ///     A focused run inherits what its shell exported; fixture setup must still only touch the fixture. Run alone:
+    ///     every git this process starts sees the variables while they are set.
+    /// </summary>
+    [Test]
+    [NotInParallel]
+    public async Task CreateRepositoryAsync_WithAnExportedGitConfigAndIndex_LeavesBothExternalFilesUntouched()
+    {
+        using var external = new TempDirectory("development-git-external");
+        const string Sentinel = "[sentinel]\n\tkept = true\n";
+        await File.WriteAllTextAsync(external.FilePath("sentinel.gitconfig"), Sentinel);
+        string[] variables = ["GIT_CONFIG", "GIT_INDEX_FILE"];
+        var previous = variables.ToDictionary(static name => name, Environment.GetEnvironmentVariable, StringComparer.Ordinal);
+        Environment.SetEnvironmentVariable("GIT_CONFIG", external.FilePath("sentinel.gitconfig"));
+        Environment.SetEnvironmentVariable("GIT_INDEX_FILE", external.FilePath("sentinel.index"));
+        string repository;
+        try
+        {
+            repository = await CreateRepositoryAsync();
+        }
+        finally
+        {
+            foreach (var entry in previous)
+            {
+                Environment.SetEnvironmentVariable(entry.Key, entry.Value);
+            }
+        }
+
+        AssertEx.Equal(Sentinel, await File.ReadAllTextAsync(external.FilePath("sentinel.gitconfig")),
+            "fixture git wrote its identity into the exported GIT_CONFIG");
+        AssertEx.False(File.Exists(external.FilePath("sentinel.index")), "fixture git staged into the exported GIT_INDEX_FILE");
+        AssertEx.Equal("development-workspace@example.invalid\n",
+            (await RunProcessAsync(repository, "git", "config", "--local", "user.email")).StandardOutput);
+        AssertEx.Equal("README.md\n", (await RunProcessAsync(repository, "git", "ls-tree", "--name-only", "HEAD")).StandardOutput);
     }
 
     /// <summary>
@@ -1907,42 +1943,6 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         return new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions()), TimeProvider.System);
     }
 
-    private static async Task<CommandResult> RunProcessAsync(string workingDirectory, string executable, params string[] arguments)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = executable,
-            WorkingDirectory = workingDirectory,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false
-        };
-        foreach (var argument in arguments)
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
-
-        using var process = new Process
-        {
-            StartInfo = startInfo
-        };
-        process.Start();
-        var stdout = process.StandardOutput.ReadToEndAsync();
-        var stderr = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
-        return new CommandResult
-        {
-            ExitCode = process.ExitCode,
-            StandardOutput = await stdout,
-            StandardError = await stderr
-        };
-    }
-
-    private static void EnsureSuccess(CommandResult result)
-    {
-        AssertEx.Equal(expected: 0, result.ExitCode, result.StandardError);
-    }
-
     private static IDevelopmentStore CancellationStore(DevelopmentExecutionSnapshot snapshot)
     {
         var store = Substitute.For<IDevelopmentStore>();
@@ -1983,15 +1983,6 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             "ok",
             Version: 1,
             Sequence: 1);
-    }
-
-    private sealed record CommandResult
-    {
-        public required int ExitCode { get; init; }
-
-        public required string StandardOutput { get; init; }
-
-        public required string StandardError { get; init; }
     }
 
     private static ILocalModelProviderResolver LocalModelResolver(params LocalModelDescriptor[] models) =>
@@ -2178,15 +2169,6 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             await _cancellation.CancelAsync();
             return paths;
         }
-    }
-
-    private sealed class UnexpectedCloudContextService : IDevelopmentCloudAttemptContextService
-    {
-        public Task<DevelopmentCloudAttemptContext> CreateAsync(DevelopmentExecutionSnapshot snapshot,
-            IReadOnlyList<DevelopmentCloudContextExcerpt> excerpts,
-            IReadOnlyList<Guid>? inputArtifactIds = null,
-            CancellationToken cancellationToken = default) =>
-            throw new InvalidOperationException("The local-only coder fixture must not build a cloud context.");
     }
 
     // Stands in for any cancellation the attempt token delivers mid-run; the runners cannot tell which one it was.

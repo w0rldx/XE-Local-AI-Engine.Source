@@ -375,11 +375,6 @@ export function isTerminalGraphWorkflowRunStatus(status: GraphWorkflowRunStatus)
 	return status === "Completed" || status === "Failed" || status === "Cancelled";
 }
 
-/** The node run has stopped for good: the runtime has routed past it and its successors carry the outcome. */
-export function isTerminalGraphWorkflowNodeRunStatus(status: GraphWorkflowNodeRunStatus): boolean {
-	return status === "Succeeded" || status === "Failed" || status === "Skipped" || status === "Cancelled";
-}
-
 /** Mirrors `GraphWorkflowOptions.MaxNodesPerDefinition`: the editor refuses a save past this before the server does. */
 export const GRAPH_WORKFLOW_MAX_NODES = 200;
 

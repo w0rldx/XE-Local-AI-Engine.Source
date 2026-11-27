@@ -1,0 +1,47 @@
+# Shrink-only limits read by scripts/docs-inventory-check.py. One row per page or path: check|key|limit|reason.
+# Limits only go down. A row is stale, and the check fails, once its key no longer needs it: a wiki-page-size page
+# gone or back under the 61440-byte cap, a history-prose page or path-references path whose count fell below the
+# limit (write the new count down) or to zero (delete the row). Never raise a limit to make a page pass.
+#
+# wiki-page-size: a page's byte ceiling, seeded at its measured size rounded up to a multiple of 50. Split lookup
+#   tables out to docs/wiki/reference/ or delete history to get under it.
+# history-prose: how many `**Gone.**`, "no longer exists" or dated-change lines a page may still hold.
+# path-references: how many citations of a backticked path that is neither tracked nor git-ignored may remain.
+
+wiki-page-size|docs/wiki/05-chat.md|149700|over the cap at introduction
+wiki-page-size|docs/wiki/07-model-fit.md|67250|over the cap at introduction
+wiki-page-size|docs/wiki/08-data-and-persistence.md|92000|over the cap at introduction
+wiki-page-size|docs/wiki/09-api-and-hubs.md|69250|over the cap at introduction
+wiki-page-size|docs/wiki/10-react-client.md|73700|over the cap at introduction
+wiki-page-size|docs/wiki/11-hosting-and-deployment.md|104150|over the cap at introduction
+wiki-page-size|docs/wiki/12-security-and-privacy.md|121750|over the cap at introduction; holds 117 bytes for an in-flight sandbox change
+wiki-page-size|docs/wiki/13-testing-and-validation.md|109000|over the cap at introduction; holds 33 bytes for an in-flight sandbox change
+wiki-page-size|docs/wiki/16-code-conventions.md|68400|over the cap at introduction
+wiki-page-size|docs/wiki/20-benchmarks.md|99850|over the cap at introduction
+wiki-page-size|docs/wiki/21-graph-workflows.md|128650|over the cap at introduction
+wiki-page-size|docs/wiki/24-audio-transcription.md|105050|over the cap at introduction
+wiki-page-size|docs/wiki/reference/03-llama-server-supervisor.md|67800|over the cap at introduction
+wiki-page-size|docs/wiki/reference/04-ai-agent-runtime.md|77650|over the cap at introduction
+wiki-page-size|docs/wiki/reference/09-endpoint-inventory.md|72400|generated-shape reference table: one row per LocalApiRoutes family plus their design notes
+wiki-page-size|docs/wiki/reference/12-sandbox-modes-and-options.md|96250|over the cap at introduction; holds 3522 bytes for an in-flight sandbox change
+
+history-prose|docs/wiki/01-architecture-overview.md|1|at introduction
+history-prose|docs/wiki/02-project-layout.md|1|at introduction
+history-prose|docs/wiki/07-model-fit.md|1|at introduction
+history-prose|docs/wiki/11-hosting-and-deployment.md|1|at introduction
+history-prose|docs/wiki/12-security-and-privacy.md|4|at introduction
+history-prose|docs/wiki/14-image-generation.md|3|at introduction
+history-prose|docs/wiki/15-knowledge-base.md|1|at introduction
+history-prose|docs/wiki/20-benchmarks.md|1|at introduction
+history-prose|docs/wiki/reference/09-signalr-hubs.md|1|at introduction
+history-prose|docs/wiki/reference/12-sandbox-modes-and-options.md|1|at introduction
+
+path-references|docs/qwen_image_2.1.md|1|upstream stable-diffusion.cpp document, not a path in this repository
+path-references|src/NAudio.Wasapi/WasapiRecorder.cs|1|upstream NAudio source file, not a path in this repository
+path-references|src/TUnit.Analyzers/DiagnosticIds.cs|1|upstream TUnit source file, not a path in this repository
+path-references|src/llama-grammar.cpp|2|upstream llama.cpp source file, not a path in this repository
+path-references|src/unittest/__init__.py|1|a module in a coder's workspace, not a path in this repository
+path-references|src/unittest/|1|a module in a coder's workspace, not a path in this repository
+path-references|tools/server/server-common.cpp|2|upstream llama.cpp source file, not a path in this repository
+path-references|tools/server/server-context.cpp|1|upstream llama.cpp source file, not a path in this repository
+path-references|tools/server/server-schema.cpp|1|upstream llama.cpp source file, not a path in this repository

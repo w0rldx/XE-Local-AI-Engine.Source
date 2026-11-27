@@ -1185,11 +1185,16 @@ public sealed class GraphWorkflowAgentExecutorTests
         AssertEx.Contains(Prompt(harness.Invocations.PackageFor(second)), "## Conversation request\n\nthe original request");
     }
 
-    /// <summary>The request section is budgeted like the upstream map, and says so when it is cut.</summary>
+    /// <summary>
+    ///     The request section is budgeted like the upstream map, and says so when it is cut. A 3-byte character never
+    ///     straddles the cut: 1024 bytes keep 341 of them, and the marker counts the bytes left out.
+    /// </summary>
     [Test]
-    public async Task AChatRequestOverTheBudget_IsTruncatedWithAMarker()
+    [Arguments('a', 1024, 976)]
+    [Arguments('日', 341, 4977)]
+    public async Task AChatRequestOverTheBudget_IsTruncatedWithAMarker(char character, int keptCharacters, int omittedBytes)
     {
-        const string instructions = "chat-request-truncated";
+        var instructions = $"chat-request-truncated-{keptCharacters}";
 
         // A private host: the budget is host-level configuration. The run is started through the store, which is the only way
         // to pin a run input over the budget the run service itself enforces.
@@ -1199,13 +1204,12 @@ public sealed class GraphWorkflowAgentExecutorTests
         var runId = await harness.StartRunThroughTheStoreAsync(definitionId,
             graph,
             [("start", GraphWorkflowNodeKind.Start), ("analyze", GraphWorkflowNodeKind.Agent), ("done", GraphWorkflowNodeKind.End)],
-            ChatInput(new string('a', count: 2000)));
+            ChatInput(new string(character, count: 2000)));
 
         _ = await AdvanceUntilTerminalAsync(harness, runId);
 
-        var prompt = Prompt(harness.Invocations.PackageFor(instructions));
-        AssertEx.Contains(prompt, "## Conversation request");
-        AssertEx.Contains(prompt, "bytes omitted");
+        AssertEx.Contains(Prompt(harness.Invocations.PackageFor(instructions)),
+            $"## Conversation request\n\n{new string(character, keptCharacters)}\n… truncated, {omittedBytes} bytes omitted");
     }
 
     /// <summary>The queue reason a row carried while it waited for the lane is cleared once it runs, so a succeeded node reads no reason.</summary>

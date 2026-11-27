@@ -4,7 +4,7 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Agents.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Client.Services.Eval;
+using XE_Local_AI_Engine.Client.Services.Eval.Implementation;
 
 /// <summary>
 ///     Scans one agent's most-recent thumbs-up assistant turns and stages harvested golden candidates inert
@@ -16,9 +16,9 @@ using XE_Local_AI_Engine.Client.Services.Eval;
 /// </remarks>
 public sealed class HarvestGoldenConversationsEndpoint : Endpoint<HarvestGoldenConversationsRequest, GoldenHarvestResponse>
 {
-    private readonly IGoldenHarvestService _harvestService;
+    private readonly GoldenHarvestService _harvestService;
 
-    public HarvestGoldenConversationsEndpoint(IGoldenHarvestService harvestService)
+    public HarvestGoldenConversationsEndpoint(GoldenHarvestService harvestService)
     {
         ArgumentNullException.ThrowIfNull(harvestService);
         _harvestService = harvestService;

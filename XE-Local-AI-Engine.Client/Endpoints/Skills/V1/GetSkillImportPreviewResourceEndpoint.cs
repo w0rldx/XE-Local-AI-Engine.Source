@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Skills.V1;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Skills.V1.Mappers;
-using XE_Local_AI_Engine.Client.Services.Agents;
+using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
 /// <summary>
@@ -18,9 +18,9 @@ public sealed class GetSkillImportPreviewResourceEndpoint : Endpoint<GetSkillImp
 {
     private const string NotFoundMessage = "The import preview has expired, was already used, or holds no such file. Preview the source again.";
 
-    private readonly ISkillImportService _importService;
+    private readonly SkillImportService _importService;
 
-    public GetSkillImportPreviewResourceEndpoint(ISkillImportService importService)
+    public GetSkillImportPreviewResourceEndpoint(SkillImportService importService)
     {
         ArgumentNullException.ThrowIfNull(importService);
         _importService = importService;

@@ -37,7 +37,7 @@ public sealed class AgentExecutionLogToolSchemaTokenTests : IDisposable
         await using var context = await CreateDatabaseAsync("envelope-tokens-project.sqlite");
         _ = context.AgentExecutionLogs.Add(EnvelopeRow(toolSchemaTokens: 12_345L, maxToolSchemaTokens: 4_096));
         _ = await context.SaveChangesAsync();
-        var store = new AgentExecutionLogStore(context, new FixedTimeProvider(FixedNow));
+        var store = new AgentExecutionLogStore(context, new ManualTimeProvider(FixedNow));
 
         var envelope = (await store.ListRunEnvelopesAsync(conversationId: null, limit: 10)).Single();
 
@@ -51,7 +51,7 @@ public sealed class AgentExecutionLogToolSchemaTokenTests : IDisposable
         await using var context = await CreateDatabaseAsync("envelope-tokens-null.sqlite");
         _ = context.AgentExecutionLogs.Add(EnvelopeRow(toolSchemaTokens: null, maxToolSchemaTokens: null));
         _ = await context.SaveChangesAsync();
-        var store = new AgentExecutionLogStore(context, new FixedTimeProvider(FixedNow));
+        var store = new AgentExecutionLogStore(context, new ManualTimeProvider(FixedNow));
 
         var envelope = (await store.ListRunEnvelopesAsync(conversationId: null, limit: 10)).Single();
 
@@ -68,7 +68,7 @@ public sealed class AgentExecutionLogToolSchemaTokenTests : IDisposable
         await using var context = await CreateDatabaseAsync("envelope-tokens-wide.sqlite");
         _ = context.AgentExecutionLogs.Add(EnvelopeRow(wideEstimate, maxToolSchemaTokens: 8));
         _ = await context.SaveChangesAsync();
-        var store = new AgentExecutionLogStore(context, new FixedTimeProvider(FixedNow));
+        var store = new AgentExecutionLogStore(context, new ManualTimeProvider(FixedNow));
 
         var envelope = (await store.ListRunEnvelopesAsync(conversationId: null, limit: 10)).Single();
 
@@ -81,7 +81,7 @@ public sealed class AgentExecutionLogToolSchemaTokenTests : IDisposable
         // The kind-0 diagnostics projection was deliberately left alone: these columns never carry a value on a memory
         // row, so widening that record would add two permanently-null fields to a different read view.
         await using var context = await CreateDatabaseAsync("memory-projection-unchanged.sqlite");
-        var store = new AgentExecutionLogStore(context, new FixedTimeProvider(FixedNow));
+        var store = new AgentExecutionLogStore(context, new ManualTimeProvider(FixedNow));
         var agentId = Guid.NewGuid();
 
         _ = await store.AddAsync(new AgentExecutionLogInput
@@ -133,20 +133,5 @@ public sealed class AgentExecutionLogToolSchemaTokenTests : IDisposable
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
         return context;
-    }
-
-    private sealed class FixedTimeProvider : TimeProvider
-    {
-        private readonly DateTimeOffset _now;
-
-        public FixedTimeProvider(DateTimeOffset now)
-        {
-            _now = now;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return _now;
-        }
     }
 }

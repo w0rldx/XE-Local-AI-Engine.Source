@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -30,8 +30,22 @@ const BACKEND_IGNORED_PACKAGES = [
 	"NetArchTest.Rules",
 ];
 
-// Projects that are never shipped to end users (tests, fixtures, dev orchestration).
-const BACKEND_EXCLUDED_PROJECTS = ["*Tests*", "*Testing*", "*AppHost*"];
+// Never-shipped projects (tests, fixtures, dev orchestration), matched against the project FILE NAME only.
+const BACKEND_EXCLUDED_PROJECT_NAME = /Tests|Testing|AppHost/i;
+
+/**
+ * The `--exclude-projects-matching` entries for the solution's never-shipped projects: their exact file names.
+ * nuget-license tries each entry against the full project path before the file name, so a wildcard such as `*Tests*`
+ * would also drop every project of a checkout that sits under a directory named "tests"; an exact file name cannot
+ * match a full path.
+ * @param {string} solutionXml
+ * @returns {string[]}
+ */
+export function backendExcludedProjects(solutionXml) {
+	return [...solutionXml.matchAll(/<Project\s+Path="([^"]+)"/g)]
+		.map((match) => match[1].split(/[\\/]/).at(-1) ?? "")
+		.filter((name) => BACKEND_EXCLUDED_PROJECT_NAME.test(name));
+}
 
 /**
  * @typedef {object} ThirdPartyPackage
@@ -181,7 +195,7 @@ function collectBackendPackages() {
 		"--override-package-information",
 		nugetOverridePath,
 		"--exclude-projects-matching",
-		BACKEND_EXCLUDED_PROJECTS.join(";"),
+		backendExcludedProjects(readFileSync(solutionPath, "utf8")).join(";"),
 		"--ignored-packages",
 		BACKEND_IGNORED_PACKAGES.join(";"),
 	];

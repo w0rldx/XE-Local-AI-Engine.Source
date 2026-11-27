@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import type { XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsResponse } from "@/core/api/generated";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
+import { formatCount } from "@/core/formatting/NumberFormatting";
 import { sameRepoVariants } from "@/core/models/ModelVariants";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { ModelFitPanel } from "@/features/model-fit/components/ModelFitPanel";
@@ -114,7 +115,10 @@ function ModelDetailsBody({
 					</Text>
 					<Text>
 						{t("pages.models.details.contextLength", "Context length: {{value}}", {
-							value: details?.maxContextTokens?.toLocaleString() ?? t("pages.models.details.unknown", "Unknown"),
+							value:
+								details?.maxContextTokens == null
+									? t("pages.models.details.unknown", "Unknown")
+									: formatCount(details.maxContextTokens),
 						})}
 					</Text>
 					{details?.system ? (

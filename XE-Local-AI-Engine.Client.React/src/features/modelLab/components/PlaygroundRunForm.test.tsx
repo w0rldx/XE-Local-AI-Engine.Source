@@ -9,7 +9,7 @@ import { PlaygroundRunForm } from "@/features/modelLab/components/PlaygroundRunF
 import de from "@/features/modelLab/locales/model-lab-de.json";
 import en from "@/features/modelLab/locales/model-lab-en.json";
 import { loadModelLabStrings } from "@/features/modelLab/models/ModelLabStrings";
-import fixture from "@/features/modelLab/models/playgroundTrace.fixture.json";
+import fixture from "@/features/modelLab/test/playgroundTrace.fixture.json";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";

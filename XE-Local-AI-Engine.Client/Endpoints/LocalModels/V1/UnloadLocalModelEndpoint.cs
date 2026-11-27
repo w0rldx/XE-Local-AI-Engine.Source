@@ -3,23 +3,23 @@ namespace XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Client.Services.Models;
+using XE_Local_AI_Engine.Client.Services.Models.Implementation;
 
 /// <summary>
 ///     Gracefully evicts a model from the local runtime's memory, wherever it is resident.
 /// </summary>
 /// <remarks>
 ///     The fan-out across every llama-server role belongs to
-///     <see cref="IModelUnloadCoordinator" />; this endpoint binds, delegates and maps. Idempotent: unloading a model
+///     <see cref="ModelUnloadCoordinator" />; this endpoint binds, delegates and maps. Idempotent: unloading a model
 ///     that is not loaded still reports success. <c>Unloaded</c> is false only when a llama-server process was still
 ///     busy when the bounded drain window elapsed and was therefore left running. The model name is carried in the
 ///     route, so the client sends no body at all — see <see cref="Configure" /> for the Accepts override.
 /// </remarks>
 public sealed class UnloadLocalModelEndpoint : Endpoint<UnloadLocalModelRequest, UnloadLocalModelResponse>
 {
-    private readonly IModelUnloadCoordinator _unloadCoordinator;
+    private readonly ModelUnloadCoordinator _unloadCoordinator;
 
-    public UnloadLocalModelEndpoint(IModelUnloadCoordinator unloadCoordinator)
+    public UnloadLocalModelEndpoint(ModelUnloadCoordinator unloadCoordinator)
     {
         ArgumentNullException.ThrowIfNull(unloadCoordinator);
         _unloadCoordinator = unloadCoordinator;

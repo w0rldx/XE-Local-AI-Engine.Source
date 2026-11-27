@@ -29,7 +29,7 @@ vi.mock("@/features/agents/queries/useFeedbackInsights", () => hooksMock);
 
 import { FeedbackInsightsPanel } from "@/features/agents/components/FeedbackInsightsPanel";
 import type { FeedbackInsights } from "@/features/agents/models/FeedbackInsightsModels";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 
 function makeInsights(overrides: Partial<FeedbackInsights> = {}): FeedbackInsights {
 	return {
@@ -51,34 +51,6 @@ function makeInsights(overrides: Partial<FeedbackInsights> = {}): FeedbackInsigh
 		],
 		...overrides,
 	};
-}
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-	Object.defineProperty(document, "fonts", {
-		writable: true,
-		value: { ready: Promise.resolve(), addEventListener: vi.fn(), removeEventListener: vi.fn() },
-	});
 }
 
 function renderPanel(ui: ReactElement) {

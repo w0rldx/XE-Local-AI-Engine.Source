@@ -1,13 +1,12 @@
 import { Alert, Badge, Button, Group, Loader, Paper, Progress, Stack, Table, Text } from "@mantine/core";
 import { IconArrowRight } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { ApiError } from "@/core/api/errors/ApiError";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
-import { getModelLabExperimentRoutingOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import type { XeLocalAiEngineClientServicesModelLabModelLabTraceResult as TraceResult } from "@/core/api/generated/types.gen";
+import { formatNumber } from "@/core/formatting/NumberFormatting";
 import {
 	BasisBadge,
 	ExplanationEntry,
@@ -16,7 +15,8 @@ import {
 } from "@/features/modelLab/components/ArchitectureExplanation";
 import { type ExplanationLevel, explanationKey, type routingTopics } from "@/features/modelLab/models/ModelLabExplanation";
 import type { ModelLabJump } from "@/features/modelLab/models/ModelLabNavigation";
-import { expertChoices, expertUsage } from "@/features/modelLab/models/ModelLabRouting";
+import { isNotFound } from "@/features/modelLab/models/ModelLabPyTorch";
+import { expertChoices, expertUsage, modelLabRoutingOptions } from "@/features/modelLab/models/ModelLabRouting";
 import {
 	routingProvenanceNote,
 	routingUsageCount,
@@ -24,6 +24,9 @@ import {
 } from "@/features/modelLab/models/ModelLabRoutingProvenance";
 
 const notRecorded = ["stepper.routingNotRecorded"];
+
+// Display rounding only: the response carries each weight exactly as the expert received it.
+const twoDecimals = (value: number) => formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 interface TraceRoutingPanelProps {
 	experimentId: string;
@@ -54,16 +57,9 @@ export function TraceRoutingPanel({
 	const [open, setOpen] = useState<string | null>(null);
 	const recorded = result.routing != null;
 	const routing = useQuery({
-		...getModelLabExperimentRoutingOptions({ path: { experimentId } }),
-		// A saved run's routing never changes.
-		staleTime: Number.POSITIVE_INFINITY,
+		...modelLabRoutingOptions(experimentId),
 		enabled: recorded,
 	});
-	// Display rounding only: the response carries each weight exactly as the expert received it.
-	const numbers = useMemo(
-		() => new Intl.NumberFormat(i18n.language, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-		[i18n.language],
-	);
 	const title = (
 		<Text size="sm" fw={600}>
 			{t("pages.modelLab.trace.stepper.routing.title", "Routing used to predict this token")}
@@ -99,7 +95,7 @@ export function TraceRoutingPanel({
 	const usage =
 		data && selectedBlock !== undefined && data.layers.includes(selectedBlock) ? expertUsage(data.steps, selectedBlock) : [];
 	const chipLabel = (expert: number, weight: number) =>
-		t("pages.modelLab.trace.stepper.routing.chip", "E{{expert}} {{weight}}", { expert, weight: numbers.format(weight) });
+		t("pages.modelLab.trace.stepper.routing.chip", "E{{expert}} {{weight}}", { expert, weight: twoDecimals(weight) });
 	const caption = t(
 		"pages.modelLab.trace.stepper.routing.caption",
 		"Experts each mixture-of-experts block chose at step {{step}}, with their weights",
@@ -127,7 +123,7 @@ export function TraceRoutingPanel({
 			{routing.status === "pending" && <Loader size="sm" />}
 			{routing.status === "error" && (
 				<Alert color="red" data-testid="model-lab-stepper-routing-failed">
-					{routing.error instanceof ApiError && routing.error.statusCode === 404
+					{isNotFound(routing.error)
 						? t("pages.modelLab.trace.stepper.routing.notFound", "This run kept no routing.")
 						: apiErrorMessage(routing.error, t("pages.modelLab.trace.stepper.routing.failed", "The routing could not be read."))}
 				</Alert>
@@ -200,7 +196,7 @@ export function TraceRoutingPanel({
 									</Table.Td>
 									{!data.normalizedTopK && (
 										<Table.Td ta="right" style={{ whiteSpace: "nowrap" }}>
-											{numbers.format(block.weights.reduce((sum, weight) => sum + weight, 0))}
+											{twoDecimals(block.weights.reduce((sum, weight) => sum + weight, 0))}
 										</Table.Td>
 									)}
 								</Table.Tr>

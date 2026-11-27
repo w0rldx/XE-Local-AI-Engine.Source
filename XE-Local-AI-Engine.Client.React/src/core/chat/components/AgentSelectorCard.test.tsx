@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AgentOption } from "@/core/agents/models/AgentOption";
@@ -12,15 +10,7 @@ import type { AgentOption } from "@/core/agents/models/AgentOption";
 // the call site); picking the Default Assistant row calls onSelectAgent("") (which disables it).
 import { AgentSelectorCard } from "@/core/chat/components/AgentSelectorCard";
 import classes from "@/core/chat/components/ChatComposerToolbar.module.css";
-import { testMantineTheme } from "@/test/MantineTestRender";
-
-function renderWithProviders(ui: ReactElement) {
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			{ui}
-		</MantineProvider>,
-	);
-}
+import { renderWithMantine } from "@/test/MantineTestRender";
 
 function makeOption(overrides: Partial<AgentOption> = {}): AgentOption {
 	return {
@@ -63,7 +53,7 @@ describe("AgentSelectorCard", () => {
 	});
 
 	it("disables the trigger when there are no agents", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<AgentSelectorCard agentOptions={[]} agentModeEnabled={false} selectedAgentId="" onSelectAgent={vi.fn()} />,
 		);
 
@@ -75,7 +65,7 @@ describe("AgentSelectorCard", () => {
 	it("shows the Default Assistant label on the trigger when agent mode is off", () => {
 		const options = [makeOption({ id: "agent-1", name: "Alpha Agent" })];
 
-		renderWithProviders(
+		renderWithMantine(
 			<AgentSelectorCard agentOptions={options} agentModeEnabled={false} selectedAgentId="" onSelectAgent={vi.fn()} />,
 		);
 
@@ -85,7 +75,7 @@ describe("AgentSelectorCard", () => {
 	it("shows the selected agent name on the trigger when agent mode is on", () => {
 		const options = [makeOption({ id: "agent-1", name: "Alpha Agent" })];
 
-		renderWithProviders(
+		renderWithMantine(
 			<AgentSelectorCard agentOptions={options} agentModeEnabled={true} selectedAgentId="agent-1" onSelectAgent={vi.fn()} />,
 		);
 
@@ -96,7 +86,7 @@ describe("AgentSelectorCard", () => {
 	// lives only in the accessible name and the tooltip, and the same menu still has to open.
 	it("names the current agent in its accessible name and tooltip, so the folded icon-only trigger still says it", async () => {
 		const options = [makeOption({ id: "agent-1", name: "Alpha Agent" })];
-		renderWithProviders(
+		renderWithMantine(
 			<AgentSelectorCard agentOptions={options} agentModeEnabled={true} selectedAgentId="agent-1" onSelectAgent={vi.fn()} />,
 		);
 
@@ -116,7 +106,7 @@ describe("AgentSelectorCard", () => {
 	it("lists the Default Assistant row and agents in the dropdown when opened", async () => {
 		const options = [makeOption({ id: "agent-1", name: "Alpha Agent" }), makeOption({ id: "agent-2", name: "Beta Agent" })];
 
-		renderWithProviders(
+		renderWithMantine(
 			<AgentSelectorCard agentOptions={options} agentModeEnabled={false} selectedAgentId="" onSelectAgent={vi.fn()} />,
 		);
 
@@ -131,7 +121,7 @@ describe("AgentSelectorCard", () => {
 		const onSelectAgent = vi.fn();
 		const options = [makeOption({ id: "agent-1", name: "Alpha Agent" })];
 
-		renderWithProviders(
+		renderWithMantine(
 			<AgentSelectorCard agentOptions={options} agentModeEnabled={false} selectedAgentId="" onSelectAgent={onSelectAgent} />,
 		);
 
@@ -145,7 +135,7 @@ describe("AgentSelectorCard", () => {
 		const onSelectAgent = vi.fn();
 		const options = [makeOption({ id: "agent-1", name: "Alpha Agent" })];
 
-		renderWithProviders(
+		renderWithMantine(
 			<AgentSelectorCard
 				agentOptions={options}
 				agentModeEnabled={true}
@@ -164,7 +154,7 @@ describe("AgentSelectorCard", () => {
 		const onSelectAgent = vi.fn();
 		const options = [makeOption({ id: "agent-1", name: "Alpha Agent" })];
 
-		renderWithProviders(
+		renderWithMantine(
 			<AgentSelectorCard
 				agentOptions={options}
 				agentModeEnabled={true}
@@ -186,7 +176,7 @@ describe("AgentSelectorCard", () => {
 	it("shows the Orchestrator badge for orchestrator-kind agents", async () => {
 		const options = [makeOption({ id: "orch-1", name: "Orch Agent", kind: "Orchestrator" })];
 
-		renderWithProviders(
+		renderWithMantine(
 			<AgentSelectorCard agentOptions={options} agentModeEnabled={false} selectedAgentId="" onSelectAgent={vi.fn()} />,
 		);
 
@@ -199,7 +189,7 @@ describe("AgentSelectorCard", () => {
 	it("renders a pinned-model hint element for agents with a modelProfile", async () => {
 		const options = [makeOption({ id: "agent-1", name: "Pinned Agent", modelProfile: "llama3:8b" })];
 
-		renderWithProviders(
+		renderWithMantine(
 			<AgentSelectorCard agentOptions={options} agentModeEnabled={false} selectedAgentId="" onSelectAgent={vi.fn()} />,
 		);
 
@@ -213,7 +203,7 @@ describe("AgentSelectorCard", () => {
 	it("treats a stale selectedAgentId (deleted agent) as Default Assistant on the trigger", () => {
 		const options = [makeOption({ id: "agent-1", name: "Live Agent" })];
 
-		renderWithProviders(
+		renderWithMantine(
 			<AgentSelectorCard
 				agentOptions={options}
 				agentModeEnabled={true}
@@ -230,7 +220,7 @@ describe("AgentSelectorCard", () => {
 	it("names the search box for assistive technology", async () => {
 		const options = Array.from({ length: 6 }, (_, index) => makeOption({ id: `agent-${index}`, name: `Agent ${index}` }));
 
-		renderWithProviders(
+		renderWithMantine(
 			<AgentSelectorCard agentOptions={options} agentModeEnabled={true} selectedAgentId="agent-0" onSelectAgent={vi.fn()} />,
 		);
 

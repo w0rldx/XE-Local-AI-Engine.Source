@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/locales/en.json";
@@ -59,15 +57,7 @@ vi.mock("@/core/auth/api/NodeAuthApi", () => authApiMock);
 import { Login } from "@/core/auth/pages/Login";
 import { Setup } from "@/core/auth/pages/Setup";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
-import { testMantineTheme } from "@/test/MantineTestRender";
-
-function renderWithProviders(ui: ReactElement) {
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			{ui}
-		</MantineProvider>,
-	);
-}
+import { renderWithMantine } from "@/test/MantineTestRender";
 
 describe("node auth pages", () => {
 	afterEach(() => {
@@ -95,7 +85,7 @@ describe("node auth pages", () => {
 	});
 
 	it("logs in with password only and navigates to the safe redirect", async () => {
-		renderWithProviders(<Login />);
+		renderWithMantine(<Login />);
 
 		fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: "correct horse" } });
 		fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
@@ -111,7 +101,7 @@ describe("node auth pages", () => {
 	it("says when to try again after a rate-limited session restore", () => {
 		authApiMock.refreshRateLimitedForSeconds.mockReturnValue(42);
 
-		renderWithProviders(<Login />);
+		renderWithMantine(<Login />);
 
 		expect(screen.getByText(resolveKey("auth.login.errorRateLimited", { seconds: 42 }))).toBeTruthy();
 	});
@@ -124,7 +114,7 @@ describe("node auth pages", () => {
 				data: { message: "Too many failed sign-in attempts.", code: "locked-out", retryAfterSeconds: 300 },
 			},
 		});
-		renderWithProviders(<Login />);
+		renderWithMantine(<Login />);
 
 		fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: "correct horse" } });
 		fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
@@ -139,7 +129,7 @@ describe("node auth pages", () => {
 			isAxiosError: true,
 			response: { status: 401, data: "" },
 		});
-		renderWithProviders(<Login />);
+		renderWithMantine(<Login />);
 
 		fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: "wrong horse" } });
 		fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
@@ -148,7 +138,7 @@ describe("node auth pages", () => {
 	});
 
 	it("sets up the first admin and immediately logs in", async () => {
-		renderWithProviders(<Setup />);
+		renderWithMantine(<Setup />);
 
 		// Password satisfies the client-side policy mirrored from ASP.NET Identity:
 		// 12+ chars, upper, lower, digit, and a symbol.
@@ -173,7 +163,7 @@ describe("node auth pages", () => {
 	});
 
 	it("accepts a non-ASCII address the node accepts, with no browser-only rule marking it invalid", async () => {
-		renderWithProviders(<Setup />);
+		renderWithMantine(<Setup />);
 
 		const password = "Long-Enough-Password1";
 		const email = screen.getByLabelText(/^Email/) as HTMLInputElement;
@@ -189,7 +179,7 @@ describe("node auth pages", () => {
 
 	it("reveals the recovery code after setup and continues to external access only once it is saved", async () => {
 		authApiMock.setupNodeAuth.mockResolvedValue({ recoveryCode: "AAAAA-BBBBB-CCCCC" });
-		renderWithProviders(<Setup />);
+		renderWithMantine(<Setup />);
 		expect(screen.getByTestId("first-run-stepper").textContent).toBe("Step 1 of 3: Account");
 
 		const password = "Long-Enough-Password1";
@@ -219,7 +209,7 @@ describe("node auth pages", () => {
 	it("still reveals the recovery code when the login after setup fails and continues to login", async () => {
 		authApiMock.setupNodeAuth.mockResolvedValue({ recoveryCode: "AAAAA-BBBBB-CCCCC" });
 		authApiMock.loginNodeAuth.mockRejectedValue(new Error("network down"));
-		renderWithProviders(<Setup />);
+		renderWithMantine(<Setup />);
 
 		const password = "Long-Enough-Password1";
 		fireEvent.change(screen.getByLabelText(/^Email/), { target: { value: "admin@example.test" } });
@@ -241,7 +231,7 @@ describe("node auth pages", () => {
 	});
 
 	it("blocks setup and surfaces the policy when the password is too weak", async () => {
-		renderWithProviders(<Setup />);
+		renderWithMantine(<Setup />);
 
 		// Missing an uppercase letter and a digit, so the client-side policy must reject it.
 		const weakPassword = "weak-password";
@@ -257,7 +247,7 @@ describe("node auth pages", () => {
 	// The literal first screen of a fresh install. `errors` is recomputed on every render including the first, so
 	// without a touched gate the operator was greeted by two red validation errors for fields they had not typed in.
 	it("shows no validation errors before the operator has touched a field", () => {
-		renderWithProviders(<Setup />);
+		renderWithMantine(<Setup />);
 
 		expect(screen.queryByText(resolveKey("auth.setup.validationEmail"))).toBeNull();
 		expect(screen.queryByText(resolveKey("auth.setup.validationPasswordRequired"))).toBeNull();
@@ -266,7 +256,7 @@ describe("node auth pages", () => {
 	});
 
 	it("shows a field's validation error once that field has been touched", () => {
-		renderWithProviders(<Setup />);
+		renderWithMantine(<Setup />);
 
 		fireEvent.change(screen.getByLabelText(/^Email/), { target: { value: "not-an-email" } });
 
@@ -289,7 +279,7 @@ describe("node auth pages", () => {
 			authApiMock.getNodeAuthStatus
 				.mockResolvedValueOnce({ setupRequired: true, authenticated: false, vault: "pending" })
 				.mockResolvedValue({ setupRequired: false, authenticated: false, vault: "unlocked" });
-			renderWithProviders(<Setup />);
+			renderWithMantine(<Setup />);
 
 			await vi.advanceTimersByTimeAsync(5_000);
 			expect(navigateMock).not.toHaveBeenCalled();
@@ -300,7 +290,7 @@ describe("node auth pages", () => {
 		});
 
 		it("stops re-checking once the page unmounts", async () => {
-			const { unmount } = renderWithProviders(<Setup />);
+			const { unmount } = renderWithMantine(<Setup />);
 			await vi.advanceTimersByTimeAsync(5_000);
 			expect(authApiMock.getNodeAuthStatus).toHaveBeenCalledTimes(1);
 
@@ -314,7 +304,7 @@ describe("node auth pages", () => {
 		it("does not leave while its own recovery code is on screen", async () => {
 			authApiMock.setupNodeAuth.mockResolvedValue({ recoveryCode: "AAAAA-BBBBB-CCCCC" });
 			authApiMock.getNodeAuthStatus.mockResolvedValue({ setupRequired: false, authenticated: true, vault: "unlocked" });
-			renderWithProviders(<Setup />);
+			renderWithMantine(<Setup />);
 
 			const password = "Long-Enough-Password1";
 			fireEvent.change(screen.getByLabelText(/^Email/), { target: { value: "admin@example.test" } });

@@ -22,6 +22,7 @@ import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { getModelLabExperimentOptions, getModelLabExperimentTraceOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import type { XeLocalAiEngineClientEndpointsModelLabV1ModelLabExperimentResponse as Experiment } from "@/core/api/generated/types.gen";
 import { logprobPercentLabel, logprobTextLabel } from "@/core/directInference/DirectInferenceModels";
+import { formatNumber } from "@/core/formatting/NumberFormatting";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { NextTokenStepView } from "@/features/modelLab/components/NextTokenStepView";
 import { CandidateNoteText } from "@/features/modelLab/components/TraceStepCandidates";
@@ -36,6 +37,8 @@ import {
 } from "@/features/modelLab/models/ModelLabComparison";
 import { type CandidateBasis, candidateNote, toStepEntry } from "@/features/modelLab/models/ModelLabTrace";
 
+// Two decimals in the UI language, ungrouped.
+const twoDecimals: Intl.NumberFormatOptions = { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false };
 const differsBackground = "var(--mantine-color-yellow-light)";
 const selectedBackground = "var(--mantine-primary-color-light)";
 const cellStyle = { overflowWrap: "anywhere", whiteSpace: "pre-wrap", verticalAlign: "top" } as const;
@@ -413,7 +416,7 @@ function TraceComparison({ runs }: { runs: Experiment[] }) {
 									{means.means[row]?.map((mean, index) => (
 										// biome-ignore lint/suspicious/noArrayIndexKey: one cell per run, in the runs' fixed order.
 										<Table.Td key={index} ta="right">
-											{mean === null ? "–" : mean.toFixed(2)}
+											{mean === null ? "–" : formatNumber(mean, twoDecimals)}
 										</Table.Td>
 									))}
 								</Table.Tr>

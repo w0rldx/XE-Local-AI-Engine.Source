@@ -392,11 +392,11 @@ XE-Local-AI-Engine.Tests/Chat/NodeChatInvocationPumpRunEnvelopeTests.cs|run|7
 XE-Local-AI-Engine.Tests/Chat/NodeChatPersistenceServiceTests.cs|run|5
 XE-Local-AI-Engine.Tests/Chat/NodeChatReadOnlyEndpointTests.cs|run|1
 XE-Local-AI-Engine.Tests/Chat/NodeChatReadOnlyEndpointTests.cs|summary|1
-XE-Local-AI-Engine.Tests/Chat/NodeChatRegenerationServiceTests.cs|run|18
+XE-Local-AI-Engine.Tests/Chat/NodeChatRegenerationServiceTests.cs|run|16
 XE-Local-AI-Engine.Tests/Chat/NodeChatRegenerationServiceTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Chat/NodeChatRestartRecoveryServiceTests.cs|run|5
 XE-Local-AI-Engine.Tests/Chat/NodeChatStreamServiceAgentResolutionTests.cs|run|9
-XE-Local-AI-Engine.Tests/Chat/NodeChatStreamServiceTestSupport.cs|run|8
+XE-Local-AI-Engine.Tests/Chat/NodeChatStreamServiceTestSupport.cs|run|7
 XE-Local-AI-Engine.Tests/Chat/NodeChatStreamServiceTests.cs|run|5
 XE-Local-AI-Engine.Tests/Chat/NodeChatTurnReadCapTests.cs|run|4
 XE-Local-AI-Engine.Tests/Chat/NodeChatTurnReadCapTests.cs|summary|2
@@ -824,7 +824,7 @@ XE-Local-AI-Engine.Tests/Knowledge/KnowledgeIngestionWorkerTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Mcp/InProcMcpServer.cs|run|1
 XE-Local-AI-Engine.Tests/Mcp/InProcMcpServer.cs|summary|1
 XE-Local-AI-Engine.Tests/Mcp/McpClientFactoryLoopbackTests.cs|run|1
-XE-Local-AI-Engine.Tests/Mcp/McpClientFactoryLoopbackTests.cs|summary|2
+XE-Local-AI-Engine.Tests/Mcp/McpClientFactoryLoopbackTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Mcp/McpServerApiKeyServiceTests.cs|run|1
 XE-Local-AI-Engine.Tests/Mcp/McpServerApiKeyServiceTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Mcp/McpServerConnectionManagerDiTests.cs|run|2
@@ -838,7 +838,7 @@ XE-Local-AI-Engine.Tests/Mcp/SandboxedMcpStdioLiveTests.cs|block|1
 XE-Local-AI-Engine.Tests/Mcp/SandboxedMcpStdioLiveTests.cs|run|3
 XE-Local-AI-Engine.Tests/Mcp/SandboxedMcpStdioLiveTests.cs|summary|3
 XE-Local-AI-Engine.Tests/Mcp/SandboxedMcpStdioTransportTests.cs|run|8
-XE-Local-AI-Engine.Tests/Mcp/SandboxedMcpStdioTransportTests.cs|summary|4
+XE-Local-AI-Engine.Tests/Mcp/SandboxedMcpStdioTransportTests.cs|summary|3
 XE-Local-AI-Engine.Tests/Memory/MemoryExtractionDispatcherTests.cs|run|8
 XE-Local-AI-Engine.Tests/Memory/MemoryExtractionDispatcherTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Memory/MemoryExtractionServiceTests.cs|run|2

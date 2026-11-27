@@ -67,7 +67,7 @@ public sealed class ModelLabPyTorchSourceServiceTests
         }
 
         AssertEx.Equal("config.json", string.Join(',', script.LastConfigFiles), "The config directory holds the config alone.");
-        AssertEx.Equal(ModelLabExperimentServiceTests.LabHost.Config, script.LastConfig!);
+        AssertEx.Equal(ModelLabTestSupport.LabHost.Config, script.LastConfig!);
 
         script.Hold.SetResult();
         var outcome = await building;
@@ -76,11 +76,11 @@ public sealed class ModelLabPyTorchSourceServiceTests
         AssertEx.Equal("checkpoint", index.Source.Kind);
         AssertEx.Equal("Qwen/Qwen3.5-0.8B", index.Source.RepoId);
         AssertEx.Equal(lab.ArtifactId, index.Source.BaseArtifactId!.Value);
-        AssertEx.Equal($"{Sha256(ModelLabExperimentServiceTests.LabHost.Config)}-5.17.0-2.13.0+cpu-{ModelLabTraceSpec.ContractVersion}", index.IndexId);
+        AssertEx.Equal($"{Sha256(ModelLabTestSupport.LabHost.Config)}-5.17.0-2.13.0+cpu-{ModelLabTraceSpec.ContractVersion}", index.IndexId);
         AssertEx.Equal("Qwen3_5ForCausalLM", index.Index.ModelClass);
         AssertEx.Null(index.Index.DeclaredArchitectures, "A config with no architectures declares none.");
         AssertEx.Empty(Directory.EnumerateFileSystemEntries(lab.WorkRoot), "No work directory survives the job.");
-        AssertEx.Equal(index.IndexId, (await lab.Service.GetLastAsync(ModelLabExperimentServiceTests.Gguf, CancellationToken.None)).IndexId);
+        AssertEx.Equal(index.IndexId, (await lab.Service.GetLastAsync(ModelLabTestSupport.Gguf, CancellationToken.None)).IndexId);
     }
 
     /// <summary>B3: the same config.json, from either source, is the same index; the second answer runs no script.</summary>
@@ -90,7 +90,7 @@ public sealed class ModelLabPyTorchSourceServiceTests
         using var runtime = new FakeRuntime();
         var script = new ScriptedSourceJob(runtime);
         await using var lab = await Lab.StartAsync(runtime, script);
-        lab.ServeHubConfig(ModelLabExperimentServiceTests.LabHost.Config);
+        lab.ServeHubConfig(ModelLabTestSupport.LabHost.Config);
 
         var fromCheckpoint = await lab.Service.BuildAsync(lab.CheckpointRequest(), CancellationToken.None);
         var fromHub = await lab.Service.BuildAsync(Lab.HubRequest(), CancellationToken.None);
@@ -102,8 +102,8 @@ public sealed class ModelLabPyTorchSourceServiceTests
         AssertEx.Equal(HubCommit, hub.Source.Revision);
         AssertEx.Null(hub.Source.BaseArtifactId);
         var kept = Path.Combine(ModelLabPyTorchSourceService.IndexRoot(lab.DataDirectory), "configs", Sha256($"Qwen/Qwen3.5-0.8B@{HubCommit}"), "config.json");
-        AssertEx.Equal(ModelLabExperimentServiceTests.LabHost.Config, await File.ReadAllTextAsync(kept));
-        AssertEx.Equal("huggingface", (await lab.Service.GetLastAsync(ModelLabExperimentServiceTests.Gguf, CancellationToken.None)).Source.Kind);
+        AssertEx.Equal(ModelLabTestSupport.LabHost.Config, await File.ReadAllTextAsync(kept));
+        AssertEx.Equal("huggingface", (await lab.Service.GetLastAsync(ModelLabTestSupport.Gguf, CancellationToken.None)).Source.Kind);
         AssertEx.Empty(Directory.EnumerateFileSystemEntries(lab.WorkRoot), "The fetch's staging directory goes too.");
     }
 
@@ -120,7 +120,7 @@ public sealed class ModelLabPyTorchSourceServiceTests
 
         var index = AssertEx.NotNull(built.Index, built.RefusalMessage ?? "built");
         AssertEx.Equal("XLMRobertaForSequenceClassification", string.Join(',', index.Index.DeclaredArchitectures ?? []), "Only the strings are kept.");
-        var last = await lab.Service.GetLastAsync(ModelLabExperimentServiceTests.Gguf, CancellationToken.None);
+        var last = await lab.Service.GetLastAsync(ModelLabTestSupport.Gguf, CancellationToken.None);
         AssertEx.Equal("XLMRobertaForSequenceClassification", string.Join(',', last.Index.DeclaredArchitectures ?? []), "The stored index carries them.");
     }
 
@@ -134,7 +134,7 @@ public sealed class ModelLabPyTorchSourceServiceTests
 
         runtime.SetTorchVersion("2.14.0+cpu");
 
-        _ = await AssertEx.ThrowsAsync<ModelLabPyTorchIndexNotFoundException>(() => lab.Service.GetLastAsync(ModelLabExperimentServiceTests.Gguf, CancellationToken.None));
+        _ = await AssertEx.ThrowsAsync<ModelLabPyTorchIndexNotFoundException>(() => lab.Service.GetLastAsync(ModelLabTestSupport.Gguf, CancellationToken.None));
         var second = await lab.Service.BuildAsync(lab.CheckpointRequest(), CancellationToken.None);
         AssertEx.Equal(expected: 2, script.SpawnCount);
         AssertEx.True(second.Index!.IndexId.EndsWith($"-2.14.0+cpu-{ModelLabTraceSpec.ContractVersion}", StringComparison.Ordinal), second.Index.IndexId);
@@ -248,7 +248,7 @@ public sealed class ModelLabPyTorchSourceServiceTests
             Result = static () => null,
             Lines =
             [
-                ModelLabExperimentServiceTests.Handshake,
+                ModelLabTestSupport.Handshake,
                 $$"""{"event":"error","category":"{{category}}","message":"the script's own words"}""",
                 """{"event":"done","cancelled":false}"""
             ],
@@ -259,7 +259,7 @@ public sealed class ModelLabPyTorchSourceServiceTests
         var outcome = await lab.ExpectAsync(expected, lab.CheckpointRequest());
 
         AssertEx.Contains(outcome.RefusalMessage, "the script's own words");
-        _ = await AssertEx.ThrowsAsync<ModelLabPyTorchIndexNotFoundException>(() => lab.Service.GetLastAsync(ModelLabExperimentServiceTests.Gguf, CancellationToken.None));
+        _ = await AssertEx.ThrowsAsync<ModelLabPyTorchIndexNotFoundException>(() => lab.Service.GetLastAsync(ModelLabTestSupport.Gguf, CancellationToken.None));
         AssertEx.Empty(Directory.EnumerateFileSystemEntries(lab.WorkRoot));
     }
 
@@ -392,7 +392,7 @@ public sealed class ModelLabPyTorchSourceServiceTests
         };
         await using var lab = await Lab.StartAsync(runtime, script, Qwen35TensorFixture.Qwen35_27BLike());
         using var client = lab.Host.Factory.CreateClient();
-        var route = "/api/local/v1/model-lab/architecture/" + Uri.EscapeDataString(ModelLabExperimentServiceTests.Gguf) + "/pytorch";
+        var route = "/api/local/v1/model-lab/architecture/" + Uri.EscapeDataString(ModelLabTestSupport.Gguf) + "/pytorch";
 
         using var missing = lab.Host.Authorized(HttpMethod.Get, route);
         AssertEx.Equal(HttpStatusCode.NotFound, (await client.SendAsync(missing)).StatusCode, "Nothing built yet.");
@@ -437,7 +437,7 @@ public sealed class ModelLabPyTorchSourceServiceTests
         await File.WriteAllTextAsync(lab.ArtifactConfigPath, """{"auto_map":{}}""");
         using var client = lab.Host.Factory.CreateClient();
 
-        using var post = lab.Host.Authorized(HttpMethod.Post, "/api/local/v1/model-lab/architecture/" + Uri.EscapeDataString(ModelLabExperimentServiceTests.Gguf) + "/pytorch");
+        using var post = lab.Host.Authorized(HttpMethod.Post, "/api/local/v1/model-lab/architecture/" + Uri.EscapeDataString(ModelLabTestSupport.Gguf) + "/pytorch");
         post.Content = JsonContent.Create(new
         {
             source = "checkpoint",
@@ -520,13 +520,13 @@ public sealed class ModelLabPyTorchSourceServiceTests
         using var runtime = new FakeRuntime();
         var script = new ScriptedSourceJob(runtime);
         await using var lab = await Lab.StartAsync(runtime, script);
-        lab.ServeHubConfig(ModelLabExperimentServiceTests.LabHost.Config, beforeServing: () => runtime.SetTorchVersion("2.14.0+cpu"));
+        lab.ServeHubConfig(ModelLabTestSupport.LabHost.Config, beforeServing: () => runtime.SetTorchVersion("2.14.0+cpu"));
 
         var outcome = await lab.Service.BuildAsync(Lab.HubRequest(), CancellationToken.None);
 
         var index = AssertEx.NotNull(outcome.Index, outcome.RefusalMessage ?? "built");
         AssertEx.True(index.IndexId.EndsWith($"-2.14.0+cpu-{ModelLabTraceSpec.ContractVersion}", StringComparison.Ordinal), index.IndexId);
-        AssertEx.Equal(index.IndexId, (await lab.Service.GetLastAsync(ModelLabExperimentServiceTests.Gguf, CancellationToken.None)).IndexId);
+        AssertEx.Equal(index.IndexId, (await lab.Service.GetLastAsync(ModelLabTestSupport.Gguf, CancellationToken.None)).IndexId);
     }
 
     /// <summary>The host's runtime substitute runs the admission it is handed, as the provider does inside its start transaction.</summary>
@@ -565,15 +565,15 @@ public sealed class ModelLabPyTorchSourceServiceTests
     /// <summary>The lab host with this feature's script, a venv laid out on disk, and a Hub config seam.</summary>
     private sealed class Lab : IAsyncDisposable
     {
-        private readonly ModelLabExperimentServiceTests.ScriptedProcess _unused;
+        private readonly ModelLabTestSupport.ScriptedProcess _unused;
 
-        private Lab(ModelLabExperimentServiceTests.LabHost host, ModelLabExperimentServiceTests.ScriptedProcess unused)
+        private Lab(ModelLabTestSupport.LabHost host, ModelLabTestSupport.ScriptedProcess unused)
         {
             Host = host;
             _unused = unused;
         }
 
-        public ModelLabExperimentServiceTests.LabHost Host { get; }
+        public ModelLabTestSupport.LabHost Host { get; }
 
         public ModelLabPyTorchSourceService Service => Host.Services.GetRequiredService<ModelLabPyTorchSourceService>();
 
@@ -596,9 +596,9 @@ public sealed class ModelLabPyTorchSourceServiceTests
         public static async Task<Lab> StartAsync(FakeRuntime runtime, ScriptedSourceJob script, GgufTensorInspection? gguf = null)
         {
 #pragma warning disable CA2000 // The lab owns it.
-            var unused = new ModelLabExperimentServiceTests.ScriptedProcess();
+            var unused = new ModelLabTestSupport.ScriptedProcess();
 #pragma warning restore CA2000
-            var host = await ModelLabExperimentServiceTests.LabHost.StartAsync(unused, configure: services =>
+            var host = await ModelLabTestSupport.LabHost.StartAsync(unused, configure: services =>
             {
                 services.RemoveAll<ITrainingProcessSpawner>();
                 services.AddSingleton<ITrainingProcessSpawner>(script);
@@ -619,7 +619,7 @@ public sealed class ModelLabPyTorchSourceServiceTests
         public ModelLabPyTorchBuildRequest CheckpointRequest() =>
             new()
             {
-                ModelName = ModelLabExperimentServiceTests.Gguf,
+                ModelName = ModelLabTestSupport.Gguf,
                 Source = "checkpoint",
                 BaseArtifactId = ArtifactId
             };
@@ -627,7 +627,7 @@ public sealed class ModelLabPyTorchSourceServiceTests
         public static ModelLabPyTorchBuildRequest HubRequest() =>
             new()
             {
-                ModelName = ModelLabExperimentServiceTests.Gguf,
+                ModelName = ModelLabTestSupport.Gguf,
                 Source = "huggingface",
                 RepoId = "Qwen/Qwen3.5-0.8B",
                 Revision = "main"
@@ -757,7 +757,7 @@ public sealed class ModelLabPyTorchSourceServiceTests
 
         public Func<string?> Result { get; set; }
 
-        public IReadOnlyList<string> Lines { get; init; } = ModelLabExperimentServiceTests.CompleteRun;
+        public IReadOnlyList<string> Lines { get; init; } = ModelLabTestSupport.CompleteRun;
 
         public int ExitCode { get; init; }
 

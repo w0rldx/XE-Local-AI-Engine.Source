@@ -10,6 +10,7 @@
 # this file's parse. There are no escaping rules to get subtly wrong later.
 import base64
 import builtins
+import contextlib
 import ctypes
 import json
 import os
@@ -32,22 +33,23 @@ _CALL_TIMEOUT = float(_CONFIG["callTimeoutSeconds"])
 _EXPORTS = list(_CONFIG["exports"])
 _MAX_CAPTURE_BYTES = 8192
 
-_verdict = {"status": "verdict", "collected": 0, "passed": 0, "failed": 0, "phase": "start", "error": None}
+_verdict: dict = {"status": "verdict", "collected": 0, "passed": 0, "failed": 0, "phase": "start", "error": None}
 
 
 def _emit():
     # sys.__stdout__ rather than sys.stdout: the test phase redirects sys.stdout to stderr so that an operator's
     # print() is evidence rather than noise on the channel C# parses. Nothing else in this process writes to fd 1.
-    sys.__stdout__.write("<<<XE-PYTEST:" + _NONCE + ">>>" + json.dumps(_verdict) + "\n")
-    sys.__stdout__.flush()
+    sys.__stdout__.write("<<<XE-PYTEST:" + _NONCE + ">>>" + json.dumps(_verdict) + "\n")  # pyrefly: ignore[missing-attribute]
+    sys.__stdout__.flush()  # pyrefly: ignore[missing-attribute]
 
 
 def _unavailable(reason):
     # NOT a zero. A sandbox that cannot be trusted is unscorable; a candidate that misbehaves inside a working sandbox
     # is a zero. C# keeps the two apart, and this is how the parent says which one happened.
-    sys.__stdout__.write("<<<XE-PYTEST:" + _NONCE + ">>>"
-                         + json.dumps({"status": "unavailable", "reason": reason}) + "\n")
-    sys.__stdout__.flush()
+    sys.__stdout__.write(  # pyrefly: ignore[missing-attribute]
+        "<<<XE-PYTEST:" + _NONCE + ">>>" + json.dumps({"status": "unavailable", "reason": reason}) + "\n"
+    )
+    sys.__stdout__.flush()  # pyrefly: ignore[missing-attribute]
     sys.exit(0)
 
 
@@ -70,12 +72,12 @@ class _CandidateError(Exception):
 
 
 class _TestDeadline(BaseException):
-    """The criterion's deadline on the whole test phase. BaseException, so a test's `except Exception` cannot absorb it."""
+    """The criterion's deadline on the whole test phase: a BaseException, so `except Exception` cannot absorb it."""
 
 
 # "hit" is the verdict's own record that the deadline fired: unittest may file the raise under a test decorated
 # expectedFailure and count nothing as failed, so its bookkeeping cannot be what decides the outcome.
-_deadline = {"armed": False, "hit": False, "result": None}
+_deadline: dict = {"armed": False, "hit": False, "result": None}
 _DEADLINE_MESSAGE = "the tests did not finish within " + format(_CALL_TIMEOUT, "g") + "s"
 
 
@@ -103,8 +105,7 @@ class _Boundary:
     def __init__(self):
         request_read, self._request_write = os.pipe()
         self._response_read, response_write = os.pipe()
-        child_source = (b"_CANDIDATE_B64 = \"" + _CANDIDATE_B64.encode("ascii") + b"\"\n"
-                        + base64.b64decode(_CHILD_B64))
+        child_source = b'_CANDIDATE_B64 = "' + _CANDIDATE_B64.encode("ascii") + b'"\n' + base64.b64decode(_CHILD_B64)
         self._process = subprocess.Popen(
             [sys.executable, "-I", "-"],
             stdin=subprocess.PIPE,
@@ -114,13 +115,15 @@ class _Boundary:
             env={
                 "XE_REQ_FD": str(request_read),
                 "XE_RES_FD": str(response_write),
-                "HOME": os.environ.get("HOME", "/tmp"),
-                "TMPDIR": os.environ.get("TMPDIR", "/tmp"),
-            })
+                # The jail's own /tmp, not the host's: this process runs inside the per-invocation jail.
+                "HOME": os.environ.get("HOME", "/tmp"),  # noqa: S108  # nosec B108
+                "TMPDIR": os.environ.get("TMPDIR", "/tmp"),  # noqa: S108  # nosec B108
+            },
+        )
         os.close(request_read)
         os.close(response_write)
-        self._process.stdin.write(child_source)
-        self._process.stdin.close()
+        self._process.stdin.write(child_source)  # pyrefly: ignore[missing-attribute]
+        self._process.stdin.close()  # pyrefly: ignore[missing-attribute]
         self._buffer = bytearray()
         self._captured = []
         self._drains = [self._drain(self._process.stdout), self._drain(self._process.stderr)]
@@ -147,12 +150,12 @@ class _Boundary:
         try:
             encoded = json.dumps(payload).encode("utf-8")
         except (TypeError, ValueError) as error:
-            raise _CandidateError("the arguments are not JSON-serializable: " + str(error))
+            raise _CandidateError("the arguments are not JSON-serializable: " + str(error)) from error
 
         try:
             os.write(self._request_write, encoded + b"\n")
-        except OSError:
-            raise _CandidateError("the candidate process is no longer accepting calls")
+        except OSError as error:
+            raise _CandidateError("the candidate process is no longer accepting calls") from error
 
         message = json.loads(self._readline().decode("utf-8", "replace"))
         if "exc" in message:
@@ -179,7 +182,7 @@ class _Boundary:
             newline = self._buffer.find(b"\n")
             if newline >= 0:
                 line = bytes(self._buffer[:newline])
-                del self._buffer[:newline + 1]
+                del self._buffer[: newline + 1]
                 return line
 
             remaining = deadline - time.monotonic()
@@ -196,14 +199,12 @@ class _Boundary:
 
     def close(self):
         for closer in (lambda: os.close(self._request_write), lambda: os.close(self._response_read)):
-            try:
+            with contextlib.suppress(OSError):
                 closer()
-            except OSError:
-                pass
         try:
             self._process.kill()
             self._process.wait(timeout=5)
-        except BaseException:  # noqa: BLE001 - teardown must not replace a verdict with its own failure
+        except BaseException:  # noqa: BLE001, S110 - teardown must not replace a verdict with its own failure
             pass
         for thread in self._drains:
             thread.join(timeout=1)
@@ -216,7 +217,9 @@ class _Candidate:
     """`candidate.solve(10)` -- one attribute access, one request, one answer."""
 
     def __getattr__(self, name):
-        return lambda *args, **kwargs: _BOUNDARY.request({"op": "call", "name": name, "args": list(args), "kwargs": kwargs})
+        return lambda *args, **kwargs: _BOUNDARY.request(  # pyrefly: ignore[missing-attribute]
+            {"op": "call", "name": name, "args": list(args), "kwargs": kwargs}
+        )
 
 
 _BOUNDARY = None
@@ -230,7 +233,8 @@ try:
         "__name__": "__xe_tests__",
         "candidate": _candidate,
         "pycall": lambda name, args=(), kwargs=None: _BOUNDARY.request(
-            {"op": "call", "name": name, "args": list(args), "kwargs": kwargs or {}}),
+            {"op": "call", "name": name, "args": list(args), "kwargs": kwargs or {}}
+        ),
         "pyeval": lambda source: _BOUNDARY.request({"op": "eval", "src": source}),
         "CandidateError": _CandidateError,
     }
@@ -243,14 +247,15 @@ try:
     signal.signal(signal.SIGALRM, _on_deadline)
     _deadline["armed"] = True
     signal.setitimer(signal.ITIMER_REAL, _CALL_TIMEOUT)
-    exec(compile(base64.b64decode(_TESTS_B64), "<tests>", "exec"), _namespace)
+    # Running the operator's tests is this process's job.
+    exec(compile(base64.b64decode(_TESTS_B64), "<tests>", "exec"), _namespace)  # noqa: S102  # nosec B102
 
-    _cases = [value for value in _namespace.values()
-              if isinstance(value, type) and issubclass(value, unittest.TestCase)]
+    _cases = [
+        value for value in _namespace.values() if isinstance(value, type) and issubclass(value, unittest.TestCase)
+    ]
     if _cases:
         _verdict["phase"] = "run"
-        _suite = unittest.TestSuite(
-            [unittest.defaultTestLoader.loadTestsFromTestCase(case) for case in _cases])
+        _suite = unittest.TestSuite([unittest.defaultTestLoader.loadTestsFromTestCase(case) for case in _cases])
         _result = unittest.TestResult()
         _deadline["result"] = _result
         _suite.run(_result)

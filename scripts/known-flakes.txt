@@ -1,4 +1,14 @@
 # Known flaky backend tests, read by scripts/run-backend-tests.sh ("Known flakes" in its header).
 # One test METHOD name per line: <name>|<date added>|<note>. MTP prints only the method name, so a
 # flaky class is listed method by method. A match only annotates the failure line; the gate stays
-# red, nothing is skipped or retried. Remove a line when its root cause is fixed.
+# red, nothing is skipped or retried. Add a line in the same round when a test failed on a clean tip
+# and passed unchanged on it (scripts/gate-flakes.py lists them; rerun a CANDIDATE's class first, as
+# its green run skipped tests). Remove it when its root cause is fixed.
+McpOnlyPrimaryServe_EmitsCanonicalReadinessSupportsStatusAndEnforcesPortAndLeaseExits|2026-11-26|red on clean tip d497c68c5 (2026-11-17) after two green runs of it; an earlier line was removed with no root-cause fix
+LockedVault_ServeWithTheAdminPassword_UnlocksWithoutThePreHost_AndAWrongOneExitsFive|2026-11-26|red then green on clean tip 2ab9da27e (2026-11-15)
+Unpinned_EachSignalOpensAnFd_AndVerifiesTheChildThroughIt|2026-11-26|red then green on clean tip 400742c85 (2026-11-20), red again on 1f6be1d91 (2026-11-22)
+StartValidation_WhileTheCoderRunIsStillClosing_WaitsAndNumbersItsStreamAboveTheCoderTerminal|2026-11-26|red then green on clean tip e575e5192 (2026-11-26)
+Validation_UnderTheDotnetCsprojProfile_IgnoresAnMSBuildImportTheCoderPlantedInItsHome|2026-11-26|red then green on clean tips 61efd1e22 and bf50e2a21 (2026-10-30) and 26b7d30c9 (2026-11-23)
+Validation_UnderTheDotnetCsprojProfile_WhenPatchCompilesAndPasses_ReachesInReviewWithEveryCommandRecorded|2026-11-26|red then green on clean tip 26b7d30c9 (2026-11-23)
+Validation_UnderTheDotnetCsprojProfile_WhenPatchFailsATest_DoesNotReachInReview|2026-11-26|red then green on clean tip 26b7d30c9 (2026-11-23)
+NodeRestart_IsRefusedWithoutAShell_AndAShellOwnedEngineExitsWithTheRestartCode|2026-11-26|red on clean tip 90cb35939 (owned --desktop engine printed no ready line within its read; EngineCliProcessTests) then 18/18 green three times unchanged

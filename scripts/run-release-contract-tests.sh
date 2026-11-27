@@ -27,6 +27,12 @@ command -v python3 >/dev/null 2>&1 || {
   echo "ERROR: python3 is required for release contract tests." >&2
   exit 2
 }
+# Every scripts/** file targets the host python3 at 3.13 or newer (root pyproject.toml, per-file-target-version);
+# an older one would fail tests with tracebacks instead of naming the cause.
+python3 -c 'import sys; sys.exit(tuple(sys.version_info[:2]) < (3, 13))' || {
+  echo "ERROR: release contract tests need python3 3.13 or newer; $(command -v python3) is $(python3 -c 'import sys; print(*sys.version_info[:3], sep=".")')." >&2
+  exit 2
+}
 
 tests=()
 while IFS= read -r test_file; do

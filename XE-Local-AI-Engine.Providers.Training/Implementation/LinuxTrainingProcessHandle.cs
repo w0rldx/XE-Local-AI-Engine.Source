@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.Training.Implementation;
 
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
 using System.Threading.Channels;
@@ -47,7 +46,7 @@ internal enum GroupWaitResult
 ///     there would turn every operator cancel into a failure.
 /// </remarks>
 [SupportedOSPlatform("linux")]
-internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandle
+internal sealed class LinuxTrainingProcessHandle : ITrainingProcessHandle
 {
     private const int Sigterm = 15;
     private const int Sigkill = 9;
@@ -77,7 +76,7 @@ internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandl
         Channel<string> output,
         ILogger logger,
         TimeProvider timeProvider)
-        : this(process, receipt, output, logger, timeProvider, Kill, process.WaitForExit)
+        : this(process, receipt, output, logger, timeProvider, LinuxKill.Send, process.WaitForExit)
     {
     }
 
@@ -88,7 +87,7 @@ internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandl
         ILogger logger,
         TimeProvider timeProvider,
         LinuxTrainingProcessSpawner.TrainerPin pin)
-        : this(process, receipt, output, logger, timeProvider, Kill, process.WaitForExit, pin, TrainerPidFdOps.Real)
+        : this(process, receipt, output, logger, timeProvider, LinuxKill.Send, process.WaitForExit, pin, TrainerPidFdOps.Real)
     {
     }
 
@@ -424,9 +423,4 @@ internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandl
             return true; // No associated process — treat as exited.
         }
     }
-
-    // int kill(pid_t pid, int sig); — a negative pid signals the process group abs(pid).
-    [LibraryImport("libc", EntryPoint = "kill", SetLastError = true)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
-    private static partial int Kill(int pid, int sig);
 }

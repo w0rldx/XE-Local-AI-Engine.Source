@@ -20,11 +20,11 @@ public sealed class GetModelCatalogInfoEndpoint : EndpointWithoutRequest<ModelCa
 {
     private readonly IModelCatalogProvider _catalogProvider;
     private readonly IOptions<ModelCatalogOptions> _options;
-    private readonly IGgufVariantRecommender _recommender;
+    private readonly GgufVariantRecommender _recommender;
 
     public GetModelCatalogInfoEndpoint(IModelCatalogProvider catalogProvider,
         IOptions<ModelCatalogOptions> options,
-        IGgufVariantRecommender recommender)
+        GgufVariantRecommender recommender)
     {
         ArgumentNullException.ThrowIfNull(catalogProvider);
         ArgumentNullException.ThrowIfNull(options);

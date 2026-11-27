@@ -4,7 +4,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using XE_Local_AI_Engine.Desktop.Linux;
 
-internal static partial class DesktopEngineCommand
+internal static class DesktopEngineCommand
 {
     internal static async Task<int> RunAsync(string[] args)
     {
@@ -68,7 +68,7 @@ internal static partial class DesktopEngineCommand
 
     private static void SendTerm(Process process) =>
         SendTerm(process, Environment.ProcessId == 1 ? static _ => LinuxPidFd.Unsupported() : LinuxPidFd.Open,
-            static (pin, signal) => pin.Send(signal, group: false), SendSignal);
+            static (pin, signal) => pin.Send(signal, group: false), LinuxKill.Send);
 
     /// <summary>SIGTERM through a pidfd opened, then checked against <c>HasExited</c>, so a recycled pid is never signalled.</summary>
     /// <remarks>
@@ -94,8 +94,4 @@ internal static partial class DesktopEngineCommand
             _ = signal(process.Id, 15);
         }
     }
-
-    [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
-    [LibraryImport("libc", EntryPoint = "kill", SetLastError = true)]
-    private static partial int SendSignal(int processId, int signal);
 }

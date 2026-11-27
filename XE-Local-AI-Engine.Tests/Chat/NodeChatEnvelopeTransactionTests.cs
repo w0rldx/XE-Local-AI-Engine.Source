@@ -728,23 +728,8 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         public required long? MaxToolSchemaTokens { get; init; }
     }
 
-    private async Task<ServiceProvider> BuildProviderAsync(string fileName)
-    {
-        Directory.CreateDirectory(_rootPath);
-        var databasePath = Path.Combine(_rootPath, fileName);
-        var services = new ServiceCollection();
-        services.AddScoped<INodeSqliteKeyHolder, NullNodeSqliteKeyHolder>();
-        services.AddDbContext<NodeChatDbContext>(options => options.UseSqlite(NodeChatTestDatabase.ConnectionString(databasePath)));
-        services.AddSingleton<NodeChatPersistenceWriter>();
-
-        var provider = services.BuildServiceProvider(true);
-        await using var scope = provider.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        await dbContext.Database.EnsureDeletedAsync();
-        await dbContext.Database.EnsureCreatedAsync();
-
-        return provider;
-    }
+    private Task<ServiceProvider> BuildProviderAsync(string fileName) =>
+        NodeChatTestProvider.BuildAsync(Path.Combine(_rootPath, fileName), pooled: false);
 
     private static NodeChatPersistenceService CreateService(ServiceProvider provider, IUsageProviderResolver? usageProviderResolver = null)
     {

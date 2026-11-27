@@ -6,17 +6,10 @@ CPU wheel in the root dev venv). Where torch is not installed, every test skips 
 
 import contextlib
 import math
-import sys
 import types
-import unittest
-from unittest import mock
 
 from modellablib import lens_record
-
-try:
-    import torch
-except ImportError:
-    torch = None
+from test_stubs import load_modellab, require_torch, run_standalone
 
 HIDDEN = 8
 VOCAB = 11
@@ -24,36 +17,9 @@ BLOCKS = 3
 TOP = 4
 
 
-def _require_torch():
-    if torch is None:
-        raise unittest.SkipTest("torch is not installed: the root dev venv carries CPU torch on linux x86_64 only.")
-    return torch
-
-
-def _load_modellab():
-    """The real script on real torch, with transformers reduced to the names it imports. Leaves no stub behind."""
-    _require_torch()
-    transformers = types.SimpleNamespace(
-        __version__="stub",
-        AutoModelForCausalLM=None,
-        AutoTokenizer=None,
-        DynamicCache=None,
-        LogitsProcessor=object,
-        LogitsProcessorList=None,
-        StoppingCriteria=object,
-        StoppingCriteriaList=None,
-    )
-    with mock.patch.dict(sys.modules, {"transformers": transformers}):
-        sys.modules.pop("modellab", None)
-        import modellab
-
-        sys.modules.pop("modellab", None)
-    return modellab
-
-
 def _model():
     """Embeddings, BLOCKS linear blocks, a LayerNorm and an untied head: the parts _Lens reads."""
-    torch = _require_torch()
+    torch = require_torch()
     nn = torch.nn
     torch.manual_seed(0)
 
@@ -84,8 +50,8 @@ def _lens(modellab, model, stack):
 
 
 def test_each_block_reads_through_the_head_and_the_last_row_is_the_models_own():
-    torch = _require_torch()
-    modellab = _load_modellab()
+    torch = require_torch()
+    modellab = load_modellab()
     model = _model()
     stack = contextlib.ExitStack()
     lens = _lens(modellab, model, stack)
@@ -127,8 +93,8 @@ def test_each_block_reads_through_the_head_and_the_last_row_is_the_models_own():
 
 
 def test_a_nan_readout_stays_nan_on_record_and_is_written_null():
-    torch = _require_torch()
-    modellab = _load_modellab()
+    torch = require_torch()
+    modellab = load_modellab()
     with contextlib.ExitStack() as stack:
         lens = _lens(modellab, _model(), stack)
         torch.manual_seed(1)
@@ -151,8 +117,8 @@ def test_a_nan_readout_stays_nan_on_record_and_is_written_null():
 
 
 def test_a_step_without_every_block_state_is_refused():
-    torch = _require_torch()
-    modellab = _load_modellab()
+    torch = require_torch()
+    modellab = load_modellab()
     with contextlib.ExitStack() as stack:
         lens = _lens(modellab, _model(), stack)
         lens._stash = {0: torch.zeros(HIDDEN)}
@@ -167,11 +133,4 @@ def test_a_step_without_every_block_state_is_refused():
 
 
 if __name__ == "__main__":
-    for name, test in sorted(globals().items()):
-        if name.startswith("test_") and callable(test):
-            try:
-                test()
-            except unittest.SkipTest as reason:
-                print(f"skip {name}: {reason}")
-            else:
-                print(f"ok {name}")
+    run_standalone(globals())

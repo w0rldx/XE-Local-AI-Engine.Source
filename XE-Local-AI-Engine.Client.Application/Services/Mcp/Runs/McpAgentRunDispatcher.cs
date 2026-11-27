@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Mcp.Runs;
 
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
@@ -470,7 +471,7 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
             FailureCode = succeeded ? null : outcome.FailureCode ?? InternalFailureCode,
             Result = succeeded && outcome.Content is { } content ? McpAgentRunResultTruncation.Apply(content, _options.MaxResultCharacters) : null,
             // At most 512 UTF-16 code units can encode to the store's 2 KiB UTF-8 display bound.
-            DisplayMessage = Truncate(outcome.DisplayMessage, 512),
+            DisplayMessage = outcome.DisplayMessage is { } message ? TextTruncation.TruncateAtRuneBoundary(message, maximumChars: 512) : null,
             CompletedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
         };
     }
@@ -487,7 +488,4 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
             // Host shutdown.
         }
     }
-
-    private static string? Truncate(string? value, int maxLength) =>
-        value is null || value.Length <= maxLength ? value : value[..maxLength];
 }

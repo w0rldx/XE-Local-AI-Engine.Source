@@ -27,7 +27,7 @@ public sealed class SlashCommandStoreTests : IDisposable
     public async Task AddAsync_RoundTripsTypedActionAndEncryptsSensitiveColumns()
     {
         var path = GetPath("roundtrip.sqlite");
-        using var key = new FixedKeyHolder();
+        using var key = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         Guid id;
         await using (var context = AgentDefinitionTestContextFactory.Create(path, key))
         {
@@ -70,7 +70,7 @@ public sealed class SlashCommandStoreTests : IDisposable
     public async Task AddAsync_AtCapacity_RejectsOneHundredAndFirstCommand()
     {
         var path = GetPath("capacity.sqlite");
-        using var key = new FixedKeyHolder();
+        using var key = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         await using var context = AgentDefinitionTestContextFactory.Create(path, key);
         await context.Database.EnsureCreatedAsync();
         var store = new SlashCommandStore(context, TimeProvider.System);
@@ -100,7 +100,7 @@ public sealed class SlashCommandStoreTests : IDisposable
     public async Task AddAndUpdateAsync_WithATakenName_ThrowNameConflictFromTheUniqueIndex()
     {
         var path = GetPath("name-conflict.sqlite");
-        using var key = new FixedKeyHolder();
+        using var key = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         Guid otherId;
         await using (var context = AgentDefinitionTestContextFactory.Create(path, key))
         {
@@ -154,7 +154,7 @@ public sealed class SlashCommandStoreTests : IDisposable
     public async Task GetByIdAsync_WithInvalidEnvelope_FailsClosedWithoutPayload(string actionJson)
     {
         var path = GetPath($"invalid-{Guid.NewGuid():N}.sqlite");
-        using var key = new FixedKeyHolder();
+        using var key = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var id = Guid.NewGuid();
         await using (var context = AgentDefinitionTestContextFactory.Create(path, key))
         {
@@ -180,7 +180,7 @@ public sealed class SlashCommandStoreTests : IDisposable
     public async Task GetByIdAsync_WithActionTypeMismatch_FailsClosed()
     {
         var path = GetPath("invalid-action-type.sqlite");
-        using var key = new FixedKeyHolder();
+        using var key = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var id = Guid.NewGuid();
         await using (var context = AgentDefinitionTestContextFactory.Create(path, key))
         {
@@ -205,7 +205,7 @@ public sealed class SlashCommandStoreTests : IDisposable
     public async Task AddAsync_FromTwoContextsAtNinetyNine_AllowsExactlyOneReservation()
     {
         var path = GetPath("capacity-race.sqlite");
-        using var key = new FixedKeyHolder();
+        using var key = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         await using (var seedContext = AgentDefinitionTestContextFactory.Create(path, key))
         {
             await seedContext.Database.EnsureCreatedAsync();
@@ -239,7 +239,7 @@ public sealed class SlashCommandStoreTests : IDisposable
     public async Task GetByIdAsync_WhenPlaintextNameIsTampered_FailsAuthentication(string tamperedName)
     {
         var path = GetPath($"tampered-{tamperedName}.sqlite");
-        using var key = new FixedKeyHolder();
+        using var key = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         Guid id;
         await using (var context = AgentDefinitionTestContextFactory.Create(path, key))
         {
@@ -274,7 +274,7 @@ public sealed class SlashCommandStoreTests : IDisposable
     public async Task GetByIdAsync_WhenPersistedNameIsInvalid_FailsClosed(string invalidName)
     {
         var path = GetPath($"invalid-name-{Guid.NewGuid():N}.sqlite");
-        using var key = new FixedKeyHolder();
+        using var key = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var id = Guid.NewGuid();
         await using (var context = AgentDefinitionTestContextFactory.Create(path, key))
         {
@@ -318,21 +318,5 @@ public sealed class SlashCommandStoreTests : IDisposable
     {
         Directory.CreateDirectory(_rootPath);
         return Path.Combine(_rootPath, name);
-    }
-
-    private sealed class FixedKeyHolder : INodeSqliteKeyHolder
-    {
-        private byte[]? _key = Enumerable.Range(1, 32).Select(static value => (byte)value).ToArray();
-        public ReadOnlyMemory<byte> Key => _key ?? throw new ObjectDisposedException(nameof(FixedKeyHolder));
-
-        public void Dispose()
-        {
-            if (_key is not null)
-            {
-                CryptographicOperations.ZeroMemory(_key);
-            }
-
-            _key = null;
-        }
     }
 }

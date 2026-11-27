@@ -1,8 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
 
 using System.Diagnostics;
-using System.Formats.Tar;
-using System.IO.Compression;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -34,10 +32,10 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
     private const long MaxDownloadBytes = 2L * 1024 * 1024 * 1024;
 
     private readonly string _activeTag;
+    private readonly ManagedRuntimeArchiveInstaller _archiveInstaller;
     private readonly Architecture _arch;
     private readonly WhisperAssetPin? _assetPinOverride;
     private readonly string _cacheRoot;
-    private readonly HttpClient _httpClient;
     private readonly IManagedRuntimeStore<WhisperBackend>? _installedRuntimeStore;
     private readonly ILogger _logger;
     private readonly IManagedSourceBuildSignal<WhisperBackend>? _managedSourceSignal;
@@ -92,8 +90,12 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
     {
         _logger = logger ?? NullLogger.Instance;
         _assetPinOverride = assetPinOverride;
-        ArgumentNullException.ThrowIfNull(httpClient);
-        _httpClient = httpClient;
+        _archiveInstaller = new ManagedRuntimeArchiveInstaller(httpClient,
+            "whisper.cpp",
+            "whispercpp",
+            MaxDownloadBytes,
+            static (message, inner) => inner is null ? new WhisperRuntimeException(message) : new WhisperRuntimeException(message, inner),
+            _logger);
         ArgumentException.ThrowIfNullOrWhiteSpace(cacheRoot);
         ArgumentException.ThrowIfNullOrWhiteSpace(activeTag);
         _cacheRoot = cacheRoot;
@@ -167,10 +169,17 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
         // A missing or renamed whisper-server lands here too, so the repair is visible rather than a silent wait.
         _logger.LogInformation("No cached whisper-server for whisper.cpp {Tag} ({Backend}); downloading the pinned runtime.", _activeTag, backend);
         var startedAt = Stopwatch.GetTimestamp();
-        await DownloadVerifyExtractAsync(WhisperCppReleasePins.DownloadUri(_activeTag, pin.AssetName),
+        // whisper.cpp ships zip on Windows and tar.gz on Linux, unlike stable-diffusion.cpp, which is zip everywhere.
+        var archiveKind = pin.ArchiveKind switch
+        {
+            WhisperArchiveKind.Zip => ManagedRuntimeArchiveKind.Zip,
+            WhisperArchiveKind.TarGz => ManagedRuntimeArchiveKind.TarGz,
+            _ => throw new WhisperRuntimeException("The pinned whisper.cpp asset declares an unknown archive format.")
+        };
+        await _archiveInstaller.InstallAsync(WhisperCppReleasePins.DownloadUri(_activeTag, pin.AssetName),
             pin.AssetName,
             pin.Sha256,
-            pin.ArchiveKind,
+            archiveKind,
             backendDir,
             ct).ConfigureAwait(false);
         _logger.LogInformation("Downloaded and verified whisper.cpp {Tag} ({Backend}) in {ElapsedMs} ms.",
@@ -360,143 +369,6 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
 
         var serverFileName = Path.GetFileName(pin.ServerRelativePath);
         return Directory.EnumerateFiles(backendDir, serverFileName, SearchOption.AllDirectories).FirstOrDefault();
-    }
-
-    /// <summary>
-    ///     Shared download, SHA256-verify and atomic-extract pipeline against the pinned hash. A transient failure or a
-    ///     hash mismatch is discarded and retried exactly once, then surfaced sanitized.
-    /// </summary>
-    private async Task DownloadVerifyExtractAsync(Uri url,
-        string assetName,
-        string expectedSha256,
-        WhisperArchiveKind archiveKind,
-        string backendDir,
-        CancellationToken ct)
-    {
-        var firstError = await DownloadVerifyExtractOrErrorAsync(url, assetName, expectedSha256, archiveKind, backendDir, ct).ConfigureAwait(false);
-        if (firstError is null)
-        {
-            return;
-        }
-
-        var secondError = await DownloadVerifyExtractOrErrorAsync(url, assetName, expectedSha256, archiveKind, backendDir, ct).ConfigureAwait(false);
-        if (secondError is null)
-        {
-            return;
-        }
-
-        throw new WhisperRuntimeException("The whisper.cpp runtime could not be downloaded or failed integrity verification after a retry. "
-                                          + "Check the network connection and try again.",
-            secondError);
-    }
-
-    private async Task<Exception?> DownloadVerifyExtractOrErrorAsync(Uri url,
-        string assetName,
-        string expectedSha256,
-        WhisperArchiveKind archiveKind,
-        string backendDir,
-        CancellationToken ct)
-    {
-        // Defense in depth: strip any directory component before composing a temp path, so an asset name can never traverse.
-        var tempArchive = Path.Combine(Path.GetTempPath(), $"whispercpp-{Guid.NewGuid():N}-{Path.GetFileName(assetName)}");
-        try
-        {
-            await DownloadToFileAsync(url, tempArchive, ct).ConfigureAwait(false);
-
-            if (!await FileSha256.MatchesAsync(tempArchive, expectedSha256, ct).ConfigureAwait(false))
-            {
-                return new WhisperRuntimeException("The whisper.cpp runtime download failed integrity verification.");
-            }
-
-            await ExtractArchiveAsync(tempArchive, archiveKind, backendDir, ct).ConfigureAwait(false);
-            return null;
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            return exception;
-        }
-        finally
-        {
-            BestEffortFile.TryDeleteFile(tempArchive);
-        }
-    }
-
-    private async Task DownloadToFileAsync(Uri url, string destination, CancellationToken ct)
-    {
-        using var response = await _httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-
-        await using var source = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-
-        try
-        {
-            await using var target = new FileStream(destination, FileMode.Create, FileAccess.Write, FileShare.None);
-
-            var buffer = new byte[81920];
-            long written = 0;
-            int read;
-            while ((read = await source.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
-            {
-                written += read;
-                if (written > MaxDownloadBytes)
-                {
-                    throw new WhisperRuntimeException("The whisper.cpp runtime download exceeded the maximum allowed size.");
-                }
-
-                await target.WriteAsync(buffer.AsMemory(start: 0, read), ct).ConfigureAwait(false);
-            }
-        }
-        catch
-        {
-            BestEffortFile.TryDeleteFile(destination);
-            throw;
-        }
-    }
-
-    /// <summary>
-    ///     Extracts into a temp sibling then publishes it through <see cref="StagedDirectoryPublish" />, so a partial extract
-    ///     can never masquerade as a cached install and a failed publish keeps the previous runtime.
-    /// </summary>
-    /// <remarks>
-    ///     Dispatches on the archive kind because whisper.cpp ships zip on Windows and tar.gz on Linux — unlike
-    ///     stable-diffusion.cpp, which is zip everywhere.
-    /// </remarks>
-    private async Task ExtractArchiveAsync(string archivePath, WhisperArchiveKind archiveKind, string backendDir, CancellationToken ct)
-    {
-        var stagingDir = $"{backendDir}.{Guid.NewGuid():N}.tmp";
-        Directory.CreateDirectory(stagingDir);
-        try
-        {
-            switch (archiveKind)
-            {
-                case WhisperArchiveKind.Zip:
-                    await ZipFile.ExtractToDirectoryAsync(archivePath, stagingDir, ct).ConfigureAwait(false);
-                    break;
-                case WhisperArchiveKind.TarGz:
-                    await using (var compressed = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read))
-                        await using (var decompressed = new GZipStream(compressed, CompressionMode.Decompress))
-                        {
-                            await TarFile.ExtractToDirectoryAsync(decompressed, stagingDir, overwriteFiles: true, ct).ConfigureAwait(false);
-                        }
-
-                    break;
-                default:
-                    throw new WhisperRuntimeException("The pinned whisper.cpp asset declares an unknown archive format.");
-            }
-
-            await StagedDirectoryPublish.PublishAsync(stagingDir, backendDir, _logger, ct).ConfigureAwait(false);
-        }
-        finally
-        {
-            if (Directory.Exists(stagingDir))
-            {
-                Directory.Delete(stagingDir, recursive: true);
-            }
-        }
     }
 
     /// <summary>

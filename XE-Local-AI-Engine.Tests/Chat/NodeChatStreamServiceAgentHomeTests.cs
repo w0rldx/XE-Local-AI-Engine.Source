@@ -130,7 +130,7 @@ public sealed class NodeChatStreamServiceAgentHomeTests
         };
         provider.ConnectAsync(Arg.Any<SandboxAttachKey>(), Arg.Any<CancellationToken>()).Returns(handle);
         provider.ReadFileAsync(Arg.Any<SandboxHandle>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns("hello from coder");
-        var identity = new StubAgentHomeIdentityProvider(owner, node);
+        var identity = new FixedAgentHomeIdentityProvider(owner, node);
         var exclusions = Substitute.For<ISensitiveFileExclusionService>();
         exclusions.SecretEntryNames.Returns([]);
         exclusions.ExcludedEntryNames.Returns([]);

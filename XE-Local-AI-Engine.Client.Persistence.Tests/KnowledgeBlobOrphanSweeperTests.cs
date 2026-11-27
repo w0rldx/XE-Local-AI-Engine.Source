@@ -313,22 +313,7 @@ public sealed class KnowledgeBlobOrphanSweeperTests : IDisposable
     private static readonly DateTimeOffset FixedNowUtc = new(year: 2026, month: 9, day: 21, hour: 12, minute: 0, second: 0, TimeSpan.Zero);
 
     private static TimeProvider FixedClock() =>
-        new FixedTimeProvider(FixedNowUtc);
-
-    private sealed class FixedTimeProvider : TimeProvider
-    {
-        private readonly DateTimeOffset _now;
-
-        public FixedTimeProvider(DateTimeOffset now)
-        {
-            _now = now;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return _now;
-        }
-    }
+        new ManualTimeProvider(FixedNowUtc);
 
     private string DataDirectory()
     {

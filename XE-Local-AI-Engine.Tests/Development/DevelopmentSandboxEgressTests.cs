@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
-using System.Diagnostics;
 using System.Net.Sockets;
 using System.Text;
 using Microsoft.Extensions.Options;
@@ -244,8 +243,8 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
         // Removing the file puts the repository back on the machine's real sources, which is the shape of an actual
         // registered repository and the only shape in which "the warm is what made this work" is falsifiable.
         File.Delete(Path.Combine(repository, "NuGet.config"));
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "rm", "--quiet", "--", "NuGet.config");
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "commit", "-m", "restore from the machine's real package sources");
+        await TestGit.RunAsync(repository, "rm", "--quiet", "--", "NuGet.config");
+        await TestGit.RunAsync(repository, "commit", "-m", "restore from the machine's real package sources");
 
         var worktree = Path.Combine(_root, "worktree");
         await CloneDetachedAsync(repository, worktree);
@@ -259,7 +258,7 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
 
         var profile = DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.DotnetSlnx,
             DevelopmentSyntheticSolutionRepository.SolutionPath);
-        var head = await ReadGitOutputAsync(worktree, "rev-parse", "--verify", "HEAD^{commit}");
+        var head = (await TestGit.RunAsync(worktree, "rev-parse", "--verify", "HEAD^{commit}")).Trim();
 
         // COLD: a per-task package root with nothing in it, and a sandbox with no egress. The restore has to fail —
         // if it does not, this host resolves packages from somewhere the test did not control and every other
@@ -431,12 +430,12 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
         Directory.CreateDirectory(_root);
         var repository = Path.Combine(_root, "repo-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(repository);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "init", "--initial-branch=main", ".");
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.email", "development-egress@example.invalid");
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.name", "Development Egress Test");
+        await TestGit.RunAsync(repository, "init", "--initial-branch=main", ".");
+        await TestGit.RunAsync(repository, "config", "user.email", "development-egress@example.invalid");
+        await TestGit.RunAsync(repository, "config", "user.name", "Development Egress Test");
         await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "base\n");
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "add", "README.md");
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "commit", "-m", "base");
+        await TestGit.RunAsync(repository, "add", "README.md");
+        await TestGit.RunAsync(repository, "commit", "-m", "base");
 
         var data = Path.Combine(_root, "d-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(data);
@@ -467,37 +466,10 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
     private static async Task CloneDetachedAsync(string repository, string worktree)
     {
         Directory.CreateDirectory(worktree);
-        await DevelopmentMountBrokerTests.RunGitAsync(Path.GetDirectoryName(worktree)!, "clone", "--no-hardlinks", repository, worktree);
-        var head = await ReadGitOutputAsync(worktree, "rev-parse", "--verify", "HEAD^{commit}");
-        await DevelopmentMountBrokerTests.RunGitAsync(worktree, "checkout", "--detach", head);
-        await DevelopmentMountBrokerTests.RunGitAsync(worktree, "remote", "remove", "origin");
-    }
-
-    private static async Task<string> ReadGitOutputAsync(string workingDirectory, params string[] arguments)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "git",
-            WorkingDirectory = workingDirectory,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false
-        };
-        foreach (var argument in arguments)
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
-
-        using var process = new Process
-        {
-            StartInfo = startInfo
-        };
-        process.Start();
-        var error = process.StandardError.ReadToEndAsync();
-        var output = await process.StandardOutput.ReadToEndAsync();
-        await process.WaitForExitAsync();
-        AssertEx.Equal(expected: 0, process.ExitCode, await error);
-        return output.Trim();
+        await TestGit.RunAsync(Path.GetDirectoryName(worktree)!, "clone", "--no-hardlinks", repository, worktree);
+        var head = (await TestGit.RunAsync(worktree, "rev-parse", "--verify", "HEAD^{commit}")).Trim();
+        await TestGit.RunAsync(worktree, "checkout", "--detach", head);
+        await TestGit.RunAsync(worktree, "remote", "remove", "origin");
     }
 
     private static DevelopmentOptions OptionsValue() =>

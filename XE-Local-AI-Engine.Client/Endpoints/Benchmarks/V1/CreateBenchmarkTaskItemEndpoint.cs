@@ -8,9 +8,9 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 public sealed class CreateBenchmarkTaskItemEndpoint : Endpoint<CreateBenchmarkTaskItemRequest, BenchmarkTaskItemResponse>
 {
-    private readonly IBenchmarkTaskItemService _items;
+    private readonly BenchmarkTaskItemService _items;
 
-    public CreateBenchmarkTaskItemEndpoint(IBenchmarkTaskItemService items)
+    public CreateBenchmarkTaskItemEndpoint(BenchmarkTaskItemService items)
     {
         ArgumentNullException.ThrowIfNull(items);
         _items = items;

@@ -31,7 +31,7 @@ public sealed class WorkSessionCloudEgressTests
         var sessionId = Guid.NewGuid();
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         await RecordAFindingAsync(factory, sessionId);
-        var cloudAgentId = await WorkSessionServiceTests.SeedAgentAsync(factory, "a-cloud-model");
+        var cloudAgentId = await WorkSessionTestSupport.SeedAgentAsync(factory, "a-cloud-model");
 
         await using var scope = factory.Services.CreateAsyncScope();
         var refusal = await AssertEx.ThrowsAsync<WorkSessionValidationException>(() =>
@@ -52,7 +52,7 @@ public sealed class WorkSessionCloudEgressTests
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
-        var cloudAgentId = await WorkSessionServiceTests.SeedAgentAsync(factory, "a-cloud-model");
+        var cloudAgentId = await WorkSessionTestSupport.SeedAgentAsync(factory, "a-cloud-model");
 
         await using var scope = factory.Services.CreateAsyncScope();
         var updated = await scope.ServiceProvider.GetRequiredService<IWorkSessionService>()
@@ -70,11 +70,12 @@ public sealed class WorkSessionCloudEgressTests
     public async Task Update_WhenTheOperatorOptedCloudDataAccessIn_AllowsTheRepoint()
     {
         // Private host: the operator opt-in it asserts on is a host-level config value.
-        await using var factory = WorkSessionServiceTests.NewFactory(("KnowledgeBase:AllowCloudModelAccess", "true"));
+        await using var factory = WorkSessionTestSupport.NewFactory(
+            configuration: WorkSessionTestSupport.Configuration(("KnowledgeBase:AllowCloudModelAccess", "true")));
         var sessionId = Guid.NewGuid();
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         await RecordAFindingAsync(factory, sessionId);
-        var cloudAgentId = await WorkSessionServiceTests.SeedAgentAsync(factory, "a-cloud-model");
+        var cloudAgentId = await WorkSessionTestSupport.SeedAgentAsync(factory, "a-cloud-model");
 
         await using var scope = factory.Services.CreateAsyncScope();
         var updated = await scope.ServiceProvider.GetRequiredService<IWorkSessionService>()
@@ -98,7 +99,7 @@ public sealed class WorkSessionCloudEgressTests
         var sessionId = Guid.NewGuid();
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         await RecordAFindingAsync(factory, sessionId);
-        var cloudAgentId = await WorkSessionServiceTests.SeedAgentAsync(factory, "a-cloud-model");
+        var cloudAgentId = await WorkSessionTestSupport.SeedAgentAsync(factory, "a-cloud-model");
 
         await using var scope = factory.Services.CreateAsyncScope();
         var updated = await scope.ServiceProvider.GetRequiredService<IWorkSessionService>()
@@ -125,7 +126,7 @@ public sealed class WorkSessionCloudEgressTests
         var sessionId = Guid.NewGuid();
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         await RecordAFindingAsync(factory, sessionId);
-        var cloudAgentId = await WorkSessionServiceTests.SeedAgentAsync(factory, "a-cloud-model");
+        var cloudAgentId = await WorkSessionTestSupport.SeedAgentAsync(factory, "a-cloud-model");
 
         await using var scope = factory.Services.CreateAsyncScope();
         var refusal = await AssertEx.ThrowsAsync<WorkSessionValidationException>(() =>
@@ -149,7 +150,7 @@ public sealed class WorkSessionCloudEgressTests
                     {
                         CloudGrants = grants
                     });
-        return WorkSessionServiceTests.NewFactory(services =>
+        return WorkSessionTestSupport.NewFactory(services =>
         {
             services.RemoveAll<IModelCapabilityResolver>();
             services.AddSingleton(capabilities);
@@ -163,7 +164,7 @@ public sealed class WorkSessionCloudEgressTests
         var sessionId = Guid.NewGuid();
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         await RecordAFindingAsync(factory, sessionId);
-        var localAgentId = await WorkSessionServiceTests.SeedAgentAsync(factory, "another-local-model");
+        var localAgentId = await WorkSessionTestSupport.SeedAgentAsync(factory, "another-local-model");
 
         await using var scope = factory.Services.CreateAsyncScope();
         var updated = await scope.ServiceProvider.GetRequiredService<IWorkSessionService>()

@@ -361,16 +361,3 @@ export function verifierConfigIssue(
 			return constraintIssue(parsed);
 	}
 }
-
-/** The first criterion the node would refuse, so the editor can point at one row rather than reporting "invalid". */
-export function firstVerifierIssue(
-	criteria: readonly { kind?: string | null; config?: string | null }[],
-): { index: number; issue: BenchmarkVerifierIssue } | null {
-	for (const [index, criterion] of criteria.entries()) {
-		const issue = verifierConfigIssue(toBenchmarkCriterionKind(criterion.kind), criterion.config);
-		if (issue !== null) {
-			return { index, issue };
-		}
-	}
-	return null;
-}

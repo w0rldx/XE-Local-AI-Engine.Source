@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.E2ETests.Tests;
 using System.Diagnostics;
 using System.Reflection;
 using Microsoft.Playwright;
+using XE_Local_AI_Engine.Client.Testing.Git;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 [Category("Development")]
@@ -552,6 +553,7 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
             RedirectStandardError = true,
             UseShellExecute = false
         };
+        TestGitEnvironment.Isolate(startInfo);
         foreach (var argument in arguments)
         {
             startInfo.ArgumentList.Add(argument);

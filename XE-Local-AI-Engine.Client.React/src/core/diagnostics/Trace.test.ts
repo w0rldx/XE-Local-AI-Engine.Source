@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ensureConfigTrace, extractTraceId, generateTraceparent, getTraceId, rememberTraceId } from "@/core/diagnostics/Trace";
+import { ensureConfigTrace, extractTraceId, generateTraceparent, getTraceId } from "@/core/diagnostics/Trace";
 
 const W3C_TRACEPARENT = /^00-[0-9a-f]{32}-[0-9a-f]{16}-01$/;
 
@@ -18,13 +18,6 @@ describe("generateTraceparent", () => {
 });
 
 describe("config → traceId WeakMap pairing", () => {
-	it("stashes and reads back a trace id by config identity", () => {
-		const config = {};
-		rememberTraceId(config, "0af7651916cd43dd8448eb211c80319c");
-		expect(getTraceId(config)).toBe("0af7651916cd43dd8448eb211c80319c");
-		expect(getTraceId({})).toBeUndefined();
-	});
-
 	it("reuses the original trace id on a 401-style retry (same config object)", () => {
 		const config = {};
 		const first = ensureConfigTrace(config);

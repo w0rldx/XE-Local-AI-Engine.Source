@@ -23,7 +23,6 @@ import {
 	externalAppListPollIntervalMs,
 	externalAppQueryIds,
 	useCancelExternalAppOperation,
-	useExternalAppApplication,
 	useExternalAppCatalog,
 	useExternalAppInstallPreview,
 	useExternalAppInstance,
@@ -51,7 +50,6 @@ import {
 	externalAppInstanceLogs,
 	externalAppInstancesResponse,
 	externalAppInstanceSummary,
-	externalAppManifest,
 	externalAppRuntime,
 	externalAppTestIds,
 	externalAppUpdatePreview,
@@ -419,7 +417,6 @@ describe("read hooks", () => {
 		server.use(
 			jsonRoute("get", "external-apps/runtime", externalAppRuntime()),
 			jsonRoute("get", "external-apps/catalog", externalAppCatalog()),
-			jsonRoute("get", `external-apps/catalog/${externalAppTestIds.application}`, externalAppManifest()),
 			jsonRoute("get", `external-apps/catalog/${externalAppTestIds.application}/install-preview`, externalAppInstallPreview()),
 			jsonRoute("get", "external-apps/instances", externalAppInstancesResponse()),
 			jsonRoute("get", `external-apps/instances/${instanceId}/update-preview`, externalAppUpdatePreview()),
@@ -430,7 +427,6 @@ describe("read hooks", () => {
 			() => ({
 				runtime: useExternalAppRuntime(),
 				catalog: useExternalAppCatalog(),
-				application: useExternalAppApplication(externalAppTestIds.application),
 				installPreview: useExternalAppInstallPreview(externalAppTestIds.application, true),
 				instances: useExternalAppInstances(),
 				updatePreview: useExternalAppUpdatePreview(instanceId, true),
@@ -450,9 +446,9 @@ describe("read hooks", () => {
 		expect(result.current.fetchStatus).toBe("idle");
 	});
 
-	// A refresh can rewrite every manifest, so the single-application entries have to go with the list; leaving them
-	// would show a stale tested version next to a freshly refreshed card.
-	it("drops the catalog and every single-application entry when the catalog is refreshed", async () => {
+	// A refresh can rewrite every manifest, so the cached catalog has to go; keeping it would show a stale tested
+	// version next to a freshly refreshed card.
+	it("drops the catalog when the catalog is refreshed", async () => {
 		let catalogReads = 0;
 		server.use(
 			http.get(localApiPath("external-apps/catalog"), () => {

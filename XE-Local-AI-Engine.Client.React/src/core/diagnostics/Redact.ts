@@ -124,15 +124,6 @@ export function redactString(value: string): string {
 	return result.replace(EMAIL_PATTERN, "[redacted-email]").replace(HOME_PATH_PATTERN, "~");
 }
 
-/** Strip `Authorization`/`Bearer`-style header values regardless of casing. */
-export function redactHeaders(headers: Readonly<Record<string, unknown>>): Record<string, unknown> {
-	const result: Record<string, unknown> = {};
-	for (const [key, value] of Object.entries(headers)) {
-		result[key] = isSensitiveKey(key) ? REDACTED : redactValue(value);
-	}
-	return result;
-}
-
 /** Remove token-bearing query parameters from a URL while preserving everything else. */
 export function redactUrl(url: string): string {
 	try {
@@ -159,7 +150,7 @@ export function redactUrl(url: string): string {
 }
 
 /** Deep-redact an arbitrary value: mask sensitive keys, scrub free-text strings, guard cycles. */
-export function redactValue(value: unknown, seen: WeakSet<object> = new WeakSet(), depth = 0): unknown {
+function redactValue(value: unknown, seen: WeakSet<object> = new WeakSet(), depth = 0): unknown {
 	if (typeof value === "string") {
 		return redactString(value);
 	}

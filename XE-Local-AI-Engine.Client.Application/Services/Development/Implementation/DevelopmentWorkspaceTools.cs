@@ -546,8 +546,8 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         var errorTruncated = Encoding.UTF8.GetByteCount(result.StandardError) > _options.MaxCommandOutputBytes;
         return result with
         {
-            StandardOutput = Truncate(result.StandardOutput, _options.MaxCommandOutputBytes),
-            StandardError = Truncate(result.StandardError, _options.MaxCommandOutputBytes),
+            StandardOutput = Utf8Truncation.TruncateToUtf8ByteBudget(result.StandardOutput, _options.MaxCommandOutputBytes),
+            StandardError = Utf8Truncation.TruncateToUtf8ByteBudget(result.StandardError, _options.MaxCommandOutputBytes),
             StandardOutputTruncated = result.StandardOutputTruncated || outputTruncated,
             StandardErrorTruncated = result.StandardErrorTruncated || errorTruncated
         };
@@ -877,16 +877,5 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         {
             throw new InvalidOperationException($"The fixed Development {operation} operation failed.");
         }
-    }
-
-    private static string Truncate(string value, int byteLimit)
-    {
-        if (Encoding.UTF8.GetByteCount(value) <= byteLimit)
-        {
-            return value;
-        }
-
-        var bytes = Encoding.UTF8.GetBytes(value);
-        return Encoding.UTF8.GetString(bytes.AsSpan(0, byteLimit));
     }
 }

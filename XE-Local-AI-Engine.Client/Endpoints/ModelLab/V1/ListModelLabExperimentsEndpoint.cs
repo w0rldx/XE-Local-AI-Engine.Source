@@ -9,11 +9,14 @@ using XE_Local_AI_Engine.Client.Services.ModelLab;
 public sealed class ListModelLabExperimentsEndpoint : EndpointWithoutRequest<ModelLabExperimentListResponse>
 {
     private readonly ModelLabExperimentService _experiments;
+    private readonly ModelLabExperimentReader _reader;
 
-    public ListModelLabExperimentsEndpoint(ModelLabExperimentService experiments)
+    public ListModelLabExperimentsEndpoint(ModelLabExperimentService experiments, ModelLabExperimentReader reader)
     {
         ArgumentNullException.ThrowIfNull(experiments);
+        ArgumentNullException.ThrowIfNull(reader);
         _experiments = experiments;
+        _reader = reader;
     }
 
     public override void Configure()
@@ -25,7 +28,7 @@ public sealed class ListModelLabExperimentsEndpoint : EndpointWithoutRequest<Mod
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var records = await _experiments.ListAsync(ct);
+        var records = await _reader.ListAsync(ct);
         var supported = _experiments.IsPlatformSupported;
         await Send.OkAsync(new ModelLabExperimentListResponse
         {

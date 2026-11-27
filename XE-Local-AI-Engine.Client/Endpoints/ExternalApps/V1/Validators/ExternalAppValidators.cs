@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.ExternalApps.V1.Validators;
 using System.Text.RegularExpressions;
 using FastEndpoints;
 using FluentValidation;
+using XE_Local_AI_Engine.Client.Common;
 
 /// <summary>Shape validation only: patterns, lengths, ranges and presence.</summary>
 /// <remarks>
@@ -164,7 +165,7 @@ public static partial class ExternalAppValidationRules
     /// <summary>Bounds what a message echoes back. A key is at most 64 characters; anything longer is a caller's noise.</summary>
     private static string? Truncate(string? key)
     {
-        return key is { Length: > MaxVariableKeyLength } ? key[..MaxVariableKeyLength] : key;
+        return key is null ? null : TextTruncation.TruncateAtRuneBoundary(key, MaxVariableKeyLength);
     }
 
     private static string? FirstOverlongKey(IReadOnlyDictionary<string, string>? variables)

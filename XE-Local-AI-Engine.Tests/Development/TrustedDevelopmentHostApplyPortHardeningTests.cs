@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
-using System.Diagnostics;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using TUnit.Core.Exceptions;
@@ -51,12 +50,12 @@ public sealed class TrustedDevelopmentHostApplyPortHardeningTests : IDisposable
 
         var repository = Path.Combine(_root, "repo");
         Directory.CreateDirectory(repository);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "init", "--initial-branch=main", ".");
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.email", "apply@example.invalid");
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.name", "Apply Port Test");
+        await TestGit.RunAsync(repository, "init", "--initial-branch=main", ".");
+        await TestGit.RunAsync(repository, "config", "user.email", "apply@example.invalid");
+        await TestGit.RunAsync(repository, "config", "user.name", "Apply Port Test");
         await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "base\n");
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "add", "README.md");
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "commit", "-m", "base");
+        await TestGit.RunAsync(repository, "add", "README.md");
+        await TestGit.RunAsync(repository, "commit", "-m", "base");
 
         var sentinel = Path.Combine(_root, "SENTINEL");
         var payload = Path.Combine(_root, "payload.sh");
@@ -89,7 +88,7 @@ public sealed class TrustedDevelopmentHostApplyPortHardeningTests : IDisposable
         _ = await port.InspectAsync(new DevelopmentApprovedApplySubject(projectId,
                 Guid.NewGuid(),
                 ExpectedTaskVersion: 1,
-                await ReadHeadAsync(repository),
+                (await TestGit.RunAsync(repository, "rev-parse", "HEAD")).Trim(),
                 "PATCHHASH",
                 "MANIFESTHASH",
                 "RESULTHASH",
@@ -105,29 +104,6 @@ public sealed class TrustedDevelopmentHostApplyPortHardeningTests : IDisposable
             repository);
 
         AssertEx.False(File.Exists(sentinel), "the repository-local core.fsmonitor command executed on the host.");
-    }
-
-    private static async Task<string> ReadHeadAsync(string repository)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "git",
-            WorkingDirectory = repository,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false
-        };
-        startInfo.ArgumentList.Add("rev-parse");
-        startInfo.ArgumentList.Add("HEAD");
-
-        using var process = new Process
-        {
-            StartInfo = startInfo
-        };
-        process.Start();
-        var output = await process.StandardOutput.ReadToEndAsync();
-        await process.WaitForExitAsync();
-        return output.Trim();
     }
 
     private static DevelopmentOptions OptionsValue() =>

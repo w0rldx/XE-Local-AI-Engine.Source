@@ -1,7 +1,5 @@
 # Local Runtime & Model Providers
 
-> Reviewed: 2026-10-07 · Code-grounded.
-
 **What this page covers.** How the node runs models: the provider-neutral seams in `Providers.Abstractions`, the `Providers.LlamaServer` supervisor that spawns and tree-kills localhost-bound `llama-server` children, runtime binary acquisition (prebuilt, bring-your-own override, in-app source build), the satellite providers and cloud connections. Inference is always a host child process owned by a singleton supervisor, never a container.
 
 **Read this if you are** changing launch flags or model loading, debugging a `llama-server` that will not start or gets evicted, touching binary acquisition, or changing cloud-vs-local routing. **Skip to** [§5](#5-end-to-end-how-a-model-gets-selected-loaded-and-served) for the end-to-end path; **reference pages** with the launch flags, launch-policy defaults, supervisor internals, inference profiles and provider deep dives are listed under [Reference pages](#reference-pages); **related pages:** [07](07-model-fit.md), [14](14-image-generation.md), [01](01-architecture-overview.md).
@@ -130,6 +128,29 @@ See [the reference page](reference/03-llama-server-supervisor.md#llamaserverproc
 
 Neither side is re-entrant, and an exit must be paired with a successful enter; a cancelled or faulted enter has already undone itself.
 
+#### GPU ownership: what each holder takes
+
+Four mechanisms decide who runs on the GPU, and each holder takes only some of them. The GPU work gate (`IGpuWorkGate`,
+exclusive or shared, taken before a queued item is claimed) orders whole jobs; the GPU load admission
+(`IGpuModelLoadAdmission`) serializes the spawn-through-readiness window of every GPU-backed load (CPU loads bypass
+it); the runtime-mutation lease (`AcquireRuntimeMutationLeaseOrNullAsync`) holds every new llama-server ensure off and
+is granted only while no llama-server runs; and the idle-holder broker (`GpuIdleHolderBroker`) evicts an idle holder
+when other work wants the GPU. Every refused gate entry, every blocked ensure and every lease request is that demand,
+except the idle holder's own lease request (`raisesDemand: false`).
+
+| Holder | GPU work gate | Load admission | Mutation lease | How it gives the GPU back | Operator stop |
+|---|---|---|---|---|---|
+| llama-server, every role (`LlamaServerProcessSupervisor`) | none; a refused UX notice only (`GpuWorkHolderNotice`) | each GPU spawn | ensures enter the mutation gate shared, so they wait while a lease is held | the `RunningProcess.TryBeginEvict` claim (idle reaper, cap admission, memory eviction; "Eviction & reaper") | `model-fit/running/eject` |
+| sd-server, image jobs (`ImageJobCoordinator`, `ImageServerProcessSupervisor`) | shared `ImageJob` per job, after an idle holder is asked to leave (`BeginSharedOrNullAsync`) | each GPU-backend spawn | none | the daemon's `TryBeginEvict` latch, idle TTL or least-recently-used at its cap | `images/runtime/eject` |
+| whisper-server (`WhisperServerProcessSupervisor`) | none, never | each spawn, after an idle holder is asked to leave (`AdmitGpuLoadAsync`) | none | the daemon's `TryBeginEvict` latch, only while no transcription holds it | `transcription/runtime/eject` |
+| Training run (`TrainingRunQueueHostedService`) | exclusive `TrainingRun`, peeked first | none (the trainer is Python) | yes, after the gate | never evicted; cooperative cancel | cancel the run |
+| Evaluation run (`EvaluationRunExecutor`) | exclusive `EvaluationRun`, peeked first | each arm's load in `TransientLlamaServerEvaluationHarness` | taken by the harness itself | never evicted | cancel the run |
+| Export and smoke (`TrainingExportService`, `TrainedModelSmokeGate`) | exclusive `Export` | the smoke load | yes | never evicted | — |
+| Benchmark queue (`BenchmarkQueueHostedService`) | shared `Benchmark`, peeked first | through llama-server | none | never evicted; a refused claim stays queued | cancel the run |
+| Dataset generation (`DatasetGenerationHostedService`) | shared `DatasetGeneration`, peeked first | through the teacher's llama-server | none | never evicted; a refused claim stays queued | cancel the dataset |
+| Model Lab warm worker (`ModelLabGpuSession`, [wiki 25](25-model-lab.md)) | exclusive `ModelLabExperiment`, held across jobs | none for the worker; steering arms load through the harness under the session's lease | yes, held across jobs (`raisesDemand: false`) | the only `IGpuIdleHolder`: demand evicts it once idle | `model-lab/warm/eject` |
+| Model Lab CPU jobs (PyTorch source index, training stepper) | none | none | none | no GPU; `TrainingRuntimeUsers` only keeps the runtime from being replaced under them | — |
+
 ### Spawn attempt sequencing, startup capture and one-shot fallbacks
 
 `SpawnCoreAsync` (`LlamaServerProcessSupervisor.Spawn.cs`) walks a short list of launch *candidates* — the optimized plan first, at most one safe retry, plus a context down-tier appended when the startup output classifies as OOM. Each candidate allocates its own port, launches, and either registers a `RunningProcess` or tree-kills the child and releases the port (the reserved-port set backs the cap count, so the release happens under the admission gate).
@@ -175,6 +196,8 @@ See [the reference page](reference/03-llama-server-supervisor.md#reuse-path-live
 ### Eviction & reaper
 
 `LlamaServerSupervisorOptions` sets the loaded-process caps (chat models, and two separate companion slots for the embedder and reranker; the capacity admission, not these counts, guards memory) and the idle TTLs; a background reaper loop evicts exited or idle processes, and admission evicts the least-recently-used idle process of the same class to free a slot, or an idle chat model to free memory. The chat cap and the idle TTL are node settings a save applies to the running node; after a lowered cap, the next reap pass unloads chat processes above it.
+
+A victim whose claim fails is passed over, never forced. Admission skips it for the rest of that admission, whatever the reason (a lease won the claim, another teardown owns it, or a concurrent removal won the detach), and re-reads the cap before it picks another, so a slot that freed admits without a second eviction. A lowered-cap pass rescans only when a lease won the claim; a chat another teardown owns ends the pass, so no in-window chat pays for a slot that is about to free. An eviction to free memory reports any lost claim as busy.
 
 See [the reference page](reference/03-llama-server-supervisor.md#eviction--reaper) for the rest of this section.
 

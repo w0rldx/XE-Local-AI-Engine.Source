@@ -8,9 +8,9 @@ using XE_Local_AI_Engine.Client.Services.ModelLab;
 /// <summary>404 for a run that recorded no attention, a block it did not capture, or a steering row; 422 when the stored rows fail their check.</summary>
 public sealed class GetModelLabExperimentAttentionEndpoint : Endpoint<ModelLabExperimentAttentionRouteRequest, ModelLabAttentionResponse>
 {
-    private readonly ModelLabExperimentService _experiments;
+    private readonly ModelLabExperimentReader _experiments;
 
-    public GetModelLabExperimentAttentionEndpoint(ModelLabExperimentService experiments)
+    public GetModelLabExperimentAttentionEndpoint(ModelLabExperimentReader experiments)
     {
         ArgumentNullException.ThrowIfNull(experiments);
         _experiments = experiments;

@@ -4,27 +4,11 @@ import {
 	REDACTED,
 	redactBreadcrumb,
 	redactConsoleArgs,
-	redactHeaders,
 	redactString,
 	redactUrl,
 	toNetworkEntry,
 } from "@/core/diagnostics/Redact";
 import type { ErrorBreadcrumb } from "@/core/diagnostics/Types";
-
-describe("redactHeaders", () => {
-	it("strips Authorization/Bearer values regardless of casing", () => {
-		const result = redactHeaders({
-			Authorization: "Bearer super-secret-token",
-			authorization: "Bearer another",
-			"Content-Type": "application/json",
-		});
-
-		expect(result["Authorization"]).toBe(REDACTED);
-		expect(result["authorization"]).toBe(REDACTED);
-		expect(result["Content-Type"]).toBe("application/json");
-		expect(JSON.stringify(result)).not.toContain("super-secret-token");
-	});
-});
 
 describe("redactUrl", () => {
 	it("strips token-bearing query params but keeps the rest", () => {

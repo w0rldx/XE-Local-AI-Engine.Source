@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 
 using System.Globalization;
 using System.Runtime.InteropServices;
-using System.Text;
 using Microsoft.Win32.SafeHandles;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
@@ -16,14 +15,15 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 /// </remarks>
 internal static class SandboxJailPathGuard
 {
-    // O_RDONLY (0x0) | O_NOFOLLOW (0x20000) | O_CLOEXEC (0x80000) on Linux. A raw (FileOptions) cast for O_NOFOLLOW throws, so the libc
-    // open() DllImport below is required, in parity with AgentHome's host-file no-follow guard.
-    private const int ReadOnlyNoFollowCloseOnExecFlags = 0x0 | 0x20000 | 0x80000;
-
-    // O_WRONLY (0x1) | O_CREAT (0x40) | O_TRUNC (0x200) | O_NOFOLLOW (0x20000) | O_CLOEXEC (0x80000) on Linux, 0o644 for the new file. A
-    // no-follow create fails with ELOOP if the leaf already exists as a symlink, so a planted leaf cannot redirect the copy-into write.
-    private const int WriteCreateNoFollowCloseOnExecFlags = 0x1 | 0x40 | 0x200 | 0x20000 | 0x80000;
+    // 0o644 for a file the copy-into write creates.
     private const int DefaultCreateFileMode = 0b110_100_100;
+
+    // A raw (FileOptions) cast for O_NOFOLLOW throws, so the opens go through libc open().
+    internal static readonly int ReadOnlyNoFollowCloseOnExecFlags = LinuxOpenFlags.ReadOnly | LinuxOpenFlags.NoFollow | LinuxOpenFlags.CloseOnExec;
+
+    // A no-follow create fails with ELOOP if the leaf already exists as a symlink, so a planted leaf cannot redirect the copy-into write.
+    internal static readonly int WriteCreateNoFollowCloseOnExecFlags =
+        LinuxOpenFlags.WriteOnly | LinuxOpenFlags.Create | LinuxOpenFlags.Truncate | LinuxOpenFlags.NoFollow | LinuxOpenFlags.CloseOnExec;
 
     /// <summary>
     ///     Canonicalizes a possibly sandbox-absolute path into a host path that MUST live under the jail root; this is the load-bearing
@@ -162,7 +162,7 @@ internal static class SandboxJailPathGuard
     /// <remarks>
     ///     On Linux an atomic <c>open(2)</c> with <c>O_NOFOLLOW</c>, the kernel failing with <c>ELOOP</c> if the leaf is a symlink, which
     ///     closes the check-then-open race a managed <c>lstat</c> plus open would leave; a raw <c>(FileOptions)</c> cast for it throws, so
-    ///     the libc <c>open()</c> DllImport is required. Off Linux this provider is not the primary runtime, so it falls back to a plain
+    ///     the open goes through libc. Off Linux this provider is not the primary runtime, so it falls back to a plain
     ///     open and relies on the canonicalized jail check plus the byte re-check. Throws
     ///     <see cref="UnauthorizedAccessException" /> when the leaf is a symlink or the open otherwise fails.
     /// </remarks>
@@ -184,10 +184,7 @@ internal static class SandboxJailPathGuard
             }
         }
 
-        // Null-terminate the UTF-8 path for libc.
-        var pathBytes = new byte[Encoding.UTF8.GetByteCount(sourcePath) + 1];
-        Encoding.UTF8.GetBytes(sourcePath, pathBytes);
-        var fileDescriptor = open(pathBytes, ReadOnlyNoFollowCloseOnExecFlags);
+        var fileDescriptor = LinuxOpenFlags.Open(sourcePath, ReadOnlyNoFollowCloseOnExecFlags);
         if (fileDescriptor < 0)
         {
             var error = Marshal.GetLastPInvokeError();
@@ -197,17 +194,6 @@ internal static class SandboxJailPathGuard
 
         return new SafeFileHandle(fileDescriptor, ownsHandle: true);
     }
-
-    // A single libc open(). The caller marshals the path into a null-terminated UTF-8 byte array so any filename round-trips, and the
-    // import takes the raw bytes. DllImport rather than LibraryImport keeps the project free of AllowUnsafeBlocks for one call.
-    [DllImport("libc", EntryPoint = "open", SetLastError = true)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
-    private static extern int open(byte[] pathname, int flags);
-
-    // The 3-arg open() used for O_CREAT (the mode is honored only when the file is created).
-    [DllImport("libc", EntryPoint = "open", SetLastError = true)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
-    private static extern int open(byte[] pathname, int flags, int mode);
 
     /// <summary>Reads a jail-side file's raw bytes through a no-follow open whose handle is then proven under the jail.</summary>
     /// <remarks>
@@ -268,9 +254,7 @@ internal static class SandboxJailPathGuard
             return;
         }
 
-        var pathBytes = new byte[Encoding.UTF8.GetByteCount(jailPath) + 1];
-        Encoding.UTF8.GetBytes(jailPath, pathBytes);
-        var fileDescriptor = open(pathBytes, WriteCreateNoFollowCloseOnExecFlags, DefaultCreateFileMode);
+        var fileDescriptor = LinuxOpenFlags.Open(jailPath, WriteCreateNoFollowCloseOnExecFlags, DefaultCreateFileMode);
         if (fileDescriptor < 0)
         {
             var error = Marshal.GetLastPInvokeError();

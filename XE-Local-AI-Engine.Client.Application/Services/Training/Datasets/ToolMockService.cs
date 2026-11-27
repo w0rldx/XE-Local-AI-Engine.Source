@@ -23,18 +23,14 @@ public sealed class ToolMockService : IToolMockService
 {
     private readonly ILocalToolOfferProvider _offerProvider;
     private readonly ITrainingDatasetStore _store;
-    private readonly IToolMockStaticVerifier _verifier;
 
     public ToolMockService(ITrainingDatasetStore store,
-        IToolMockStaticVerifier verifier,
         ILocalToolOfferProvider offerProvider)
     {
         ArgumentNullException.ThrowIfNull(offerProvider);
         ArgumentNullException.ThrowIfNull(store);
-        ArgumentNullException.ThrowIfNull(verifier);
         _offerProvider = offerProvider;
         _store = store;
-        _verifier = verifier;
     }
 
     public Task<IReadOnlyList<ToolMockRecord>> ListAsync(CancellationToken cancellationToken = default) =>
@@ -47,8 +43,8 @@ public sealed class ToolMockService : IToolMockService
     {
         var mock = await _store.GetMockAsync(mockId, cancellationToken)
                    ?? throw new TrainingNotFoundException("The tool mock was not found.");
-        var verification = _verifier.TryParse(mock.MockJson.Span, out var body, out var parseError)
-            ? _verifier.Verify(body, await FindSchemaAsync(mock.ToolName, cancellationToken))
+        var verification = ToolMockStaticVerifier.TryParse(mock.MockJson.Span, out var body, out var parseError)
+            ? ToolMockStaticVerifier.Verify(body, await FindSchemaAsync(mock.ToolName, cancellationToken))
             : new ToolMockVerificationV1(SchemaVersion: 1, Passed: false, [parseError]);
 
         var updated = await _store.SetMockVerificationAsync(mockId,

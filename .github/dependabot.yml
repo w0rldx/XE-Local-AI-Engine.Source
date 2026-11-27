@@ -9,6 +9,24 @@ updates:
       timezone: Europe/Berlin
     target-branch: develop
     open-pull-requests-limit: 3
+    # The repo targets net10.0: a major of these families is the next .NET line (a TFM/SDK migration, not a bump), and
+    # Microsoft.Extensions.AI 11.x needs the 11.x abstractions, which the 10.0.x pins refuse (NU1109).
+    ignore:
+      - dependency-name: "Microsoft.AspNetCore.*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Microsoft.EntityFrameworkCore.*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Microsoft.Extensions.*"
+        update-types: ["version-update:semver-major"]
+      # The framework-versioned System.* packages by name: System.CommandLine has its own major line.
+      - dependency-name: "System.Numerics.Tensors"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "System.Security.Cryptography.ProtectedData"
+        update-types: ["version-update:semver-major"]
+      # OpenTelemetry.Api 1.21.0's net10.0 dependency group requires System.Diagnostics.DiagnosticSource >= 11.0.0, a
+      # .NET 11 package that would replace the shared framework's copy; revisit when the repo moves to .NET 11.
+      - dependency-name: "OpenTelemetry*"
+        versions: [">= 1.21.0"]
     groups:
       aspire-coupled:
         patterns:

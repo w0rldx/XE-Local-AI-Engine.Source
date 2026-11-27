@@ -170,7 +170,7 @@ public sealed class CoderRepositoryScopeTests : IDisposable
 
     private static CoderWorkspaceReader CreateReader() =>
         new(new FakeSandboxRuntimeProvider(TimeProvider.System),
-            new StubIdentityProvider(),
+            new FixedAgentHomeIdentityProvider("owner-repository", "node-repository"),
             new AgentHomeExecutionLeaseManager(),
             new SensitiveFileExclusionService(),
             Options.Create(new CoderOptions()),
@@ -181,15 +181,5 @@ public sealed class CoderRepositoryScopeTests : IDisposable
         var path = Path.Combine(_repository, relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, content);
-    }
-
-    private sealed class StubIdentityProvider : IAgentHomeIdentityProvider
-    {
-        public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(new AgentHomeOwnerIdentity
-            {
-                OwnerUserId = "owner-repository",
-                NodeId = "node-repository"
-            });
     }
 }

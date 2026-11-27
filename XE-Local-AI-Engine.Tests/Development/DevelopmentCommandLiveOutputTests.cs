@@ -197,6 +197,32 @@ public sealed class DevelopmentCommandLiveOutputTests : IDisposable
         AssertEx.True(evidence.StoppedByOperator);
     }
 
+    /// <summary>Output of 3-byte characters over a cap that is not a multiple of 3 is cut before the character that would cross it.</summary>
+    [Test]
+    public async Task CatalogCommand_WithMultibyteOutputPastTheCap_KeepsWholeCharactersWithinTheCap()
+    {
+        const int Cap = 200;
+        var session = await CreateSessionAsync();
+        _sandbox.RegisterCommand(CommandLine(DevelopmentCommandIds.GitStatus), exitCode: 0, new string('日', count: 100));
+        var tools = CreateTools(session,
+            liveProgress: null,
+            new DevelopmentOptions
+            {
+                Enabled = true,
+                MaxAttemptDurationSeconds = 60,
+                LiveChannelCapacity = 64,
+                MaxCommandOutputBytes = Cap
+            });
+
+        _ = await tools.RunCommandAsync(DevelopmentCommandIds.GitStatus);
+
+        var evidence = tools.CommandEvidence.Single();
+        AssertEx.False(evidence.StandardOutput.Contains('�', StringComparison.Ordinal), "a cut inside a character decodes to U+FFFD");
+        AssertEx.True(Encoding.UTF8.GetByteCount(evidence.StandardOutput) <= Cap, $"{Encoding.UTF8.GetByteCount(evidence.StandardOutput)} bytes over a {Cap}-byte cap");
+        AssertEx.Equal(new string('日', count: 66), evidence.StandardOutput);
+        AssertEx.True(evidence.OutputTruncated);
+    }
+
     [Test]
     public async Task StopCommand_WithACapBelowTheStopLine_CutsTheStopLineToTheCap_AndReadsTruncated()
     {

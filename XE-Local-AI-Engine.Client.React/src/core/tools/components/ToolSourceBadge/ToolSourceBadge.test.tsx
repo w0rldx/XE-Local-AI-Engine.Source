@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { cleanup, render, screen } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { cleanup, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("react-i18next", () => ({
@@ -20,43 +18,7 @@ vi.mock("react-i18next", () => ({
 }));
 
 import { ToolSourceBadge } from "@/core/tools/components/ToolSourceBadge/ToolSourceBadge";
-import { testMantineTheme } from "@/test/MantineTestRender";
-
-function renderWithProviders(ui: ReactElement) {
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			{ui}
-		</MantineProvider>,
-	);
-}
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-	Object.defineProperty(document, "fonts", {
-		writable: true,
-		value: { ready: Promise.resolve(), addEventListener: vi.fn(), removeEventListener: vi.fn() },
-	});
-}
+import { installJsdomEnvironmentMocks, renderWithMantine } from "@/test/MantineTestRender";
 
 describe("ToolSourceBadge", () => {
 	beforeEach(() => {
@@ -68,21 +30,21 @@ describe("ToolSourceBadge", () => {
 	});
 
 	it("renders a built-in badge", () => {
-		renderWithProviders(<ToolSourceBadge source={{ kind: "builtin", serverSlug: null }} />);
+		renderWithMantine(<ToolSourceBadge source={{ kind: "builtin", serverSlug: null }} />);
 
 		const badge = screen.getByTestId("tool-source-badge-builtin");
 		expect(badge.textContent).toBe("built-in");
 	});
 
 	it("renders an mcp badge with the server slug", () => {
-		renderWithProviders(<ToolSourceBadge source={{ kind: "mcp", serverSlug: "filesystem-tools" }} />);
+		renderWithMantine(<ToolSourceBadge source={{ kind: "mcp", serverSlug: "filesystem-tools" }} />);
 
 		const badge = screen.getByTestId("tool-source-badge-mcp");
 		expect(badge.textContent).toBe("MCP · filesystem-tools");
 	});
 
 	it("renders a generic mcp badge when the slug is missing", () => {
-		renderWithProviders(<ToolSourceBadge source={{ kind: "mcp", serverSlug: null }} />);
+		renderWithMantine(<ToolSourceBadge source={{ kind: "mcp", serverSlug: null }} />);
 
 		const badge = screen.getByTestId("tool-source-badge-mcp");
 		expect(badge.textContent).toBe("MCP");
@@ -95,7 +57,7 @@ describe("ToolSourceBadge", () => {
 		["custom", { kind: "custom", serverSlug: null }],
 		["mcp", { kind: "mcp", serverSlug: "filesystem-tools" }],
 	] as const)("keeps the %s badge from being squeezed by its row", (kind, source) => {
-		renderWithProviders(<ToolSourceBadge source={source} />);
+		renderWithMantine(<ToolSourceBadge source={source} />);
 
 		expect(screen.getByTestId(`tool-source-badge-${kind}`).style.flexShrink).toBe("0");
 	});

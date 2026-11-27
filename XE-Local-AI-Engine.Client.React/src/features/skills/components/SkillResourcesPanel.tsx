@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { formatCount } from "@/core/formatting/NumberFormatting";
 import { CodeEditor } from "@/core/ui/components/CodeEditor/CodeEditor";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { useSkillResourceContent, useSkillResources } from "@/features/skills/queries/useSkillImport";
@@ -62,7 +63,7 @@ export function SkillResourcesPanel({ skillId }: SkillResourcesPanelProps) {
 							</Text>
 							<Group gap="xs" wrap="nowrap">
 								<Text size="xs" c="dimmed">
-									{`${resource.mediaType} · ${resource.sizeBytes.toLocaleString()} B`}
+									{`${resource.mediaType} · ${formatCount(resource.sizeBytes)} B`}
 								</Text>
 								<Button
 									size="compact-xs"

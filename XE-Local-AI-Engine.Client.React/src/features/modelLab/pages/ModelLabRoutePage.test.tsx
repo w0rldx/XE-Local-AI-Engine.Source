@@ -12,8 +12,9 @@ import { describe, expect, it, vi } from "vitest";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { modelLabSearchSchema } from "@/features/modelLab/models/ModelLabNavigation";
-import playgroundFixture from "@/features/modelLab/models/playgroundTrace.fixture.json";
 import { ModelLabRoutePage } from "@/features/modelLab/pages/ModelLabRoutePage";
+import playgroundFixture from "@/features/modelLab/test/playgroundTrace.fixture.json";
+import { chooseOption } from "@/test/ChooseOption";
 import { acceptConfirm, openConfirm } from "@/test/ConfirmFlow";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
@@ -390,19 +391,6 @@ async function renderRoute(entry: string, outsideLoaded?: Promise<void>) {
 // The URL's search as the router holds it, in a fixed key order.
 function searchOf(router: { state: { location: { search: unknown } } }): Record<string, unknown> {
 	return Object.fromEntries(Object.entries(router.state.location.search as Record<string, unknown>).sort());
-}
-
-async function chooseOption(label: RegExp, option: string): Promise<void> {
-	const select = await screen.findByRole("combobox", { name: label });
-	fireEvent.click(select);
-	const listbox = await waitFor(() => {
-		const element = document.getElementById(select.getAttribute("aria-controls") ?? "");
-		if (element === null) {
-			throw new Error("the dropdown is not open yet");
-		}
-		return element;
-	});
-	fireEvent.click(await within(listbox).findByRole("option", { name: option, hidden: true }));
 }
 
 function selectedTab(): string | null {

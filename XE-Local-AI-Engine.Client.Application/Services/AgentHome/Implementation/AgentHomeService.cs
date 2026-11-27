@@ -44,7 +44,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
     private readonly ILogger<AgentHomeService> _logger;
     private readonly IAgentHomeManifestService _manifestService;
     private readonly AgentHomeOptions _options;
-    private readonly IAgentHomePatchService _patchService;
+    private readonly AgentHomePatchService _patchService;
     private readonly LocalContainerOptions _nodeOptions;
     private readonly IAgentSandboxRuntimeProvider _provider;
     private readonly SandboxOptions _sandboxOptions;
@@ -63,7 +63,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         AgentHomeRunExecutionRegistry executingRuns,
         IAgentHomeWorkspaceIsolation isolation,
         IAgentHomeWorkspaceService workspaceService,
-        IAgentHomePatchService patchService,
+        AgentHomePatchService patchService,
         IAgentHomeGoalExecutor goalExecutor,
         IServiceScopeFactory scopeFactory,
         IOptions<AgentHomeOptions> options,

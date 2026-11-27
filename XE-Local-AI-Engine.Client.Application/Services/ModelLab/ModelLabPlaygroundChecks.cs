@@ -137,7 +137,7 @@ internal static class ModelLabPlaygroundChecks
     };
 
     /// <summary>Why the script run did not do its work, or null when it did.</summary>
-    public static string? RunFailureOrNull(ModelLabScriptRunner.ScriptRun run, bool cancelRequested)
+    public static string? RunFailureOrNull(ModelLabScriptRun run, bool cancelRequested)
     {
         ArgumentNullException.ThrowIfNull(run);
         if (cancelRequested || run.State.ScriptCancelled || run.ExitCode == TrainingRunExecutor.CancelledExitCode)

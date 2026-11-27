@@ -18,7 +18,7 @@ internal sealed class ModelLabServeWorker : IDisposable
 
     private readonly ITrainingProcessHandle _handle;
     private readonly TaskCompletionSource<string?> _handshake = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private readonly ModelLabScriptRunner.StreamState _idleOutput = new();
+    private readonly ModelLabScriptStreamState _idleOutput = new();
     private readonly ModelLabJobOptions _options;
     private readonly CancellationTokenSource _pumpStop = new();
     private readonly Lock _sync = new();
@@ -73,7 +73,7 @@ internal sealed class ModelLabServeWorker : IDisposable
 
     /// <param name="workRoot">The Model Lab work root; the spawn gets a directory of its own under it, so no file it leaves reaches a later worker.</param>
     public static ModelLabServeWorker Spawn(ITrainingProcessSpawner spawner,
-        ModelLabScriptRunner.ScriptCommand script,
+        ModelLabScriptCommand script,
         string workRoot,
         ModelLabJobOptions options,
         TimeProvider timeProvider)
@@ -115,7 +115,7 @@ internal sealed class ModelLabServeWorker : IDisposable
     }
 
     /// <summary>Waits for the handshake; <see langword="null" /> once it came, otherwise what the job ends with. A cancel kills the worker.</summary>
-    public async Task<ModelLabScriptRunner.ScriptRun?> WaitForHandshakeAsync(CancellationToken ct)
+    public async Task<ModelLabScriptRun?> WaitForHandshakeAsync(CancellationToken ct)
     {
         string? failure;
         try
@@ -130,7 +130,7 @@ internal sealed class ModelLabServeWorker : IDisposable
         catch (OperationCanceledException)
         {
             Break(reason: null);
-            return new ModelLabScriptRunner.ScriptRun
+            return new ModelLabScriptRun
             {
                 State = _idleOutput,
                 FailureReason = null,
@@ -145,7 +145,7 @@ internal sealed class ModelLabServeWorker : IDisposable
 
         // A worker that exited before its handshake failed the way a one-shot script does: by its exit status and its last lines.
         var exited = string.Equals(failure, ExitedReason, StringComparison.Ordinal);
-        return new ModelLabScriptRunner.ScriptRun
+        return new ModelLabScriptRun
         {
             State = _idleOutput,
             FailureReason = exited ? null : failure,
@@ -174,7 +174,7 @@ internal sealed class ModelLabServeWorker : IDisposable
             {
                 return new ModelLabServeJobOutcome
                 {
-                    Run = new ModelLabScriptRunner.ScriptRun
+                    Run = new ModelLabScriptRun
                     {
                         State = job.State,
                         FailureReason = _brokenReason ?? "The Model Lab worker could not take the job.",
@@ -251,7 +251,7 @@ internal sealed class ModelLabServeWorker : IDisposable
 
         return new ModelLabServeJobOutcome
         {
-            Run = new ModelLabScriptRunner.ScriptRun
+            Run = new ModelLabScriptRun
             {
                 State = job.State,
                 // After its terminal frame, only a break that came before its ready is this job's: one after it is the idle worker's.
@@ -537,7 +537,7 @@ internal sealed class ModelLabServeWorker : IDisposable
 
         public required TrainingScriptWatchdog Watchdog { get; init; }
 
-        public ModelLabScriptRunner.StreamState State { get; } = new();
+        public ModelLabScriptStreamState State { get; } = new();
 
         /// <summary>The terminal frame, or the worker breaking or exiting first.</summary>
         public TaskCompletionSource Terminal { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);

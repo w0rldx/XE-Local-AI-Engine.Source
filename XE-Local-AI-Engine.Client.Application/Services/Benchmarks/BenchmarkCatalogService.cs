@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
@@ -18,7 +19,6 @@ internal sealed class BenchmarkCatalogService : IBenchmarkCatalogService
     private readonly IAgentDefinitionStore _agentDefinitions;
     private readonly IAgentDefinitionResolver _agentResolver;
     private readonly IModelCapabilityResolver _modelCapabilities;
-    private readonly IBenchmarkEligibilityPolicy _eligibilityPolicy;
     private readonly IGgufModelStore _ggufModels;
     private readonly IBenchmarkInstalledModelLeaseProvider _installedModels;
     private readonly IModelClassificationStore _classifications;
@@ -27,7 +27,6 @@ internal sealed class BenchmarkCatalogService : IBenchmarkCatalogService
     public BenchmarkCatalogService(IAgentDefinitionStore agentDefinitions,
         IAgentDefinitionResolver agentResolver,
         IModelCapabilityResolver modelCapabilities,
-        IBenchmarkEligibilityPolicy eligibilityPolicy,
         IGgufModelStore ggufModels,
         IBenchmarkInstalledModelLeaseProvider installedModels,
         IModelClassificationStore classifications,
@@ -36,7 +35,6 @@ internal sealed class BenchmarkCatalogService : IBenchmarkCatalogService
         ArgumentNullException.ThrowIfNull(agentDefinitions);
         ArgumentNullException.ThrowIfNull(agentResolver);
         ArgumentNullException.ThrowIfNull(modelCapabilities);
-        ArgumentNullException.ThrowIfNull(eligibilityPolicy);
         ArgumentNullException.ThrowIfNull(ggufModels);
         ArgumentNullException.ThrowIfNull(installedModels);
         ArgumentNullException.ThrowIfNull(classifications);
@@ -44,7 +42,6 @@ internal sealed class BenchmarkCatalogService : IBenchmarkCatalogService
         _agentDefinitions = agentDefinitions;
         _agentResolver = agentResolver;
         _modelCapabilities = modelCapabilities;
-        _eligibilityPolicy = eligibilityPolicy;
         _ggufModels = ggufModels;
         _installedModels = installedModels;
         _classifications = classifications;
@@ -80,7 +77,7 @@ internal sealed class BenchmarkCatalogService : IBenchmarkCatalogService
 
             try
             {
-                _ = _eligibilityPolicy.Apply(runtime);
+                _ = BenchmarkEligibilityPolicy.Apply(runtime);
                 eligible.Add(new BenchmarkEligibleAgent
                 {
                     Id = definition.Id,

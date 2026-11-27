@@ -24,11 +24,6 @@ public static class KnowledgeCollectionScope
         return true;
     }
 
-    public static string NormalizeOrDefault(string? value)
-    {
-        return TryNormalize(value, out var normalized) ? normalized : DefaultId;
-    }
-
     private static bool IsAllowed(char value)
     {
         return char.IsAsciiLetterOrDigit(value) || value is '-' or '_' or '.';

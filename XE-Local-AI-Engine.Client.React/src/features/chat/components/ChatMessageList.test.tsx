@@ -8,15 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChatNoticeContinueContext } from "@/core/chat/models/ChatNoticeContinueContext";
 import { ChatMessageList } from "@/features/chat/components/ChatMessageList";
 import type { ChatConversationModel, ChatMessageModel, ChatStreamingState } from "@/features/chat/models/ChatModels";
-import { testMantineTheme } from "@/test/MantineTestRender";
-
-function renderWithProviders(ui: ReactElement) {
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			{ui}
-		</MantineProvider>,
-	);
-}
+import { renderWithMantine, testMantineTheme } from "@/test/MantineTestRender";
 
 function userMessage(overrides: Partial<ChatMessageModel> = {}): ChatMessageModel {
 	return {
@@ -90,7 +82,7 @@ describe("ChatMessageList failed-turn rendering", () => {
 		const onRegenerate = vi.fn();
 		const convo = conversation([userMessage(), failedAssistantMessage()]);
 
-		renderWithProviders(<ChatMessageList conversation={convo} onRegenerate={onRegenerate} />);
+		renderWithMantine(<ChatMessageList conversation={convo} onRegenerate={onRegenerate} />);
 
 		// Survives the normalizedMessages filter even though it has no content/reasoning.
 		const errorBlocks = screen.getAllByTestId("chat-message-error-assistant-1");
@@ -113,7 +105,7 @@ describe("ChatMessageList failed-turn rendering", () => {
 			failureCategory: "inter-chunk-stall",
 		};
 
-		renderWithProviders(<ChatMessageList conversation={convo} streamingMessage={streamingMessage} />);
+		renderWithMantine(<ChatMessageList conversation={convo} streamingMessage={streamingMessage} />);
 
 		// Exactly one error render — the bubble's Alert. The footer (StreamingIndicator) no longer prints errors.
 		const errorBlocks = screen.getAllByTestId("chat-message-error-assistant-1");
@@ -195,7 +187,7 @@ describe("ChatMessageList streaming status placement", () => {
 	});
 
 	it("renders the queued badge inside a bubble with no placeholder text", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ChatMessageList conversation={conversation([userMessage()])} streamingMessage={liveStream({ isQueued: true })} />,
 		);
 
@@ -265,7 +257,7 @@ describe("ChatMessageList conversation-load failure", () => {
 
 	it("renders an inline error with a Retry action (not a spinner) when the load failed", () => {
 		const onRetry = vi.fn();
-		renderWithProviders(
+		renderWithMantine(
 			<ChatMessageList
 				conversation={conversation([])}
 				isLoadingMessages={true}
@@ -286,7 +278,7 @@ describe("ChatMessageList conversation-load failure", () => {
 	});
 
 	it("renders the accessible loading spinner while loading and not failed", () => {
-		const { container } = renderWithProviders(
+		const { container } = renderWithMantine(
 			<ChatMessageList conversation={conversation([])} isLoadingMessages={true} messagesLoadFailed={false} />,
 		);
 
@@ -297,7 +289,7 @@ describe("ChatMessageList conversation-load failure", () => {
 	});
 
 	it("renders neither the error nor the loader once the conversation has messages", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ChatMessageList conversation={conversation([userMessage()])} messagesLoadFailed={true} onRetryLoadMessages={vi.fn()} />,
 		);
 
@@ -319,14 +311,14 @@ describe("ChatMessageList virtualization threshold", () => {
 	}
 
 	it("renders every row plainly at or below the threshold (no virtual container)", () => {
-		const { container } = renderWithProviders(<ChatMessageList conversation={conversation(thread(10))} />);
+		const { container } = renderWithMantine(<ChatMessageList conversation={conversation(thread(10))} />);
 
 		expect(screen.queryByTestId("chat-message-list-virtual")).toBeNull();
 		expect(container.querySelectorAll('[data-testid^="chat-message-user-"]')).toHaveLength(10);
 	});
 
 	it("switches to the windowed container above the threshold and does not mount every row", () => {
-		const { container } = renderWithProviders(<ChatMessageList conversation={conversation(thread(60))} />);
+		const { container } = renderWithMantine(<ChatMessageList conversation={conversation(thread(60))} />);
 
 		expect(screen.getByTestId("chat-message-list-virtual")).toBeTruthy();
 		// jsdom reports no real viewport geometry, so the exact mounted count is estimate-driven — the invariant
@@ -375,7 +367,7 @@ describe("ChatMessageList Continue after a cut-off answer", () => {
 			cutOffAnswer("assistant-2", 4),
 		]);
 
-		renderWithProviders(
+		renderWithMantine(
 			<ChatNoticeContinueContext value={vi.fn()}>
 				<ChatMessageList conversation={convo} />
 			</ChatNoticeContinueContext>,
@@ -395,7 +387,7 @@ describe("ChatMessageList Continue after a cut-off answer", () => {
 			isActive: true,
 		};
 
-		renderWithProviders(
+		renderWithMantine(
 			<ChatNoticeContinueContext value={vi.fn()}>
 				<ChatMessageList conversation={convo} streamingMessage={streamingMessage} />
 			</ChatNoticeContinueContext>,

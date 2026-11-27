@@ -12,9 +12,9 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks;
 public sealed class StartBenchmarkRunBatchEndpoint : Endpoint<StartBenchmarkRunBatchRequest, StartBenchmarkRunBatchResponse>
 {
     private const int MaxItems = 50;
-    private readonly IBenchmarkRunBatchService _batches;
+    private readonly BenchmarkRunBatchService _batches;
 
-    public StartBenchmarkRunBatchEndpoint(IBenchmarkRunBatchService batches)
+    public StartBenchmarkRunBatchEndpoint(BenchmarkRunBatchService batches)
     {
         ArgumentNullException.ThrowIfNull(batches);
         _batches = batches;

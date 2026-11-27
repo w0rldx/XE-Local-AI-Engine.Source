@@ -30,6 +30,9 @@ public sealed class StableDiffusionBinaryManagerTests
         AssertEx.False(exception.Message.Contains(cache.Path, StringComparison.Ordinal));
         AssertEx.False(exception.Message.Contains(Path.GetTempPath(), StringComparison.Ordinal));
         AssertEx.Contains(exception.Message, "integrity", StringComparison.OrdinalIgnoreCase);
+        AssertEx.Equal("The stable-diffusion.cpp runtime could not be downloaded or failed integrity verification after a retry. Check the network connection and try again.",
+            exception.Message);
+        AssertEx.Equal("The stable-diffusion.cpp runtime download failed integrity verification.", AssertEx.NotNull(exception.InnerException).Message);
     }
 
     [Test]

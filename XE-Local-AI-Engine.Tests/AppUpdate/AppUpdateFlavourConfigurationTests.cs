@@ -38,27 +38,10 @@ public sealed class AppUpdateFlavourConfigurationTests
 
     private static AppUpdateChannelOptions BindFlavour(string flavour)
     {
-        var path = LocateFlavourFile($"appsettings.AppUpdate.{flavour}.json");
+        var path = RepositoryPaths.ClientProject($"appsettings.AppUpdate.{flavour}.json");
         var options = new ConfigurationBuilder().AddJsonFile(path).Build()
                                                 .GetSection(AppUpdateChannelOptions.SectionName)
                                                 .Get<AppUpdateChannelOptions>();
         return AssertEx.NotNull(options, $"'{path}' has no '{AppUpdateChannelOptions.SectionName}' section.");
-    }
-
-    private static string LocateFlavourFile(string fileName)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine(directory.FullName, "XE-Local-AI-Engine.Client", fileName);
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException($"Could not locate flavour configuration {fileName}.");
     }
 }

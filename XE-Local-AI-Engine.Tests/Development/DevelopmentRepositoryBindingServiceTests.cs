@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
-using System.Diagnostics;
 using System.Text;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -268,42 +267,8 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
     {
         var repository = Path.Combine(_root, "repo-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(repository);
-        var result = await RunProcessAsync(repository, "git", "init", "--initial-branch=main", ".");
-        AssertEx.Equal(expected: 0, result.ExitCode, result.StandardError);
+        await TestGit.RunAsync(repository, "init", "--initial-branch=main", ".");
         return repository;
-    }
-
-    private static async Task<CommandResult> RunProcessAsync(string workingDirectory,
-        string executable,
-        params string[] arguments)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = executable,
-            WorkingDirectory = workingDirectory,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false
-        };
-        foreach (var argument in arguments)
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
-
-        using var process = new Process
-        {
-            StartInfo = startInfo
-        };
-        process.Start();
-        var stdout = process.StandardOutput.ReadToEndAsync();
-        var stderr = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
-        return new CommandResult
-        {
-            ExitCode = process.ExitCode,
-            StandardOutput = await stdout,
-            StandardError = await stderr
-        };
     }
 
     private static DevelopmentExecutionSnapshot ExecutionSnapshot(Guid selectedFolderId, string repositoryIdentityHash) =>
@@ -361,13 +326,4 @@ public sealed class DevelopmentRepositoryBindingServiceTests : IDisposable
             Version = version,
             CommandProfileJson = GenericProfileJson
         };
-
-    private sealed record CommandResult
-    {
-        public required int ExitCode { get; init; }
-
-        public required string StandardOutput { get; init; }
-
-        public required string StandardError { get; init; }
-    }
 }

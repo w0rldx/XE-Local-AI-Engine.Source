@@ -51,4 +51,12 @@ describe("KnowledgeScoreBadge", () => {
 
 		expect(screen.getByTestId("knowledge-score-kind").textContent).toBe(expected);
 	});
+
+	// A hand-edited `i18nextLng` such as `en_US` is not a well-formed tag; the score still renders, in the default locale.
+	it("renders with a malformed stored language tag", async () => {
+		await i18next.changeLanguage("en_US");
+		renderWithMantine(<KnowledgeScoreBadge score={7.3312} scoreKind="Rerank" />);
+
+		expect(screen.getByTestId("knowledge-score-detail").textContent).toMatch(/ 7\D33$/);
+	});
 });

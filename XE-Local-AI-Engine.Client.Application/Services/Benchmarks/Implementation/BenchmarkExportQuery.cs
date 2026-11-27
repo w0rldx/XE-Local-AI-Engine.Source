@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-internal sealed class BenchmarkExportQuery : IBenchmarkExportQuery
+public sealed class BenchmarkExportQuery
 {
     private readonly IBenchmarkExportFactsResolver _factsResolver;
     private readonly ILogger<BenchmarkExportQuery> _logger;
@@ -36,6 +36,7 @@ internal sealed class BenchmarkExportQuery : IBenchmarkExportQuery
         _logger = logger;
     }
 
+    /// <exception cref="BenchmarkNotFoundException">No project carries <paramref name="projectId" />.</exception>
     public async Task<BenchmarkJsonExportQueryResult> GetJsonAsync(Guid projectId, CancellationToken ct)
     {
         var project = await _projectStore.GetProjectAsync(projectId, ct) ?? throw new BenchmarkNotFoundException("Benchmark project was not found.");
@@ -81,6 +82,7 @@ internal sealed class BenchmarkExportQuery : IBenchmarkExportQuery
         };
     }
 
+    /// <exception cref="BenchmarkNotFoundException">No project carries <paramref name="projectId" />.</exception>
     public async Task<BenchmarkCsvExportQueryResult> GetCsvAsync(Guid projectId, CancellationToken ct)
     {
         var project = await _projectStore.GetProjectAsync(projectId, ct) ?? throw new BenchmarkNotFoundException("Benchmark project was not found.");

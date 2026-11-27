@@ -9,7 +9,8 @@
   Development Mode's own task machine or its apply gate.
 - **Authority:** Operator decisions of 2026-11-10 and 2026-11-12. No ADR covered Dev Workflows before; its earlier
   rulings were plan rulings recorded in wiki 25 (deleted in the docs sweep) and the
-  [divergence register](../wiki/22-workflow-engines-divergence-register.md).
+  divergence register (wiki 22, deleted; its last open item is in
+  [wiki 04](../wiki/04-agent-mode.md#open-decision-development-modes-second-tool-invocation-stack)).
 - **Supersedes:** the 2026-09-09 ruling that convergence is deferred (register, introduction), and the register §2
   row "`DevTask` node kind": Graph Workflows gains a `DevTask` kind that re-calls Development Mode's apply path
   instead of porting it.

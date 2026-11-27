@@ -9,7 +9,8 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     The two-phase skill import pipeline. Preview fetches, extracts, parses, validates and reports without writing;
+///     The two-phase skill import pipeline and the feature's security boundary: every input is attacker-authored.
+///     Preview fetches, extracts, parses, validates and reports without writing;
 ///     commit persists the report's materialized payload.
 /// </summary>
 /// <remarks>
@@ -19,7 +20,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     ASCII-only is deliberate. <c>allowed-tools</c> grants and restricts NOTHING — the specification calls it
 ///     pre-approval, and wiring it to the policy would claim a skill is confined while every tool stays callable.
 /// </remarks>
-internal sealed partial class SkillImportService : ISkillImportService
+public sealed partial class SkillImportService
 {
     /// <summary>Matches the body cap <c>AgentSkillService</c> applies to hand-authored skills.</summary>
     private const int MaxBodyLength = 20000;
@@ -61,12 +62,28 @@ internal sealed partial class SkillImportService : ISkillImportService
         _downloader = new GitHubSkillArchiveDownloader(httpClient, options);
     }
 
+    /// <summary>
+    ///     Preview for an uploaded <c>.zip</c>. Extracts in memory under the archive guards, discovers every
+    ///     <c>SKILL.md</c>, and returns the report. Writes nothing.
+    /// </summary>
+    /// <exception cref="SkillImportException">An archive guard tripped, or the archive holds no skill.</exception>
     public async Task<SkillImportPreview> PreviewArchiveAsync(ReadOnlyMemory<byte> archive, CancellationToken cancellationToken = default)
     {
         var folders = await SkillArchiveReader.ReadAsync(archive, _options, cancellationToken);
         return await BuildPreviewAsync(folders, UploadSourceUri, cancellationToken);
     }
 
+    /// <summary>
+    ///     Preview for an uploaded <c>.zip</c> that is still a stream: buffers it under
+    ///     <see cref="SkillImportOptions.MaxArchiveBytes" />, then runs the same archive preview. Writes nothing.
+    /// </summary>
+    /// <remarks>
+    ///     The cap applies to the bytes actually READ, never to a declared length, which is caller-controlled —
+    ///     bounding what gets buffered is the whole point of the guard.
+    /// </remarks>
+    /// <exception cref="SkillImportException">
+    ///     The upload exceeds the import size cap, an archive guard tripped, or the archive holds no skill.
+    /// </exception>
     public async Task<SkillImportPreview> PreviewArchiveAsync(Stream archive, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(archive);
@@ -74,6 +91,11 @@ internal sealed partial class SkillImportService : ISkillImportService
         return await PreviewArchiveAsync(await ReadCappedAsync(archive, cancellationToken), cancellationToken);
     }
 
+    /// <summary>
+    ///     Preview for a pasted raw <c>SKILL.md</c>. A pasted document has no containing directory and no bundled
+    ///     files, so the frontmatter <c>name</c> is authoritative and the skill imports instructions-only. Writes nothing.
+    /// </summary>
+    /// <exception cref="SkillImportException">The document carries no parsable frontmatter block.</exception>
     public Task<SkillImportPreview> PreviewMarkdownAsync(string skillMarkdown, CancellationToken cancellationToken = default)
     {
         // A pasted document has no containing directory, so its frontmatter name is all there is, and it carries no
@@ -90,6 +112,15 @@ internal sealed partial class SkillImportService : ISkillImportService
         return BuildPreviewAsync([folder], UploadSourceUri, cancellationToken);
     }
 
+    /// <summary>
+    ///     Preview for a GitHub repository. Writes nothing.
+    /// </summary>
+    /// <remarks>
+    ///     <paramref name="owner" /> and <paramref name="repository" /> are the only caller-supplied parts of the
+    ///     URL: a pasted URL is NEVER accepted, which is what keeps the host allowlist meaningful. A large collection
+    ///     repository yields many candidates and the operator selects — nothing is ever bulk-imported.
+    /// </remarks>
+    /// <exception cref="SkillImportException">The owner/repo is malformed, the download failed, or a guard tripped.</exception>
     public async Task<SkillImportPreview> PreviewGitHubRepositoryAsync(string owner, string repository, CancellationToken cancellationToken = default)
     {
         var archive = await _downloader.DownloadAsync(owner, repository, cancellationToken);
@@ -97,6 +128,11 @@ internal sealed partial class SkillImportService : ISkillImportService
         return await BuildPreviewAsync(folders, $"github:{owner}/{repository}", cancellationToken);
     }
 
+    /// <summary>
+    ///     Commit. Persists the selected skills from a previously issued preview. Fails — writing nothing — unless
+    ///     <see cref="SkillImportCommitRequest.Acknowledged" /> is <c>true</c> and the token is still live and unused.
+    /// </summary>
+    /// <exception cref="SkillImportException">Unacknowledged, unknown/expired token, or an unselectable skill name.</exception>
     public async Task<SkillImportResult> CommitAsync(SkillImportCommitRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -128,6 +164,11 @@ internal sealed partial class SkillImportService : ISkillImportService
         };
     }
 
+    /// <summary>
+    ///     Reads one bundled file, content included, out of a live preview so the operator can review it before the
+    ///     commit. Reads the cached payload only: no re-parse, no new cache entry, and the token is not consumed.
+    /// </summary>
+    /// <returns><c>null</c> when the token is unknown, expired or consumed, or no such skill or resource is in the report.</returns>
     public SkillImportResource? FindPreviewResource(Guid token, string skillName, string resourceName)
     {
         if (!_cache.TryGetValue(CacheKey(token), out SkillImportPreview? preview) || preview is null)

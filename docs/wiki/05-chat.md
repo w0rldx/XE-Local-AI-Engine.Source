@@ -1,7 +1,5 @@
 # Chat Subsystem
 
-> Reviewed: 2026-10-07 · Code-grounded.
-
 **What this page covers.** The chat subsystem: the React feature `src/features/chat` streams turns over a SignalR hub into `Client.Application/Services/Chat`, which resolves a model and agent per turn, runs the agent loop through one re-selecting `IChatClient` (`RuntimeChatClient`) and persists every turn to SQLite. Titles and message content are encrypted per column, and `RuntimeChatClient` routes each call to a cloud or local model.
 
 **Read this if you are** changing the send pipeline, streaming events, compaction, attachments or sampling, or debugging a turn that stalls or times out. **Skip to** [End-to-end turn flow](#end-to-end-turn-flow) for the path of one turn; **reference tables** are in [Scope at a glance](#scope-at-a-glance); **related pages:** [04](04-agent-mode.md), [09](09-api-and-hubs.md), [10](10-react-client.md).
@@ -261,7 +259,7 @@ Tools are offered to the turn only when all three hold (`NodeChatStreamService.c
 - **A model outside the trust boundary** (cloud or `Unresolved`, per `IModelTrustResolver`) gets a narrower offer, decided per class by the **Cloud models** switches in Node Settings → Privacy, read on every offer ([Security & Privacy](12-security-and-privacy.md)). MCP tools join it only while `AllowCloudModelMcpTools` is on (before that switch they joined every tool-capable offer ungated). `web_search`, `web_fetch` and `HttpFetch` custom tools join it only while `AllowCloudModelWebTools` AND the Web access setting are on (for a node-local model `HttpFetch` tools need only the custom-tools switch); web consent and tool approval are unchanged. `Command` custom tools never join it.
 - `spawn_subagent`, `run_python` and `run_in_agent_home` are **profile-opt-in only** — never offered on the default/mode-off chat path; they are held out of the whole offer and added back only by `GetOfferedToolsForProfile[Async]`. `run_python` and `run_in_agent_home` are added only for a model inside the trust boundary; `spawn_subagent` also for one outside it while `AllowCloudModelSubAgents` is on. See [Agent Mode](04-agent-mode.md#22-the-agenthome-write-back-loop) for the AgentHome offer rule.
 
-A bound agent definition narrows this offer to its allowed set (`resolved?.AllowedTools`); an unbound conversation uses the full capability-gated offer. That unbound fallback is built by `NodeChatStreamService.ResolveToolOfferAsync` (and `NodeChatRegenerationService.ResolveAllowedToolsAsync`) and runs through the **same tighten-only node approval policy** a bound definition already passed — otherwise a plain unbound turn would bypass a node-wide policy. With no policy configured the Permissive floor is identity, so that fallback offer is byte-identical to the raw catalog offer. The chosen offer travels in the runtime package as the tool list; the invocation factory resolves matching executables from the registry by name. MCP registration and the tool registry live in [Agent Mode](04-agent-mode.md).
+A bound agent definition narrows this offer to its allowed set (`resolved?.AllowedTools`); an unbound conversation uses the full capability-gated offer. That unbound fallback is built by `ChatToolOfferResolver.ResolveAsync`, which the send path (`NodeChatStreamService.ResolveToolOfferAsync`), regeneration, the context estimate and the Default Assistant offer read share, and runs through the **same tighten-only node approval policy** a bound definition already passed — otherwise a plain unbound turn would bypass a node-wide policy. With no policy configured the Permissive floor is identity, so that fallback offer is byte-identical to the raw catalog offer. The chosen offer travels in the runtime package as the tool list; the invocation factory resolves matching executables from the registry by name. MCP registration and the tool registry live in [Agent Mode](04-agent-mode.md).
 
 ### Tool history on follow-up turns
 
@@ -310,13 +308,9 @@ notice. The "Invocation completed" log line carries `FinishReason`, so a silent 
 
 `ChatTurnResolver` records not just *which* model runs the turn but *how it was chosen*, because `effectiveModel` keeps only the answer. `AllowAutoModelSwap` is true exactly when there was no explicit user pick **and** no honored agent pin: that is the only shape in which the turn ran on the node's default model with nobody asking for a specific one, and therefore the only shape the runner's reasoning-effort dispatcher may swap. An explicit pick and an honored pin are each a request for *that* model, so both clear the permission. `NodeChatStreamService` additionally clears it for any work-session turn: the graph was authored against a model, and a workflow step silently served by a different one is not a decision the graph's author made.
 
-### Work-session write declaration
+### Work-session tool offer
 
-**Gone.** The work-session write declaration (runtime half of the Dev Workflows invariant `GRAPH-2`) was removed with Dev Workflows ([ADR 0023](../adr/0023-dev-workflows-converge-into-graph-workflows.md)): `WorkSessionRuntimeOverride`, `NodeChatStreamRequest.RefuseUndeclaredWrites`, `WorkSessionWriteDeclarationGuard` and the `WriteGate` step outcome no longer exist. A work session's offer is the one its agent definition resolves, gated by `WorkSessionToolGate` like any other session, and `LocalChatHub` clears only the server-set `ExecutionParent` on a browser request.
-
-### Withdrawing operator tools from a workflow-owned session
-
-**Gone.** `NodeChatStreamRequest.SuppressOperatorTools` and `AskUserToolOffer.WithdrawOperatorTools`, which sent a Dev Workflows-owned work session's turn without `ask_user`, `web_fetch` and `web_search`, were removed with that engine ([ADR 0023](../adr/0023-dev-workflows-converge-into-graph-workflows.md)). Every tool-enabled chat turn keeps `ask_user`, the invariant `AskUserToolOffer.EnsureOffered` holds.
+A work session's offer is the one its agent definition resolves, gated by `WorkSessionToolGate` like any other session, and `LocalChatHub` clears only the server-set `ExecutionParent` on a browser request. Every tool-enabled chat turn keeps `ask_user`, the invariant `AskUserToolOffer.EnsureOffered` holds.
 
 ## Plain-chat knowledge-base grounding
 
@@ -437,7 +431,7 @@ Codex-only levels `minimal` and `xhigh` are offered only for Codex models; the `
 
 On the React side `clampReasoningEffort` (`stores/NodeChatPreferencesStore.ts`) maps a carried-over effort onto a different model's available set **without collapsing reasoning intent** (e.g. switching from a Codex model to a binary-only local model): a reasoning-OFF source (`none`) stays `none` when offered; any reasoning-ON source maps to the available reasoning-ON level of nearest intensity rank (`xhigh→high`, `minimal→low` onto a graded set; any graded level→`on` onto a binary set), falling back to the set's first entry only when no comparable level exists. The effort that actually drives the turn is persisted on the message metadata (`ReasoningEffort`, `NodeChatStreamService.cs`) so it survives reload.
 
-An `auto` effort that grades a turn as the FAST tier (`DefaultReasoningEffortDispatcher`) swaps it onto the local GGUF model named by the node setting `AutoEffortFastModelName`, when one is set. Provisioning such a model in a dev run (GGUF import is desktop-only) is documented in `docs/agent-knowledge/dev-runtime.md` ("A dev run provisions models through a worktree-private `HuggingFace__ModelsDirectory`").
+An `auto` effort that grades a turn as the FAST tier (`DefaultReasoningEffortDispatcher`) swaps it onto the local GGUF model named by the node setting `AutoEffortFastModelName`, when one is set. Provisioning such a model in a dev run (GGUF import is desktop-only) is documented in `docs/agent-knowledge/dev-lab.md` ("A dev run provisions models through a worktree-private `HuggingFace__ModelsDirectory`").
 
 **Live-validated behaviour (7/7 PASS on a fresh host, 2026-09-04).** Every
 non-Normal turn's `EffortDispatched` notice carries a `noticeDetail` code. Three codes were observed live: a swap
@@ -446,7 +440,7 @@ not — `fast-model-unset` (no `AutoEffortFastModelName` configured) or `tools-n
 tier can drop to Fast but the model never swaps). The save-time locality gate rejects a non-local id (e.g.
 `gpt-4o-mini`) or an uninstalled local id with **400** — *"The fast model for automatic reasoning effort must be an
 installed node-local model."* A fast model whose process crashed is relaunched and swaps again on the very next
-`auto` turn (previously the capacity snapshot kept listing the dead process). The codes are declared on
+`auto` turn. The codes are declared on
 `IReasoningEffortDispatcher` and graded by `DefaultReasoningEffortDispatcher` (`ReasoningEffortDispatcherTests`);
 the locality gate is `NodeLocalModelGate`, and the rejection message is the constant on
 `NodeSettingsAdministrationService`. The `fast-model-*` codes (`fast-model-unset`, `fast-model-is-active-model`,
@@ -462,9 +456,7 @@ marker emitters — `InvocationAgentFactory` (single-agent) and `ParticipantReas
 (orchestration participants, MCP-bound children, spawned sub-agents) — put it on the in-process marker
 `xe.llama.reasoning_budget_tokens`, which `DeferredLlamaServerChatClient.ApplyReasoningBudget` patches onto the
 outbound body as `reasoning_budget_tokens` (clamped to the launched window by `ClampToGenerationRoom`). An
-unspecified effort gets the rung of the default-effort node setting, shipped `low` (model matrix, 2026-10-04; it was
-`medium` before that, and earlier still it sent nothing and a hard prompt thought until `finish_reason: length` with
-no answer). Explicit `none` turns thinking off: `enable_thinking=false` plus `reasoning_budget_tokens: 0`, see
+unspecified effort gets the rung of the default-effort node setting, shipped `low` (model matrix, 2026-10-04). Explicit `none` turns thinking off: `enable_thinking=false` plus `reasoning_budget_tokens: 0`, see
 [Agent Mode](04-agent-mode.md) ("The reasoning-effort matrix and the thinking budget").
 
 **Answer now.** A streaming request that carries the budget also carries `reasoning_control: true`
@@ -877,7 +869,7 @@ attachmentFileIds?, confirmRerun? }` (1 MiB body cap), answered 202 `{ runId, me
 The running node's live reasoning and text come from `GraphWorkflowRunHub.StreamNodeActivity`, a pass-through of the
 chat resume registry ([Graph Workflows](21-graph-workflows.md) §5, "Live activity").
 
-`IGraphWorkflowChatService.SendAsync` runs in a fixed order:
+`GraphWorkflowChatService.SendAsync` runs in a fixed order:
 
 1. **Validate.** Content is non-blank and within `Security:MaxMessageSizeKb` (the hub is the only other place that
    cap is enforced); the composed run input is within `GraphWorkflows:MaxRunInputBytes`; the definition exists (404)
@@ -923,7 +915,7 @@ conversation, an image reference whose file was never stored as an image, or a t
 
 **Intervene from the chat (steer).** While the bound run's Agent or LLM call node is queued or running (the run list's
 `steerable`), the operator can redirect it: `POST graph-workflows/runs/{runId}/nodes/{nodeKey}/steer` with
-`{ operationId, message }`, answered 202 with the run detail. `IGraphWorkflowChatService.SteerAsync` checks that the
+`{ operationId, message }`, answered 202 with the run detail. `GraphWorkflowChatService.SteerAsync` checks that the
 run is bound (400 otherwise), that the conversation is mutable and that the node run exists (404, before anything is
 written). It then persists the text as a user message under `GraphWorkflowChatIds.SteerMessage(operationId, runId,
 nodeKey)`, a v5 UUID scoped to the target. A replay on the same node maps to the same message, and the same id reused
@@ -940,7 +932,7 @@ fenced JSON otherwise; `agentName` is the node label, `model` the node's `usage.
 deterministic id `GraphWorkflowChatIds.PublishedMessage(runId, nodeKey, attempt)`, so published messages are ordinary
 chat history that later normal turns see. **Deleting the conversation** first tells every registered
 `IConversationDeletionObserver` (a seam in `Services/Chat`; chat does not know who listens). Graph Workflows registers one
-that cancels the live bound run (`IGraphWorkflowChatService.CancelBoundRunAsync`, re-read and retried up to three times
+that cancels the live bound run (`GraphWorkflowChatService.CancelBoundRunAsync`, re-read and retried up to three times
 when a tick moves the run under it); a purge then unbinds every run (`ConversationFootprintPurge`). The observer runs
 before, and outside, the conversation's delete transaction, so a send that lands between the cancel and the delete can
 still start a run; on a purge that run is unbound and has nobody to answer it, and on a soft delete it stays bound to a

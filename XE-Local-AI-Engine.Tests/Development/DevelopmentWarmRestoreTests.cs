@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
-using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using Microsoft.Extensions.Options;
@@ -220,49 +219,20 @@ public sealed class DevelopmentWarmRestoreTests : IDisposable
         Directory.CreateDirectory(_root);
         var repository = Path.Combine(_root, "repo-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(repository);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "init", "--initial-branch=main", ".");
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.email", "development-warm@example.invalid");
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.name", "Development Warm Test");
+        await TestGit.RunAsync(repository, "init", "--initial-branch=main", ".");
+        await TestGit.RunAsync(repository, "config", "user.email", "development-warm@example.invalid");
+        await TestGit.RunAsync(repository, "config", "user.name", "Development Warm Test");
         await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "base\n");
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "add", "README.md");
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "commit", "-m", "base");
-        var baseCommit = await ReadGitOutputAsync(repository, "rev-parse", "--verify", "refs/heads/main^{commit}");
+        await TestGit.RunAsync(repository, "add", "README.md");
+        await TestGit.RunAsync(repository, "commit", "-m", "base");
+        // Read before the prepare: the warm restore runs inside it, and the recording sandbox answers the
+        // post-command workspace invariant probe with this commit.
+        var baseCommit = (await TestGit.RunAsync(repository, "rev-parse", "--verify", "refs/heads/main^{commit}")).Trim();
 
         var data = Path.Combine(_root, "d-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(data);
         var identity = DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository));
         return (repository, data, Snapshot(identity, profile), baseCommit);
-    }
-
-    /// <summary>
-    ///     The base commit has to be known BEFORE the prepare, because the warm restore runs inside it and the
-    ///     recording sandbox has to answer the post-command workspace invariant probe with the right value.
-    /// </summary>
-    private static async Task<string> ReadGitOutputAsync(string workingDirectory, params string[] arguments)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "git",
-            WorkingDirectory = workingDirectory,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false
-        };
-        foreach (var argument in arguments)
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
-
-        using var process = new Process
-        {
-            StartInfo = startInfo
-        };
-        process.Start();
-        var error = process.StandardError.ReadToEndAsync();
-        var output = await process.StandardOutput.ReadToEndAsync();
-        await process.WaitForExitAsync();
-        AssertEx.Equal(expected: 0, process.ExitCode, await error);
-        return output.Trim();
     }
 
     private static DevelopmentOptions OptionsValue() =>

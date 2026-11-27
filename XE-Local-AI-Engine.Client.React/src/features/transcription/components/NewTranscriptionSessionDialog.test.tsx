@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import i18next from "i18next";
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -9,6 +10,7 @@ import { NewTranscriptionSessionDialog } from "@/features/transcription/componen
 import { useTranscriptionCaptureStore } from "@/features/transcription/stores/TranscriptionCaptureStore";
 import { jsonRoute, localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
+import de from "@/locales/de.json";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 import { setupMswServer } from "@/test/UseMswServer";
 
@@ -222,6 +224,24 @@ describe("NewTranscriptionSessionDialog", () => {
 		expect(values.file).toBeNull();
 		expect(values.deviceId).toBeNull();
 		expect(values.title).toContain("Live session");
+	});
+
+	// The clock in the title follows the UI language, not the browser locale: a German page names a 24-hour time.
+	it("stamps the live title's time in the UI language", async () => {
+		i18next.addResourceBundle("de", "translation", de, true, true);
+		await i18next.changeLanguage("de");
+		try {
+			// The dialog opens on the last source, so the live source needs no click on a translated label.
+			useTranscriptionCaptureStore.setState({ lastSourceKind: "Microphone" });
+			const onSubmit = renderDialog();
+
+			fireEvent.click(screen.getByTestId("new-transcription-session-submit"));
+
+			const values = onSubmit.mock.calls[0]?.[0] as { title: string };
+			expect(values.title).toMatch(/^Live-Sitzung \d{2}:\d{2}:\d{2}$/);
+		} finally {
+			await i18next.changeLanguage("en");
+		}
 	});
 
 	// The file input is hidden, not cleared, when the source changes; the page routes on `file`, so a recording staged

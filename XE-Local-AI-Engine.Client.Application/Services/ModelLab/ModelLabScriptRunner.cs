@@ -1,8 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelLab;
 
 using System.Text.Json;
-using XE_Local_AI_Engine.Client.Persistence.Entities;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
 using XE_Local_AI_Engine.Providers.Abstractions;
@@ -79,10 +77,10 @@ internal sealed class ModelLabScriptRunner
     /// <param name="script">What to spawn.</param>
     /// <param name="saveReceipt">Makes the launch receipt durable, before any output is read.</param>
     /// <param name="stopToken">Asks for the cooperative stop, which the watchdog then bounds.</param>
-    public async Task<ScriptRun> RunAsync(Guid id,
+    public async Task<ModelLabScriptRun> RunAsync(Guid id,
         string workDirectory,
         byte[] jobJson,
-        ScriptCommand script,
+        ModelLabScriptCommand script,
         Func<ReadOnlyMemory<byte>, Task> saveReceipt,
         CancellationToken stopToken)
     {
@@ -104,7 +102,7 @@ internal sealed class ModelLabScriptRunner
         // Durable before the first line is read: a host that dies now must still be able to prove which process is this job's.
         await saveReceipt(JsonSerializer.SerializeToUtf8Bytes(TrainingProcessReaper.ToPersisted(handle.Receipt), TrainingJson.Options));
 
-        var state = new StreamState();
+        var state = new ModelLabScriptStreamState();
         var watchdog = NewWatchdog(_options, _options.ExitGracePeriod, _timeProvider);
         var stop = stopToken.Register(() =>
         {
@@ -137,7 +135,7 @@ internal sealed class ModelLabScriptRunner
         }
 
         var exitCode = await watchdog.WaitForExitOrEscalateAsync(handle);
-        return new ScriptRun
+        return new ModelLabScriptRun
         {
             State = state,
             FailureReason = watchdog.FailureReason,
@@ -145,7 +143,7 @@ internal sealed class ModelLabScriptRunner
         };
     }
 
-    private void Apply(Guid id, ScriptCommand script, StreamState state, TrainingScriptWatchdog watchdog, TrainingStdioEvent parsed, Action killGroup)
+    private void Apply(Guid id, ModelLabScriptCommand script, ModelLabScriptStreamState state, TrainingScriptWatchdog watchdog, TrainingStdioEvent parsed, Action killGroup)
     {
         switch (parsed.Kind)
         {
@@ -180,85 +178,5 @@ internal sealed class ModelLabScriptRunner
             default:
                 break;
         }
-    }
-
-    internal sealed class ScriptCommand
-    {
-        public required string Interpreter { get; init; }
-
-        public required string ScriptPath { get; init; }
-
-        /// <summary>The handshake version this script must speak.</summary>
-        public int ContractVersion { get; init; } = ModelLabTraceSpec.ContractVersion;
-
-        /// <summary>False keeps phase and progress frames out of the event buffer entirely: they still count as liveness.</summary>
-        public bool PublishPhases { get; init; } = true;
-    }
-
-    internal sealed class ScriptRun
-    {
-        public required StreamState State { get; init; }
-
-        public required string? FailureReason { get; init; }
-
-        public required int ExitCode { get; init; }
-
-        /// <summary>What the job ends with because of the script, or <see langword="null" /> when the script did its work.</summary>
-        public ModelLabExperimentCompletion? FailureOrNull(bool cancelRequested)
-        {
-            if (cancelRequested || State.ScriptCancelled || ExitCode == TrainingRunExecutor.CancelledExitCode)
-            {
-                return ModelLabExperimentCompletion.Cancelled();
-            }
-
-            if (FailureReason is { } reason)
-            {
-                return ModelLabExperimentCompletion.Finished(ModelLabExperimentStatus.Failed, reason);
-            }
-
-            if (State.ErrorMessage is { Length: > 0 } error)
-            {
-                return ModelLabExperimentCompletion.Finished(ModelLabExperimentStatus.Failed, State.WithLastOutput(error));
-            }
-
-            if (!State.HandshakeSeen || !State.Done || ExitCode != 0)
-            {
-                return ModelLabExperimentCompletion.Finished(ModelLabExperimentStatus.Failed, State.WithLastOutput($"The Model Lab script exited with status {ExitCode}."));
-            }
-
-            return null;
-        }
-    }
-
-    internal sealed class StreamState
-    {
-        private const int OutputLinesKept = 12;
-        private const int OutputLineLength = 300;
-
-        // A native tool's own explanation reaches only stderr: a failed compile says why here and nowhere else.
-        private readonly Queue<string> _lastOutput = new();
-
-        public bool HandshakeSeen { get; set; }
-
-        public bool Done { get; set; }
-
-        public bool ScriptCancelled { get; set; }
-
-        public string? ErrorMessage { get; set; }
-
-        /// <summary>The error event's <c>category</c>: the stable code a source job's refusal is mapped from.</summary>
-        public string? ErrorCategory { get; set; }
-
-        public void KeepOutput(string line)
-        {
-            _lastOutput.Enqueue(line.Length > OutputLineLength ? line[..OutputLineLength] : line);
-            if (_lastOutput.Count > OutputLinesKept)
-            {
-                _ = _lastOutput.Dequeue();
-            }
-        }
-
-        public string WithLastOutput(string message) =>
-            _lastOutput.Count == 0 ? message : $"{message}\n\nLast output:\n{string.Join('\n', _lastOutput)}";
     }
 }

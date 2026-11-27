@@ -62,21 +62,7 @@ vi.mock("@/features/cloud-providers/codex/queries/useCodexAuth", () => ({
 }));
 
 import { CodexSignInCard } from "@/features/cloud-providers/codex/components/CodexSignInCard";
-import { testMantineTheme } from "@/test/MantineTestRender";
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-}
+import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 
 function renderCard(): void {
 	const queryClient = new QueryClient({

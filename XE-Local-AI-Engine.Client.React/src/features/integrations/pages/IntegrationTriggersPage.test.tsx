@@ -49,7 +49,7 @@ vi.mock("@/features/integrations/queries/useIntegrationGraphOptions", () => grap
 vi.mock("@/core/ui/hooks/useConfirm", () => ({ useConfirm: () => ({ confirm: confirmMock }) }));
 
 import { IntegrationTriggersPage } from "@/features/integrations/pages/IntegrationTriggersPage";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 
 const readOnlyAgent: IntegrationAgentOption = {
 	id: "agent-read",
@@ -102,35 +102,6 @@ function makeMutation() {
 
 function makeQuery<T>(data: T) {
 	return { data, isLoading: false, error: null };
-}
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-	Object.defineProperty(document, "fonts", {
-		writable: true,
-		value: { ready: Promise.resolve(), addEventListener: vi.fn(), removeEventListener: vi.fn() },
-	});
-	window.HTMLElement.prototype.scrollIntoView = vi.fn();
 }
 
 function pageElement() {

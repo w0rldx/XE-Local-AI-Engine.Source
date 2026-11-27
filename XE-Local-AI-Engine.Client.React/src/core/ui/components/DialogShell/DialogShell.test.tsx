@@ -2,21 +2,16 @@
 
 import "@/i18n";
 
-import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { renderWithMantine } from "@/test/MantineTestRender";
 
-function renderWithProviders(ui: ReactElement) {
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			<ConfirmProvider>{ui}</ConfirmProvider>
-		</MantineProvider>,
-	);
+function renderWithConfirm(ui: ReactElement) {
+	return renderWithMantine(<ConfirmProvider>{ui}</ConfirmProvider>);
 }
 
 describe("DialogShell", () => {
@@ -52,7 +47,7 @@ describe("DialogShell", () => {
 	// (a KB chunk heading) widened the whole dialog to ~1370px on a phone. The dialog's scroll content is held to the
 	// dialog's width instead; jsdom does no layout, so the rule itself is what is asserted.
 	it("lets the dialog's scroll content shrink below its children's min-content", () => {
-		renderWithProviders(
+		renderWithConfirm(
 			<DialogShell opened={true} onClose={vi.fn()} title="Editor" data-testid="sample-dialog">
 				<div data-testid="dialog-child">body</div>
 			</DialogShell>,
@@ -68,7 +63,7 @@ describe("DialogShell", () => {
 	// Mantine names a dialog (aria-labelledby) only while its own Modal.Title is mounted. The title used to be a plain
 	// Text, so every DialogShell announced as a bare "dialog" with no idea which one had opened.
 	it("names the dialog after its visible title", () => {
-		renderWithProviders(
+		renderWithConfirm(
 			<DialogShell opened={true} onClose={vi.fn()} title="Editor" data-testid="sample-dialog">
 				<div>body</div>
 			</DialogShell>,
@@ -81,7 +76,7 @@ describe("DialogShell", () => {
 	// Playwright resolves but reports as `hidden` — so `waitFor({ state: "visible" })` timed out against a dialog that
 	// was plainly on screen. It must land on the visible dialog card instead.
 	it("puts data-testid on the visible modal content, not the zero-size portal root", () => {
-		renderWithProviders(
+		renderWithConfirm(
 			<DialogShell opened={true} onClose={vi.fn()} title="Editor" data-testid="sample-dialog">
 				<div>body</div>
 			</DialogShell>,
@@ -104,7 +99,7 @@ describe("DialogShell", () => {
 	// Regression: a stacked confirmation (the benchmark re-judge one) must render ABOVE the editor that opened it
 	// without a raw `zIndex` at the call site — a trap every future stacked dialog would have to know about.
 	it("raises a stacked dialog above the default modal layer only when it opts in", () => {
-		const { container } = renderWithProviders(
+		const { container } = renderWithConfirm(
 			<>
 				<DialogShell opened={true} onClose={vi.fn()} title="Editor" data-testid="base-dialog">
 					<div>base</div>
@@ -125,7 +120,7 @@ describe("DialogShell", () => {
 	});
 
 	it("shows a fullscreen toggle that flips between fullscreen and exit-fullscreen", () => {
-		renderWithProviders(
+		renderWithConfirm(
 			<DialogShell opened={true} onClose={vi.fn()} title="Editor">
 				<div>body</div>
 			</DialogShell>,
@@ -143,7 +138,7 @@ describe("DialogShell", () => {
 	});
 
 	it("hides the fullscreen toggle when enableFullScreenToggle is false", () => {
-		renderWithProviders(
+		renderWithConfirm(
 			<DialogShell opened={true} onClose={vi.fn()} title="Editor" enableFullScreenToggle={false}>
 				<div>body</div>
 			</DialogShell>,
@@ -154,7 +149,7 @@ describe("DialogShell", () => {
 	});
 
 	it("renders the sticky footer content", () => {
-		renderWithProviders(
+		renderWithConfirm(
 			<DialogShell opened={true} onClose={vi.fn()} title="Editor" footer={<button type="button">Save</button>}>
 				<div>body</div>
 			</DialogShell>,
@@ -166,7 +161,7 @@ describe("DialogShell", () => {
 
 	it("closes directly via the title-bar close button when not guarded", () => {
 		const onClose = vi.fn();
-		renderWithProviders(
+		renderWithConfirm(
 			<DialogShell opened={true} onClose={onClose} title="Editor">
 				<div>body</div>
 			</DialogShell>,
@@ -178,7 +173,7 @@ describe("DialogShell", () => {
 
 	it("routes a guarded close through the confirm dialog and only closes when confirmed", async () => {
 		const onClose = vi.fn();
-		renderWithProviders(
+		renderWithConfirm(
 			<DialogShell opened={true} onClose={onClose} title="Editor" confirmCloseWhen={true}>
 				<div>body</div>
 			</DialogShell>,
@@ -200,7 +195,7 @@ describe("DialogShell", () => {
 
 	it("keeps a guarded dialog open when the confirmation is cancelled", async () => {
 		const onClose = vi.fn();
-		renderWithProviders(
+		renderWithConfirm(
 			<DialogShell opened={true} onClose={onClose} title="Editor" confirmCloseWhen={true}>
 				<div>body</div>
 			</DialogShell>,

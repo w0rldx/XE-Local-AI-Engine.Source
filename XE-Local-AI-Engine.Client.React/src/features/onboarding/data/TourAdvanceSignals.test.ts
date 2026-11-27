@@ -7,7 +7,6 @@ import {
 	countVisibleAssistantReplies,
 	hasChatCapableDefault,
 	hasInstalledChatModel,
-	hasVisibleAssistantReply,
 } from "@/features/onboarding/data/TourAdvanceSignals";
 
 const chatModel: LocalModelResponse = {
@@ -99,7 +98,7 @@ describe("hasChatCapableDefault", () => {
 	});
 });
 
-describe("hasVisibleAssistantReply", () => {
+describe("countVisibleAssistantReplies", () => {
 	function fakeClient(conversations: [unknown, ChatConversationModel | undefined][]): QueryClient {
 		return {
 			getQueriesData: () => conversations,
@@ -110,7 +109,7 @@ describe("hasVisibleAssistantReply", () => {
 		return { messages } as unknown as ChatConversationModel;
 	}
 
-	it("is false when no assistant message has content yet", () => {
+	it("counts nothing when no assistant message has content yet", () => {
 		const client = fakeClient([
 			[
 				["c1"],
@@ -120,10 +119,10 @@ describe("hasVisibleAssistantReply", () => {
 				]),
 			],
 		]);
-		expect(hasVisibleAssistantReply(client)).toBe(false);
+		expect(countVisibleAssistantReplies(client)).toBe(0);
 	});
 
-	it("is true once an assistant message carries non-empty content", () => {
+	it("counts an assistant message once it carries non-empty content", () => {
 		const client = fakeClient([
 			[
 				["c1"],
@@ -133,7 +132,7 @@ describe("hasVisibleAssistantReply", () => {
 				]),
 			],
 		]);
-		expect(hasVisibleAssistantReply(client)).toBe(true);
+		expect(countVisibleAssistantReplies(client)).toBe(1);
 	});
 
 	it("counts visible replies so a later reply can be distinguished from existing conversation history", () => {
@@ -151,7 +150,7 @@ describe("hasVisibleAssistantReply", () => {
 		expect(countVisibleAssistantReplies(client)).toBe(2);
 	});
 
-	it("is false when there are no cached conversations", () => {
-		expect(hasVisibleAssistantReply(fakeClient([]))).toBe(false);
+	it("counts nothing when there are no cached conversations", () => {
+		expect(countVisibleAssistantReplies(fakeClient([]))).toBe(0);
 	});
 });

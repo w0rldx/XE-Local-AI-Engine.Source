@@ -414,7 +414,7 @@ print(f"{vite}|{pid if isinstance(pid, int) else str()}")
 ' <<<"${status_json}")"
   IFS='|' read -r VITE_URL HOST_PID <<<"${urls}"
   local deadline=$((SECONDS + READY_TIMEOUT))
-  until curl -skf --max-time 10 -o /dev/null "${BASE_URL}/api/local/v1/auth/status"; do
+  until curl -skf --noproxy '*' --max-time 10 -o /dev/null "${BASE_URL}/api/local/v1/auth/status"; do
     [[ "${SECONDS}" -lt "${deadline}" ]] || die 5 "${BASE_URL} did not answer GET auth/status within ${READY_TIMEOUT}s."
     sleep 2
   done

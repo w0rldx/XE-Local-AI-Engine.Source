@@ -26,11 +26,12 @@ sys.stdout = sys.stderr
 
 _MAX_MESSAGE_CHARS = 2000
 
-_namespace = {"__name__": "__candidate__"}
+_namespace: dict = {"__name__": "__candidate__"}
 _load_error = None
 
 try:
-    exec(compile(base64.b64decode(_CANDIDATE_B64), "<candidate>", "exec"), _namespace)
+    # Running the candidate is this process's job; C# defines _CANDIDATE_B64 in the line it prepends.
+    exec(compile(base64.b64decode(_CANDIDATE_B64), "<candidate>", "exec"), _namespace)  # noqa: S102, F821  # nosec B102  # pyrefly: ignore[unknown-name]
 except BaseException as error:  # noqa: BLE001 - a candidate may raise anything, including SystemExit
     traceback.print_exc(file=sys.stderr)
     _load_error = type(error).__name__ + ": " + str(error)[:_MAX_MESSAGE_CHARS]
@@ -52,11 +53,11 @@ def _evaluate(source):
     # escape hatch for stateful and class-based tasks that a call-only proxy cannot express.
     tree = ast.parse(source, "<pyeval>", "exec")
     tail = tree.body.pop() if tree.body and isinstance(tree.body[-1], ast.Expr) else None
-    exec(compile(tree, "<pyeval>", "exec"), _namespace)
+    exec(compile(tree, "<pyeval>", "exec"), _namespace)  # noqa: S102  # nosec B102
     if tail is None:
         return None
 
-    return eval(compile(ast.Expression(tail.value), "<pyeval>", "eval"), _namespace)
+    return eval(compile(ast.Expression(tail.value), "<pyeval>", "eval"), _namespace)  # noqa: S307  # nosec B307
 
 
 while True:

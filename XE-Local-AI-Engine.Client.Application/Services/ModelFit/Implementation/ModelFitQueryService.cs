@@ -8,16 +8,16 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
-///     Default <see cref="IModelFitQueryService" />: a thin cache reader composing the sanitized snapshot-summary
-///     store and the normalized recommendation store. It takes NO dependency on the refresh service, so a read can
-///     never start an advisor run, and none on approved images.
+///     Read-only cache reader composing the sanitized snapshot-summary store and the normalized recommendation store.
+///     It takes NO dependency on the refresh service, so a read can never start an advisor run, and none on approved
+///     images.
 /// </summary>
 /// <remarks>
 ///     On the read path it reconciles each row's install state against the node's installed GGUF models. Listing them is a node-local
 ///     read, NOT an advisor run, so the no-runner invariant still holds. The enrichment is best-effort: if the install
 ///     list cannot be read, each row keeps its stored flag.
 /// </remarks>
-public sealed class ModelFitQueryService : IModelFitQueryService
+public sealed class ModelFitQueryService
 {
     /// <summary>Member of the snapshot's <c>system</c> diagnostics object listing the catalog entries the run skipped.</summary>
     internal const string SkippedCatalogEntriesMember = "skipped_catalog_entries";
@@ -42,6 +42,15 @@ public sealed class ModelFitQueryService : IModelFitQueryService
         _snapshotStore = snapshotStore;
     }
 
+    /// <summary>
+    ///     Returns the latest successful cached recommendation snapshot for the (<paramref name="useCase" />,
+    ///     <paramref name="providerName" />) key as a sanitized view. Reads cached state only — it never runs the
+    ///     utility.
+    /// </summary>
+    /// <returns>
+    ///     <c>null</c> when no successful recommendation snapshot has ever been cached — a cache-miss the caller
+    ///     surfaces as the empty state.
+    /// </returns>
     public async Task<ModelFitLatestRecommendationsView?> GetLatestRecommendationsAsync(string? useCase,
         string providerName,
         CancellationToken cancellationToken = default)

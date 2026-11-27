@@ -2,6 +2,7 @@ import {
 	checkI18nDefaults,
 	findI18nDefaultDrift,
 	findLiteralMessages,
+	findLocaleFormatting,
 	findTranslationDefaults,
 	flattenBundle,
 } from "./CheckI18nDefaults.mjs";
@@ -167,10 +168,61 @@ test("translated, empty and already-translated-joined messages are not literals"
 	assert.deepEqual(findLiteralMessages(source), []);
 });
 
-test("the guard walks the real src tree and finds no drifted default, no missing key and no literal message", () => {
-	const { files, drifted, missing, literals } = checkI18nDefaults();
+test("an Intl formatter or a toLocale*String call is reported with its line, and types, comments and sorting are not", () => {
+	const source = [
+		"const a = new Intl.NumberFormat(language, { maximumFractionDigits: 2 });",
+		"const b = Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });",
+		"const c = count.toLocaleString();",
+		"const d = new Date().toLocaleTimeString();",
+		"const e = date.toLocaleDateString('de', options);",
+		"const f: Intl.NumberFormatOptions = { maximumFractionDigits: 2 };",
+		"// a comment naming value.toLocaleString() and new Intl.NumberFormat()",
+		"const g = names.sort((left, right) => left.localeCompare(right));",
+	].join("\n");
+	assert.deepEqual(findLocaleFormatting(source), [
+		{ line: 1, call: "Intl.NumberFormat" },
+		{ line: 2, call: "Intl.RelativeTimeFormat" },
+		{ line: 3, call: "toLocaleString" },
+		{ line: 4, call: "toLocaleTimeString" },
+		{ line: 5, call: "toLocaleDateString" },
+	]);
+});
+
+test("locale formatting fails outside src/core/formatting/ and is allowed inside it", () => {
+	const root = fixtureRoot({ source: "const label = count.toLocaleString();", en: {} });
+	mkdirSync(join(root, "src", "core", "formatting"), { recursive: true });
+	writeFileSync(
+		join(root, "src", "core", "formatting", "NumberFormatting.ts"),
+		"const format = new Intl.NumberFormat(language);",
+		"utf8",
+	);
+	const result = checkI18nDefaults({
+		sourceRoot: join(root, "src"),
+		bundlePaths: [join(root, "src", "locales", "en.json")],
+		root,
+	});
+	assert.deepEqual(result.localeFormatting, [`${join("src", "Widget.tsx")}:1 toLocaleString`]);
+});
+
+test("a checkout path that contains test/ or core/formatting/ above src neither exempts nor excludes a file", () => {
+	const checkout = join(mkdtempSync(join(tmpdir(), "check-i18n-defaults-")), "test", "core", "formatting", "checkout");
+	mkdirSync(join(checkout, "src", "locales"), { recursive: true });
+	writeFileSync(join(checkout, "src", "Widget.tsx"), "const label = count.toLocaleString();", "utf8");
+	writeFileSync(join(checkout, "src", "locales", "en.json"), "{}", "utf8");
+	const result = checkI18nDefaults({
+		sourceRoot: join(checkout, "src"),
+		bundlePaths: [join(checkout, "src", "locales", "en.json")],
+		root: checkout,
+	});
+	assert.equal(result.files, 1);
+	assert.deepEqual(result.localeFormatting, [`${join("src", "Widget.tsx")}:1 toLocaleString`]);
+});
+
+test("the guard walks the real src tree and finds no drifted default, no missing key, no literal message and no stray locale formatting", () => {
+	const { files, drifted, missing, literals, localeFormatting } = checkI18nDefaults();
 	assert.ok(files > 500);
 	assert.deepEqual(drifted, []);
 	assert.deepEqual(missing, []);
 	assert.deepEqual(literals, []);
+	assert.deepEqual(localeFormatting, []);
 });

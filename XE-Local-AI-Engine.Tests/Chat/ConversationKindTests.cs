@@ -6,7 +6,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
-using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -396,23 +395,8 @@ public sealed class ConversationKindTests : IDisposable
         return Convert.ToString(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
     }
 
-    private async Task<ServiceProvider> BuildProviderAsync(string fileName)
-    {
-        Directory.CreateDirectory(_rootPath);
-        var databasePath = Path.Combine(_rootPath, fileName);
-        var services = new ServiceCollection();
-        services.AddScoped<INodeSqliteKeyHolder, NullNodeSqliteKeyHolder>();
-        services.AddDbContext<NodeChatDbContext>(options => options.UseSqlite($"Data Source={databasePath}"));
-        services.AddSingleton<NodeChatPersistenceWriter>();
-
-        var provider = services.BuildServiceProvider(true);
-        await using var scope = provider.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        await dbContext.Database.EnsureDeletedAsync();
-        await dbContext.Database.EnsureCreatedAsync();
-
-        return provider;
-    }
+    private Task<ServiceProvider> BuildProviderAsync(string fileName) =>
+        NodeChatTestProvider.BuildAsync(Path.Combine(_rootPath, fileName), pooled: true);
 
     private static NodeChatPersistenceService CreateService(ServiceProvider provider) =>
         new(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);

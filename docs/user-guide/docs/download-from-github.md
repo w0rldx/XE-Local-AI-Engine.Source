@@ -17,7 +17,7 @@ Under the release notes, expand **Assets**. Choose the platform artifact:
 | Windows x64 | `XE-Local-AI-Engine-win-Portable.zip` |
 | Linux x64 | The file whose name ends in `.AppImage` |
 
-Windows also requires the x64 ASP.NET Core Runtime 10.0.12 or a newer .NET 10 servicing patch; install it from
+Windows also requires the x64 ASP.NET Core Runtime 10.0.15 or a newer .NET 10 servicing patch; install it from
 Microsoft's [.NET 10 download page](https://dotnet.microsoft.com/en-us/download/dotnet/10.0), plus the Microsoft Edge
 WebView2 Evergreen Runtime ([details](install-windows.md#also-install-webview2)). The Linux AppImage is
 self-contained.

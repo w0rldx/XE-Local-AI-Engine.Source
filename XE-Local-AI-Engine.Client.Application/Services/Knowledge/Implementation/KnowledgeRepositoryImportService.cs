@@ -25,12 +25,13 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
 {
     private const string SourceKind = "repository";
     private const string DefaultMimeType = "text/plain";
-    private const int ReadOnlyNoFollowCloseOnExecFlags = 0x0 | 0x20000 | 0x80000;
+
+    internal static readonly int ReadOnlyNoFollowCloseOnExecFlags = LinuxOpenFlags.ReadOnly | LinuxOpenFlags.NoFollow | LinuxOpenFlags.CloseOnExec;
 
     private readonly IDevelopmentRepositoryBindingService _repositories;
     private readonly ISensitiveFileExclusionService _exclusions;
     private readonly IKnowledgeDocumentBlobStore _blobStore;
-    private readonly IKnowledgeIngestionAdmissionService _admission;
+    private readonly KnowledgeIngestionAdmissionService _admission;
     private readonly IKnowledgeDocumentCatalogService _catalog;
     private readonly IKnowledgeDocumentPurgeService _purge;
     private readonly IDocumentTextExtractor _extractor;
@@ -39,7 +40,7 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
     public KnowledgeRepositoryImportService(IDevelopmentRepositoryBindingService repositories,
         ISensitiveFileExclusionService exclusions,
         IKnowledgeDocumentBlobStore blobStore,
-        IKnowledgeIngestionAdmissionService admission,
+        KnowledgeIngestionAdmissionService admission,
         IKnowledgeDocumentCatalogService catalog,
         IKnowledgeDocumentPurgeService purge,
         IDocumentTextExtractor extractor,
@@ -107,7 +108,7 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
             }
 
             var fullPath = Path.GetFullPath(relativePath, resolvedRoot);
-            if (!HostPathSafety.IsPathWithinRoot(resolvedRoot, fullPath))
+            if (!PathContainment.IsRootOrUnderCanonical(fullPath, resolvedRoot))
             {
                 skipped++;
                 continue;
@@ -348,9 +349,7 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
                 FileOptions.Asynchronous | FileOptions.RandomAccess);
         }
 
-        var pathBytes = new byte[Encoding.UTF8.GetByteCount(path) + 1];
-        Encoding.UTF8.GetBytes(path, pathBytes);
-        var fileDescriptor = open(pathBytes, ReadOnlyNoFollowCloseOnExecFlags);
+        var fileDescriptor = LinuxOpenFlags.Open(path, ReadOnlyNoFollowCloseOnExecFlags);
         if (fileDescriptor < 0)
         {
             var error = Marshal.GetLastPInvokeError();
@@ -360,8 +359,4 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
 
         return new SafeFileHandle(fileDescriptor, ownsHandle: true);
     }
-
-    [DllImport("libc", EntryPoint = "open", SetLastError = true)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
-    private static extern int open(byte[] pathname, int flags);
 }

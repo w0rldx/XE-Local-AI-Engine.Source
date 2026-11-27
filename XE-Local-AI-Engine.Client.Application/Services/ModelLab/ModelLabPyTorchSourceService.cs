@@ -433,10 +433,10 @@ public sealed partial class ModelLabPyTorchSourceService
             TrainingRunWorkspace.CreateOwnerOnlyDirectory(workDirectory);
             TrainingRunWorkspace.CreateOwnerOnlyDirectory(configDirectory);
             await File.WriteAllBytesAsync(Path.Combine(configDirectory, ConfigFileName), config, CancellationToken.None);
-            ModelLabScriptRunner.ScriptRun run;
+            ModelLabScriptRun run;
             try
             {
-                run = await _scripts.RunAsync(id, workDirectory, JsonSerializer.SerializeToUtf8Bytes(job, TrainingJson.Options), new ModelLabScriptRunner.ScriptCommand
+                run = await _scripts.RunAsync(id, workDirectory, JsonSerializer.SerializeToUtf8Bytes(job, TrainingJson.Options), new ModelLabScriptCommand
                 {
                     Interpreter = runtimeJob.Interpreter,
                     ScriptPath = runtimeJob.ScriptPath
@@ -491,7 +491,7 @@ public sealed partial class ModelLabPyTorchSourceService
         }
     }
 
-    private static ModelLabPyTorchOutcome? FailureOrNull(ModelLabScriptRunner.ScriptRun run, bool cancelRequested)
+    private static ModelLabPyTorchOutcome? FailureOrNull(ModelLabScriptRun run, bool cancelRequested)
     {
         if (cancelRequested || run.State.ScriptCancelled || run.ExitCode == TrainingRunExecutor.CancelledExitCode)
         {

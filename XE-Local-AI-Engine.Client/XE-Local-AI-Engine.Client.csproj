@@ -132,9 +132,10 @@
          TrainingRuntimeLayout.ResolveScriptsDirectory walks up to tools/training/ when the published copy is absent.
          Local tooling residue is excluded: every hidden (dot-prefixed) directory — a dev `uv sync` .venv, linter and
          pytest caches, editor or agent session state — and bytecode caches never ride along into the publish output
-         (a tester build shipped one such hidden state directory under training-scripts/). -->
+         (a tester build shipped one such hidden state directory under training-scripts/). The pytest modules
+         (test_*.py) are repository-only and stay out too; the packagers refuse a payload that carries one. -->
     <Content Include="$(MSBuildProjectDirectory)/../tools/training/**"
-             Exclude="$(MSBuildProjectDirectory)/../tools/training/**/.*/**;$(MSBuildProjectDirectory)/../tools/training/**/__pycache__/**"
+             Exclude="$(MSBuildProjectDirectory)/../tools/training/**/.*/**;$(MSBuildProjectDirectory)/../tools/training/**/__pycache__/**;$(MSBuildProjectDirectory)/../tools/training/**/test_*.py"
              Link="training-scripts/%(RecursiveDir)%(Filename)%(Extension)"
              CopyToPublishDirectory="PreserveNewest"
              CopyToOutputDirectory="Never"/>

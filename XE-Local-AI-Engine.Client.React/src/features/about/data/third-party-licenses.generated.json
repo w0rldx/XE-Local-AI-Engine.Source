@@ -82,49 +82,49 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@mantine/charts@9.7.4",
+			"id": "frontend:@mantine/charts@9.8.1",
 			"name": "@mantine/charts",
-			"version": "9.7.4",
+			"version": "9.8.1",
 			"license": "MIT",
 			"homepageUrl": "https://mantine.dev/",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@mantine/colors-generator@9.7.4",
+			"id": "frontend:@mantine/colors-generator@9.8.1",
 			"name": "@mantine/colors-generator",
-			"version": "9.7.4",
+			"version": "9.8.1",
 			"license": "MIT",
 			"homepageUrl": "https://mantine.dev",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@mantine/core@9.7.4",
+			"id": "frontend:@mantine/core@9.8.1",
 			"name": "@mantine/core",
-			"version": "9.7.4",
+			"version": "9.8.1",
 			"license": "MIT",
 			"homepageUrl": "https://mantine.dev/",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@mantine/hooks@9.7.4",
+			"id": "frontend:@mantine/hooks@9.8.1",
 			"name": "@mantine/hooks",
-			"version": "9.7.4",
+			"version": "9.8.1",
 			"license": "MIT",
 			"homepageUrl": "https://mantine.dev",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@mantine/notifications@9.7.4",
+			"id": "frontend:@mantine/notifications@9.8.1",
 			"name": "@mantine/notifications",
-			"version": "9.7.4",
+			"version": "9.8.1",
 			"license": "MIT",
 			"homepageUrl": "https://mantine.dev",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@mantine/store@9.7.4",
+			"id": "frontend:@mantine/store@9.8.1",
 			"name": "@mantine/store",
-			"version": "9.7.4",
+			"version": "9.8.1",
 			"license": "MIT",
 			"homepageUrl": "https://mantine.dev",
 			"source": "frontend"
@@ -146,17 +146,17 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@rrweb/types@2.2.0",
+			"id": "frontend:@rrweb/types@2.2.2",
 			"name": "@rrweb/types",
-			"version": "2.2.0",
+			"version": "2.2.2",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/rrweb-io/rrweb/tree/main/packages/@rrweb/types#readme",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@rrweb/utils@2.2.0",
+			"id": "frontend:@rrweb/utils@2.2.2",
 			"name": "@rrweb/utils",
-			"version": "2.2.0",
+			"version": "2.2.2",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/rrweb-io/rrweb/tree/main/packages/@rrweb/utils#readme",
 			"source": "frontend"
@@ -186,17 +186,17 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tabler/icons@3.49.0",
+			"id": "frontend:@tabler/icons@3.52.0",
 			"name": "@tabler/icons",
-			"version": "3.49.0",
+			"version": "3.52.0",
 			"license": "MIT",
 			"homepageUrl": "https://tabler.io/icons",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tabler/icons-react@3.49.0",
+			"id": "frontend:@tabler/icons-react@3.52.0",
 			"name": "@tabler/icons-react",
-			"version": "3.49.0",
+			"version": "3.52.0",
 			"license": "MIT",
 			"homepageUrl": "https://tabler.io/icons",
 			"source": "frontend"
@@ -210,17 +210,17 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/query-core@5.104.5",
+			"id": "frontend:@tanstack/query-core@5.108.0",
 			"name": "@tanstack/query-core",
-			"version": "5.104.5",
+			"version": "5.108.0",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/query",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/react-query@5.104.5",
+			"id": "frontend:@tanstack/react-query@5.108.0",
 			"name": "@tanstack/react-query",
-			"version": "5.104.5",
+			"version": "5.108.0",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/query",
 			"source": "frontend"
@@ -242,9 +242,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/react-virtual@3.14.22",
+			"id": "frontend:@tanstack/react-virtual@3.14.26",
 			"name": "@tanstack/react-virtual",
-			"version": "3.14.22",
+			"version": "3.14.26",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/virtual",
 			"source": "frontend"
@@ -266,9 +266,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/virtual-core@3.19.7",
+			"id": "frontend:@tanstack/virtual-core@3.19.11",
 			"name": "@tanstack/virtual-core",
-			"version": "3.19.7",
+			"version": "3.19.11",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/virtual",
 			"source": "frontend"
@@ -666,9 +666,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "frontend:axios@1.20.0",
+			"id": "frontend:axios@1.21.1",
 			"name": "axios",
-			"version": "1.20.0",
+			"version": "1.21.1",
 			"license": "MIT",
 			"homepageUrl": "https://axios-http.com",
 			"source": "frontend"
@@ -810,9 +810,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:commander@8.3.0",
+			"id": "frontend:commander@15.1.0",
 			"name": "commander",
-			"version": "8.3.0",
+			"version": "15.1.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/tj/commander.js#readme",
 			"source": "frontend"
@@ -1314,9 +1314,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:framer-motion@14.6.0",
+			"id": "frontend:framer-motion@14.14.0",
 			"name": "framer-motion",
-			"version": "14.6.0",
+			"version": "14.14.0",
 			"license": "MIT",
 			"source": "frontend"
 		},
@@ -1665,9 +1665,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:katex@0.16.47",
+			"id": "frontend:katex@0.18.10",
 			"name": "katex",
-			"version": "0.16.47",
+			"version": "0.18.10",
 			"license": "MIT",
 			"homepageUrl": "https://katex.org",
 			"source": "frontend"
@@ -2113,89 +2113,89 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.AspNetCore.Authentication.JwtBearer@10.0.14",
+			"id": "backend:Microsoft.AspNetCore.Authentication.JwtBearer@10.0.15",
 			"name": "Microsoft.AspNetCore.Authentication.JwtBearer",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.AspNetCore.Connections.Abstractions@10.0.14",
+			"id": "backend:Microsoft.AspNetCore.Connections.Abstractions@10.0.15",
 			"name": "Microsoft.AspNetCore.Connections.Abstractions",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.AspNetCore.Cryptography.Internal@10.0.14",
+			"id": "backend:Microsoft.AspNetCore.Cryptography.Internal@10.0.15",
 			"name": "Microsoft.AspNetCore.Cryptography.Internal",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.AspNetCore.Cryptography.KeyDerivation@10.0.14",
+			"id": "backend:Microsoft.AspNetCore.Cryptography.KeyDerivation@10.0.15",
 			"name": "Microsoft.AspNetCore.Cryptography.KeyDerivation",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.AspNetCore.Http.Connections.Client@10.0.14",
+			"id": "backend:Microsoft.AspNetCore.Http.Connections.Client@10.0.15",
 			"name": "Microsoft.AspNetCore.Http.Connections.Client",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.AspNetCore.Http.Connections.Common@10.0.14",
+			"id": "backend:Microsoft.AspNetCore.Http.Connections.Common@10.0.15",
 			"name": "Microsoft.AspNetCore.Http.Connections.Common",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.AspNetCore.Identity.EntityFrameworkCore@10.0.14",
+			"id": "backend:Microsoft.AspNetCore.Identity.EntityFrameworkCore@10.0.15",
 			"name": "Microsoft.AspNetCore.Identity.EntityFrameworkCore",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.AspNetCore.SignalR.Client@10.0.14",
+			"id": "backend:Microsoft.AspNetCore.SignalR.Client@10.0.15",
 			"name": "Microsoft.AspNetCore.SignalR.Client",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.AspNetCore.SignalR.Client.Core@10.0.14",
+			"id": "backend:Microsoft.AspNetCore.SignalR.Client.Core@10.0.15",
 			"name": "Microsoft.AspNetCore.SignalR.Client.Core",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.AspNetCore.SignalR.Common@10.0.14",
+			"id": "backend:Microsoft.AspNetCore.SignalR.Common@10.0.15",
 			"name": "Microsoft.AspNetCore.SignalR.Common",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.AspNetCore.SignalR.Protocols.Json@10.0.14",
+			"id": "backend:Microsoft.AspNetCore.SignalR.Protocols.Json@10.0.15",
 			"name": "Microsoft.AspNetCore.SignalR.Protocols.Json",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
 			"source": "backend"
@@ -2281,89 +2281,89 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Data.Sqlite.Core@10.0.14",
+			"id": "backend:Microsoft.Data.Sqlite.Core@10.0.15",
 			"name": "Microsoft.Data.Sqlite.Core",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://docs.microsoft.com/dotnet/standard/data/sqlite/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.EntityFrameworkCore@10.0.14",
+			"id": "backend:Microsoft.EntityFrameworkCore@10.0.15",
 			"name": "Microsoft.EntityFrameworkCore",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://docs.microsoft.com/ef/core/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.EntityFrameworkCore.Abstractions@10.0.14",
+			"id": "backend:Microsoft.EntityFrameworkCore.Abstractions@10.0.15",
 			"name": "Microsoft.EntityFrameworkCore.Abstractions",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://docs.microsoft.com/ef/core/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.EntityFrameworkCore.Analyzers@10.0.14",
+			"id": "backend:Microsoft.EntityFrameworkCore.Analyzers@10.0.15",
 			"name": "Microsoft.EntityFrameworkCore.Analyzers",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://docs.microsoft.com/ef/core/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.EntityFrameworkCore.Design@10.0.14",
+			"id": "backend:Microsoft.EntityFrameworkCore.Design@10.0.15",
 			"name": "Microsoft.EntityFrameworkCore.Design",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://docs.microsoft.com/ef/core/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.EntityFrameworkCore.Relational@10.0.14",
+			"id": "backend:Microsoft.EntityFrameworkCore.Relational@10.0.15",
 			"name": "Microsoft.EntityFrameworkCore.Relational",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://docs.microsoft.com/ef/core/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.EntityFrameworkCore.Sqlite@10.0.14",
+			"id": "backend:Microsoft.EntityFrameworkCore.Sqlite@10.0.15",
 			"name": "Microsoft.EntityFrameworkCore.Sqlite",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://docs.microsoft.com/ef/core/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.EntityFrameworkCore.Sqlite.Core@10.0.14",
+			"id": "backend:Microsoft.EntityFrameworkCore.Sqlite.Core@10.0.15",
 			"name": "Microsoft.EntityFrameworkCore.Sqlite.Core",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://docs.microsoft.com/ef/core/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.EntityFrameworkCore.Tools@10.0.14",
+			"id": "backend:Microsoft.EntityFrameworkCore.Tools@10.0.15",
 			"name": "Microsoft.EntityFrameworkCore.Tools",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://docs.microsoft.com/ef/core/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.AI@10.11.0",
+			"id": "backend:Microsoft.Extensions.AI@10.11.1",
 			"name": "Microsoft.Extensions.AI",
-			"version": "10.11.0",
+			"version": "10.11.1",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.AI.Abstractions@10.11.0",
+			"id": "backend:Microsoft.Extensions.AI.Abstractions@10.11.1",
 			"name": "Microsoft.Extensions.AI.Abstractions",
-			"version": "10.11.0",
+			"version": "10.11.1",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2377,17 +2377,17 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.AI.OpenAI@10.11.0",
+			"id": "backend:Microsoft.Extensions.AI.OpenAI@10.11.1",
 			"name": "Microsoft.Extensions.AI.OpenAI",
-			"version": "10.11.0",
+			"version": "10.11.1",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.AmbientMetadata.Application@10.11.0",
+			"id": "backend:Microsoft.Extensions.AmbientMetadata.Application@10.11.1",
 			"name": "Microsoft.Extensions.AmbientMetadata.Application",
-			"version": "10.11.0",
+			"version": "10.11.1",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2401,17 +2401,17 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Caching.Abstractions@10.0.14",
+			"id": "backend:Microsoft.Extensions.Caching.Abstractions@10.0.15",
 			"name": "Microsoft.Extensions.Caching.Abstractions",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Caching.Memory@10.0.14",
+			"id": "backend:Microsoft.Extensions.Caching.Memory@10.0.15",
 			"name": "Microsoft.Extensions.Caching.Memory",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2425,33 +2425,33 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Compliance.Abstractions@10.11.0",
+			"id": "backend:Microsoft.Extensions.Compliance.Abstractions@10.11.1",
 			"name": "Microsoft.Extensions.Compliance.Abstractions",
-			"version": "10.11.0",
+			"version": "10.11.1",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Configuration@10.0.14",
+			"id": "backend:Microsoft.Extensions.Configuration@10.0.15",
 			"name": "Microsoft.Extensions.Configuration",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Configuration.Abstractions@10.0.14",
+			"id": "backend:Microsoft.Extensions.Configuration.Abstractions@10.0.15",
 			"name": "Microsoft.Extensions.Configuration.Abstractions",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Configuration.Binder@10.0.14",
+			"id": "backend:Microsoft.Extensions.Configuration.Binder@10.0.15",
 			"name": "Microsoft.Extensions.Configuration.Binder",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2473,25 +2473,25 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.DependencyInjection@10.0.14",
+			"id": "backend:Microsoft.Extensions.DependencyInjection@10.0.15",
 			"name": "Microsoft.Extensions.DependencyInjection",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.DependencyInjection.Abstractions@10.0.14",
+			"id": "backend:Microsoft.Extensions.DependencyInjection.Abstractions@10.0.15",
 			"name": "Microsoft.Extensions.DependencyInjection.Abstractions",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.DependencyInjection.AutoActivation@10.11.0",
+			"id": "backend:Microsoft.Extensions.DependencyInjection.AutoActivation@10.11.1",
 			"name": "Microsoft.Extensions.DependencyInjection.AutoActivation",
-			"version": "10.11.0",
+			"version": "10.11.1",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2505,9 +2505,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.DependencyModel@10.0.14",
+			"id": "backend:Microsoft.Extensions.DependencyModel@10.0.15",
 			"name": "Microsoft.Extensions.DependencyModel",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2521,25 +2521,25 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Diagnostics@10.0.14",
+			"id": "backend:Microsoft.Extensions.Diagnostics@10.0.15",
 			"name": "Microsoft.Extensions.Diagnostics",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Diagnostics.Abstractions@10.0.14",
+			"id": "backend:Microsoft.Extensions.Diagnostics.Abstractions@10.0.15",
 			"name": "Microsoft.Extensions.Diagnostics.Abstractions",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Diagnostics.ExceptionSummarization@10.11.0",
+			"id": "backend:Microsoft.Extensions.Diagnostics.ExceptionSummarization@10.11.1",
 			"name": "Microsoft.Extensions.Diagnostics.ExceptionSummarization",
-			"version": "10.11.0",
+			"version": "10.11.1",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2569,17 +2569,17 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Features@10.0.14",
+			"id": "backend:Microsoft.Extensions.Features@10.0.15",
 			"name": "Microsoft.Extensions.Features",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.FileProviders.Abstractions@10.0.14",
+			"id": "backend:Microsoft.Extensions.FileProviders.Abstractions@10.0.15",
 			"name": "Microsoft.Extensions.FileProviders.Abstractions",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2593,9 +2593,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Hosting.Abstractions@10.0.14",
+			"id": "backend:Microsoft.Extensions.Hosting.Abstractions@10.0.15",
 			"name": "Microsoft.Extensions.Hosting.Abstractions",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2609,33 +2609,33 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Http.Diagnostics@10.11.0",
+			"id": "backend:Microsoft.Extensions.Http.Diagnostics@10.11.1",
 			"name": "Microsoft.Extensions.Http.Diagnostics",
-			"version": "10.11.0",
+			"version": "10.11.1",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Http.Resilience@10.11.0",
+			"id": "backend:Microsoft.Extensions.Http.Resilience@10.11.1",
 			"name": "Microsoft.Extensions.Http.Resilience",
-			"version": "10.11.0",
+			"version": "10.11.1",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Identity.Core@10.0.14",
+			"id": "backend:Microsoft.Extensions.Identity.Core@10.0.15",
 			"name": "Microsoft.Extensions.Identity.Core",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Identity.Stores@10.0.14",
+			"id": "backend:Microsoft.Extensions.Identity.Stores@10.0.15",
 			"name": "Microsoft.Extensions.Identity.Stores",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
 			"source": "backend"
@@ -2649,17 +2649,17 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Logging@10.0.14",
+			"id": "backend:Microsoft.Extensions.Logging@10.0.15",
 			"name": "Microsoft.Extensions.Logging",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Logging.Abstractions@10.0.14",
+			"id": "backend:Microsoft.Extensions.Logging.Abstractions@10.0.15",
 			"name": "Microsoft.Extensions.Logging.Abstractions",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2689,73 +2689,73 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Options@10.0.14",
+			"id": "backend:Microsoft.Extensions.Options@10.0.15",
 			"name": "Microsoft.Extensions.Options",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Options.ConfigurationExtensions@10.0.14",
+			"id": "backend:Microsoft.Extensions.Options.ConfigurationExtensions@10.0.15",
 			"name": "Microsoft.Extensions.Options.ConfigurationExtensions",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Options.DataAnnotations@10.0.14",
+			"id": "backend:Microsoft.Extensions.Options.DataAnnotations@10.0.15",
 			"name": "Microsoft.Extensions.Options.DataAnnotations",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Primitives@10.0.14",
+			"id": "backend:Microsoft.Extensions.Primitives@10.0.15",
 			"name": "Microsoft.Extensions.Primitives",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Resilience@10.11.0",
+			"id": "backend:Microsoft.Extensions.Resilience@10.11.1",
 			"name": "Microsoft.Extensions.Resilience",
-			"version": "10.11.0",
+			"version": "10.11.1",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.ServiceDiscovery@10.11.0",
+			"id": "backend:Microsoft.Extensions.ServiceDiscovery@10.11.1",
 			"name": "Microsoft.Extensions.ServiceDiscovery",
-			"version": "10.11.0",
+			"version": "10.11.1",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.ServiceDiscovery.Abstractions@10.11.0",
+			"id": "backend:Microsoft.Extensions.ServiceDiscovery.Abstractions@10.11.1",
 			"name": "Microsoft.Extensions.ServiceDiscovery.Abstractions",
-			"version": "10.11.0",
+			"version": "10.11.1",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Telemetry@10.11.0",
+			"id": "backend:Microsoft.Extensions.Telemetry@10.11.1",
 			"name": "Microsoft.Extensions.Telemetry",
-			"version": "10.11.0",
+			"version": "10.11.1",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Telemetry.Abstractions@10.11.0",
+			"id": "backend:Microsoft.Extensions.Telemetry.Abstractions@10.11.1",
 			"name": "Microsoft.Extensions.Telemetry.Abstractions",
-			"version": "10.11.0",
+			"version": "10.11.1",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2921,17 +2921,17 @@
 			"source": "backend"
 		},
 		{
-			"id": "frontend:motion-dom@14.6.0",
+			"id": "frontend:motion-dom@14.14.0",
 			"name": "motion-dom",
-			"version": "14.6.0",
+			"version": "14.14.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/motiondivision/motion#readme",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:motion-utils@14.6.0",
+			"id": "frontend:motion-utils@14.7.0",
 			"name": "motion-utils",
-			"version": "14.6.0",
+			"version": "14.7.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/motiondivision/motion#readme",
 			"source": "frontend"
@@ -3225,9 +3225,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "frontend:postcss@8.5.31",
+			"id": "frontend:postcss@8.5.33",
 			"name": "postcss",
-			"version": "8.5.31",
+			"version": "8.5.33",
 			"license": "MIT",
 			"homepageUrl": "https://postcss.org/",
 			"source": "frontend"
@@ -3425,9 +3425,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:recharts@3.10.1",
+			"id": "frontend:recharts@3.11.0",
 			"name": "recharts",
-			"version": "3.10.1",
+			"version": "3.11.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/recharts/recharts",
 			"source": "frontend"
@@ -3529,9 +3529,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:rrdom@2.2.0",
+			"id": "frontend:rrdom@2.2.2",
 			"name": "rrdom",
-			"version": "2.2.0",
+			"version": "2.2.2",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/rrweb-io/rrweb/tree/main/packages/rrdom#readme",
 			"source": "frontend"
@@ -3545,9 +3545,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:rrweb-snapshot@2.2.0",
+			"id": "frontend:rrweb-snapshot@2.2.2",
 			"name": "rrweb-snapshot",
-			"version": "2.2.0",
+			"version": "2.2.2",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/rrweb-io/rrweb/tree/main/packages/rrweb-snapshot#readme",
 			"source": "frontend"
@@ -3969,17 +3969,17 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:System.Numerics.Tensors@10.0.14",
+			"id": "backend:System.Numerics.Tensors@10.0.15",
 			"name": "System.Numerics.Tensors",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:System.Security.Cryptography.ProtectedData@10.0.14",
+			"id": "backend:System.Security.Cryptography.ProtectedData@10.0.15",
 			"name": "System.Security.Cryptography.ProtectedData",
-			"version": "10.0.14",
+			"version": "10.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -4009,9 +4009,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:three@0.186.1",
+			"id": "frontend:three@0.187.0",
 			"name": "three",
-			"version": "0.186.1",
+			"version": "0.187.0",
 			"license": "MIT",
 			"homepageUrl": "https://threejs.org/",
 			"source": "frontend"
@@ -4296,9 +4296,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:zustand@5.0.16",
+			"id": "frontend:zustand@5.1.0",
 			"name": "zustand",
-			"version": "5.0.16",
+			"version": "5.1.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/pmndrs/zustand",
 			"source": "frontend"

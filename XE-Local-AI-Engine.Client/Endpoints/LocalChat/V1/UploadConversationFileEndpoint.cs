@@ -5,7 +5,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
+using XE_Local_AI_Engine.Client.Services.DocumentIngestion.Implementation;
 using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 
 /// <summary>
@@ -13,16 +13,16 @@ using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 /// </summary>
 /// <remarks>
 ///     Enforces the size cap and extension allowlist and sanitizes the client file name to a leaf, so no client string
-///     forms a path, then hands the file to <see cref="IConversationUploadIngestor" />, which runs the gated
+///     forms a path, then hands the file to <see cref="ConversationUploadIngestor" />, which runs the gated
 ///     extract-and-persist phase. The storage path is server-generated; the original name is kept only as encrypted
 ///     display metadata.
 /// </remarks>
 public sealed class UploadConversationFileEndpoint : Endpoint<UploadConversationFileRequest, ConversationUploadedFileResponse>
 {
-    private readonly IConversationUploadIngestor _ingestor;
+    private readonly ConversationUploadIngestor _ingestor;
     private readonly long _maxUploadBytes;
 
-    public UploadConversationFileEndpoint(IConversationUploadIngestor ingestor, IOptions<SecurityOptions> securityOptions)
+    public UploadConversationFileEndpoint(ConversationUploadIngestor ingestor, IOptions<SecurityOptions> securityOptions)
     {
         ArgumentNullException.ThrowIfNull(ingestor);
         _ingestor = ingestor;

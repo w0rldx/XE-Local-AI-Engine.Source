@@ -7,30 +7,12 @@ using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 using XE_Local_AI_Engine.Client.Services.Training.Evaluation;
 using XE_Local_AI_Engine.Client.Services.Training.Export;
 
-public interface IComparisonReportService
-{
-    Task<TrainingComparisonRecord> CreateAsync(CreateComparisonCommand command, CancellationToken cancellationToken = default);
-
-    Task<IReadOnlyList<TrainingComparisonRecord>> ListAsync(CancellationToken cancellationToken = default);
-
-    /// <exception cref="TrainingNotFoundException">No comparison carries <paramref name="comparisonId" />.</exception>
-    Task<TrainingComparisonRecord> GetAsync(Guid comparisonId, CancellationToken cancellationToken = default);
-
-    Task DeleteAsync(Guid comparisonId, long expectedVersion, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    ///     What a create dialog should pre-fill for one training run: the two model names its lineage implies, and the
-    ///     evaluations that already exist for them.
-    /// </summary>
-    Task<ComparisonSuggestion> SuggestAsync(Guid trainingRunId, CancellationToken cancellationToken = default);
-}
-
 /// <summary>
 ///     Builds and reads comparison reports. The deltas are computed once at creation and stored, but
 ///     <see cref="ComputeDeltas" /> stays a pure function of the two evaluation records so the same numbers can be
 ///     recomputed from storage and checked against what was stored.
 /// </summary>
-public sealed class ComparisonReportService : IComparisonReportService
+public sealed class ComparisonReportService
 {
     private readonly IBenchmarkRunStore _benchmarks;
     private readonly ITrainingEvaluationStore _evaluations;
@@ -85,6 +67,7 @@ public sealed class ComparisonReportService : IComparisonReportService
     public Task<IReadOnlyList<TrainingComparisonRecord>> ListAsync(CancellationToken cancellationToken = default) =>
         _evaluations.ListComparisonsAsync(cancellationToken);
 
+    /// <exception cref="TrainingNotFoundException">No comparison carries <paramref name="comparisonId" />.</exception>
     public async Task<TrainingComparisonRecord> GetAsync(Guid comparisonId, CancellationToken cancellationToken = default) =>
         await _evaluations.GetComparisonAsync(comparisonId, cancellationToken) ?? throw new TrainingNotFoundException("The comparison report was not found.");
 
@@ -118,6 +101,10 @@ public sealed class ComparisonReportService : IComparisonReportService
         await _evaluations.DeleteComparisonAsync(comparisonId, expectedVersion, cancellationToken);
     }
 
+    /// <summary>
+    ///     What a create dialog should pre-fill for one training run: the two model names its lineage implies, and the
+    ///     evaluations that already exist for them.
+    /// </summary>
     public async Task<ComparisonSuggestion> SuggestAsync(Guid trainingRunId, CancellationToken cancellationToken = default)
     {
         var run = await _runs.GetAsync(trainingRunId, cancellationToken)

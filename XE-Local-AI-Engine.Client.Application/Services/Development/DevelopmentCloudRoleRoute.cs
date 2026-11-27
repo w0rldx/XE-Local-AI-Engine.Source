@@ -19,9 +19,9 @@ public sealed class DevelopmentCloudRoleRoute
 /// </summary>
 public sealed class DevelopmentCloudRoleRouteFactory
 {
-    private readonly IDevelopmentCloudContextCatalog _contextCatalog;
+    private readonly DevelopmentCloudContextCatalog _contextCatalog;
 
-    public DevelopmentCloudRoleRouteFactory(IDevelopmentCloudContextCatalog contextCatalog)
+    public DevelopmentCloudRoleRouteFactory(DevelopmentCloudContextCatalog contextCatalog)
     {
         ArgumentNullException.ThrowIfNull(contextCatalog);
         _contextCatalog = contextCatalog;

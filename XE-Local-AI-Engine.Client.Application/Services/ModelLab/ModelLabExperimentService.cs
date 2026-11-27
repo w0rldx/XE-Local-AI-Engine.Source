@@ -47,8 +47,6 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
     private const string RandomVectorFileName = "random.gguf";
     private const string JobFileName = "job.json";
 
-    internal const string RuntimeChangingMessage = "The Python training runtime is being installed or removed. Wait for it to finish, then start the experiment again.";
-
     private const string StoppingMessage = "The node is stopping. Start the experiment again once it is back.";
 
     private const string CheckpointNotFoundMessage = "The checkpoint was not found. Download it first.";
@@ -127,8 +125,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         ArgumentNullException.ThrowIfNull(supervisor);
         ArgumentNullException.ThrowIfNull(timeProvider);
         _arms = arms;
-        _blobs = new ManagedEncryptedBlobStore(dataDirectory, keyHolder, "model-lab", "artifacts", "model_lab_artifact_blob",
-            Math.Max(ModelLabTraceSpec.MaxTraceByteCap, ModelLabTraceSpec.MaxAttentionByteCap), "Model Lab artifact");
+        _blobs = ModelLabExperimentReader.NewBlobStore(dataDirectory, keyHolder);
         _broker = broker;
         _dataDirectory = dataDirectory;
         _events = events;
@@ -302,7 +299,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         if (phase is TrainingRuntimePhase.AcquiringUv or TrainingRuntimePhase.ProvisioningPython or TrainingRuntimePhase.InstallingPackages
             or TrainingRuntimePhase.Verifying or TrainingRuntimePhase.Removing)
         {
-            return Refuse(ModelLabStartRefusal.RuntimeUnavailable, RuntimeChangingMessage);
+            return Refuse(ModelLabStartRefusal.RuntimeUnavailable, ModelLabRuntimeJob.RuntimeChangingMessage);
         }
 
         if (_runtime.ResolveInterpreterPath() is not { } interpreter
@@ -387,24 +384,6 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         }
     }
 
-    public async Task<IReadOnlyList<ModelLabExperimentRecord>> ListAsync(CancellationToken ct)
-    {
-        await using var scope = _scopeFactory.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<IModelLabExperimentStore>().ListAsync(ct);
-    }
-
-    public async Task<ModelLabExperimentRecord?> GetAsync(Guid id, CancellationToken ct)
-    {
-        await using var scope = _scopeFactory.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<IModelLabExperimentStore>().GetAsync(id, ct);
-    }
-
-    public async Task<bool> ExistsAsync(Guid id, CancellationToken ct)
-    {
-        await using var scope = _scopeFactory.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<IModelLabExperimentStore>().ExistsAsync(id, ct);
-    }
-
     public async Task<ModelLabExperimentDeleteOutcome> DeleteAsync(Guid id, CancellationToken ct)
     {
         // The live job is the rule, not the row's status: a failed completion leaves a Running row with no job behind it.
@@ -424,136 +403,6 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         }
 
         return outcome;
-    }
-
-    public async Task<ModelLabExperimentUpdateOutcome> SetNotesAsync(Guid id, string? notes, CancellationToken ct)
-    {
-        await using var scope = _scopeFactory.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<IModelLabExperimentStore>().SetNotesAsync(id, notes, ct);
-    }
-
-    public async Task<ModelLabExperimentUpdateOutcome> SetPinnedAsync(Guid id, bool pinned, CancellationToken ct)
-    {
-        await using var scope = _scopeFactory.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<IModelLabExperimentStore>().SetPinnedAsync(id, pinned, MaxPinnedExperiments, ct);
-    }
-
-    public async Task<ModelLabTrace> ReadTraceAsync(Guid id, CancellationToken ct)
-    {
-        var record = await GetAsync(id, ct);
-        // A steering row's blob is its vector, which has no route out of this node.
-        if (record is not { Kind: ModelLabExperimentKind.Trace, TraceBlobId: { } blobId, TraceSha256: { } hash, TraceByteCount: { } bytes })
-        {
-            return new ModelLabTrace
-            {
-                Status = ModelLabTraceReadStatus.NotFound
-            };
-        }
-
-        var read = await _blobs.ReadAsync(id, blobId, hash, bytes, ct);
-        return read.Status == ManagedBlobReadStatus.Found
-            ? ModelLabTraceSpec.ParseTrace(read.Content)
-            : new ModelLabTrace
-            {
-                Status = ModelLabTraceReadStatus.Unavailable
-            };
-    }
-
-    /// <summary>One captured block's rows. Not found for a steering row, a trace that recorded no attention, or a block it did not capture.</summary>
-    public async Task<ModelLabAttention> ReadAttentionAsync(Guid id, int layer, CancellationToken ct)
-    {
-        var record = await GetAsync(id, ct);
-        if (record is not { Kind: ModelLabExperimentKind.Trace, AttentionBlobId: { } blobId, AttentionSha256: { } hash, AttentionByteCount: { } bytes })
-        {
-            return new ModelLabAttention
-            {
-                Status = ModelLabTraceReadStatus.NotFound
-            };
-        }
-
-        // The blob's shape is the result's: without a readable summary its rows cannot be decoded.
-        if ((record.ResultJson is { } json ? ModelLabTraceSpec.ReadResultOrNull(json)?.Attention : null) is not { Heads: > 0, WeightScale: > 0 } summary)
-        {
-            return new ModelLabAttention
-            {
-                Status = ModelLabTraceReadStatus.Unavailable
-            };
-        }
-
-        if (!summary.Layers.Contains(layer))
-        {
-            return new ModelLabAttention
-            {
-                Status = ModelLabTraceReadStatus.NotFound
-            };
-        }
-
-        var read = await _blobs.ReadAsync(id, blobId, hash, bytes, ct);
-        var attention = read.Status == ManagedBlobReadStatus.Found
-            ? ModelLabTraceSpec.ParseAttention(read.Content, summary.Heads)
-            : new ModelLabAttention
-            {
-                Status = ModelLabTraceReadStatus.Unavailable
-            };
-        return attention.Status == ModelLabTraceReadStatus.Found
-            ? attention with
-            {
-                Summary = summary,
-                Records = [.. attention.Records.Where(row => row.Layer == layer)]
-            }
-            : attention;
-    }
-
-    /// <summary>The trace's logit lens. Not found for a steering row or a trace that recorded none: one saved before contract 5, or of a checkpoint too deep for it.</summary>
-    public Task<ModelLabLens> ReadLensAsync(Guid id, CancellationToken ct) =>
-        ReadTraceSectionAsync(id,
-            static result => result.Lens,
-            static (content, summary, result) => ModelLabTraceSpec.ParseLens(content, summary, result.Tokens.Count),
-            static status => new ModelLabLens
-            {
-                Status = status
-            },
-            ct);
-
-    /// <summary>The trace's router choices. Not found for a steering row or a trace that recorded none: one saved before contract 8, or of a model with no router.</summary>
-    public Task<ModelLabRouting> ReadRoutingAsync(Guid id, CancellationToken ct) =>
-        ReadTraceSectionAsync(id,
-            static result => result.Routing,
-            static (content, summary, result) => ModelLabTraceSpec.ParseRouting(content, summary, result.BlockCount, result.Tokens.Count),
-            static status => new ModelLabRouting
-            {
-                Status = status
-            },
-            ct);
-
-    /// <summary>A section of the trace blob named by <paramref name="summaryOf" />: not found when the run recorded none, unavailable when it cannot be read back.</summary>
-    private async Task<T> ReadTraceSectionAsync<TSummary, T>(Guid id,
-        Func<ModelLabTraceResult, TSummary?> summaryOf,
-        Func<ReadOnlyMemory<byte>, TSummary, ModelLabTraceResult, T> parse,
-        Func<ModelLabTraceReadStatus, T> withStatus,
-        CancellationToken ct)
-        where TSummary : class
-    {
-        var record = await GetAsync(id, ct);
-        if (record is not { Kind: ModelLabExperimentKind.Trace, TraceBlobId: { } blobId, TraceSha256: { } hash, TraceByteCount: { } bytes })
-        {
-            return withStatus(ModelLabTraceReadStatus.NotFound);
-        }
-
-        // The lines are checked against the run's own summary and token count, so without a readable result they cannot be;
-        // a stored "tokens": null deserializes, and is no count either.
-        if ((record.ResultJson is { } json ? ModelLabTraceSpec.ReadResultOrNull(json) : null) is not { Tokens: not null } result)
-        {
-            return withStatus(ModelLabTraceReadStatus.Unavailable);
-        }
-
-        if (summaryOf(result) is not { } summary)
-        {
-            return withStatus(ModelLabTraceReadStatus.NotFound);
-        }
-
-        var read = await _blobs.ReadAsync(id, blobId, hash, bytes, ct);
-        return read.Status == ManagedBlobReadStatus.Found ? parse(read.Content, summary, result) : withStatus(ModelLabTraceReadStatus.Unavailable);
     }
 
     public Task StartAsync(CancellationToken cancellationToken) =>
@@ -819,7 +668,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
             // so between the two reads exactly one of them proceeds. A warm session has held the lease throughout.
             if (_runtime.GetStatus().Phase != TrainingRuntimePhase.Ready)
             {
-                return Refuse(ModelLabStartRefusal.RuntimeUnavailable, RuntimeChangingMessage);
+                return Refuse(ModelLabStartRefusal.RuntimeUnavailable, ModelLabRuntimeJob.RuntimeChangingMessage);
             }
 
             if (!warm)
@@ -841,7 +690,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
                 admitted = true;
             }
 
-            var license = services.GetRequiredService<ILicenseGateService>();
+            var license = services.GetRequiredService<LicenseGateService>();
             await CreateRowAsync(services, id, request, artifact, license, ct);
             lock (_jobLock)
             {
@@ -849,7 +698,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
             }
 
             var checkpoint = BaseArtifactManifest.ResolveDirectory(_dataDirectory, artifact.Id);
-            var script = new ModelLabScriptRunner.ScriptCommand
+            var script = new ModelLabScriptCommand
             {
                 Interpreter = interpreter,
                 ScriptPath = scriptPath
@@ -956,7 +805,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         Guid id,
         ModelLabExperimentRequest request,
         BaseArtifactView artifact,
-        ILicenseGateService license,
+        LicenseGateService license,
         CancellationToken ct)
     {
         var view = await license.GetAsync(artifact.Id, ct) ?? throw new TrainingNotFoundException("The base artifact was not found.");
@@ -1114,7 +963,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         return active.Session.ExitActive(active.WorkerReusable, idleFor);
     }
 
-    private async Task<ModelLabExperimentCompletion> ExecuteTraceAsync(ActiveJob active, ModelLabTraceJobV1 job, ModelLabScriptRunner.ScriptCommand script)
+    private async Task<ModelLabExperimentCompletion> ExecuteTraceAsync(ActiveJob active, ModelLabTraceJobV1 job, ModelLabScriptCommand script)
     {
         if (active.Cancellation.IsCancellationRequested)
         {
@@ -1129,7 +978,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         ModelLabExperimentRequest request,
         string checkpoint,
         int layer,
-        ModelLabScriptRunner.ScriptCommand script)
+        ModelLabScriptCommand script)
     {
         if (active.Cancellation.IsCancellationRequested)
         {
@@ -1188,7 +1037,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
     private async Task<ModelLabExperimentCompletion> DeriveAndRunArmsAsync(ActiveJob active,
         ModelLabExperimentRequest request,
         ModelLabSteeringJobV1 job,
-        ModelLabScriptRunner.ScriptCommand script,
+        ModelLabScriptCommand script,
         string modelFilePath)
     {
         var id = active.ExperimentId;
@@ -1334,7 +1183,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
     }
 
     /// <summary>Runs the job in the session's worker, spawning it first on a cold start. The row holds the receipt only while the job runs.</summary>
-    private async Task<ModelLabScriptRunner.ScriptRun> RunServeJobAsync(ActiveJob active, byte[] jobJson, ModelLabScriptRunner.ScriptCommand script)
+    private async Task<ModelLabScriptRun> RunServeJobAsync(ActiveJob active, byte[] jobJson, ModelLabScriptCommand script)
     {
         var id = active.ExperimentId;
         var workDirectory = WorkDirectory(id);
@@ -1363,9 +1212,9 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
                 // No warmth without a durable identity: the session evicts a worker it could not record.
                 _logger.LogError(exception, "The Model Lab worker's receipt could not be written for experiment {ExperimentId}.", id);
                 worker.Kill();
-                return new ModelLabScriptRunner.ScriptRun
+                return new ModelLabScriptRun
                 {
-                    State = new ModelLabScriptRunner.StreamState(),
+                    State = new ModelLabScriptStreamState(),
                     FailureReason = "The Model Lab worker's identity could not be recorded on disk, so it was stopped.",
                     ExitCode = -1
                 };

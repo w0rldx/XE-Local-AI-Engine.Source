@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import fnmatch
 import json
+import re
 import unittest
 from ast import literal_eval
 from pathlib import Path
@@ -11,6 +12,7 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEPENDABOT = REPO_ROOT / ".github" / "dependabot.yml"
 PACKAGE_MANIFEST = REPO_ROOT / "XE-Local-AI-Engine.Client.React" / "package.json"
+PACKAGES_PROPS = REPO_ROOT / "Directory.Packages.props"
 PNPM_WORKSPACE = REPO_ROOT / "XE-Local-AI-Engine.Client.React" / "pnpm-workspace.yaml"
 TRAINING_MANIFEST = REPO_ROOT / "tools" / "training" / "pyproject.toml"
 
@@ -228,6 +230,22 @@ class DependabotGroupContractTests(unittest.TestCase):
         for dependency in CODEGEN_DEPENDENCIES:
             self.assertTrue(matches(codegen, dependency, "development"))
             self.assertFalse(matches(catch_all, dependency, "development"))
+
+    def test_framework_system_packages_skip_majors_but_system_commandline_does_not(self) -> None:
+        nuget = [u for u in load_yaml(DEPENDABOT)["updates"] if u.get("package-ecosystem") == "nuget"]
+        self.assertEqual(1, len(nuget))
+        majors = [
+            entry["dependency-name"]
+            for entry in nuget[0]["ignore"]
+            # The minimal YAML reader keeps a flow sequence as its source text.
+            if entry.get("update-types") == '["version-update:semver-major"]'
+        ]
+        packages = re.findall(r'<PackageVersion Include="(System\.[^"]+)"', PACKAGES_PROPS.read_text(encoding="utf-8"))
+        self.assertIn("System.CommandLine", packages)
+        for package in packages:
+            with self.subTest(package=package):
+                ignored = any(fnmatch.fnmatchcase(package, pattern) for pattern in majors)
+                self.assertEqual(package != "System.CommandLine", ignored)
 
     def test_production_updates_are_separated_from_development_updates(self) -> None:
         runtime = self.groups["frontend-runtime"]

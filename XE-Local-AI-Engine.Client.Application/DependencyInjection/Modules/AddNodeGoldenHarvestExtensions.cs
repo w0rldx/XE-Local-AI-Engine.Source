@@ -21,7 +21,7 @@ internal static class AddNodeGoldenHarvestExtensions
                .Bind(builder.Configuration.GetSection(GoldenHarvestOptions.Section));
         // Golden harvest orchestration deterministically scans thumbs-up sources, dedups against already-harvested messages and
         // stages each fresh candidate inert through the golden CRUD service (same validation, caps, encryption). Scoped like those.
-        builder.Services.AddScoped<IGoldenHarvestService, GoldenHarvestService>();
+        builder.Services.AddScoped<GoldenHarvestService>();
 
         return builder;
     }

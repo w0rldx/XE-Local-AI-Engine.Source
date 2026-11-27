@@ -6,7 +6,7 @@ namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Auth;
 /// </summary>
 /// <remarks>
 ///     The token exchange completes in the background once the browser redirects back to the loopback listener;
-///     observe it via <see cref="IEntraAuthCodeSignInCoordinator.GetStatus" />.
+///     observe it via <see cref="EntraAuthCodeSignInCoordinator.Status" />.
 /// </remarks>
 public sealed class EntraAuthCodeSignInHandle
 {

@@ -3,13 +3,14 @@
 // The Record attention switch against a stubbed preflight (MSW): it follows the node's verdict on the checkpoint, and says
 // why when it is off.
 
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen } from "@testing-library/react";
 import i18next from "i18next";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 
 import { TraceCheckpointForm } from "@/features/modelLab/components/TraceCheckpointForm";
 import { loadModelLabStrings } from "@/features/modelLab/models/ModelLabStrings";
+import { chooseOption } from "@/test/ChooseOption";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
@@ -60,19 +61,6 @@ const preflight = {
 	refusal: null,
 	refusalMessage: null,
 };
-
-async function chooseOption(label: RegExp, option: string): Promise<void> {
-	const select = await screen.findByRole("combobox", { name: label });
-	fireEvent.click(select);
-	const listbox = await waitFor(() => {
-		const element = document.getElementById(select.getAttribute("aria-controls") ?? "");
-		if (element === null) {
-			throw new Error("the dropdown is not open yet");
-		}
-		return element;
-	});
-	fireEvent.click(await within(listbox).findByRole("option", { name: option, hidden: true }));
-}
 
 async function recordAttentionAfterCheck(checked: Record<string, unknown>): Promise<HTMLInputElement> {
 	server.use(

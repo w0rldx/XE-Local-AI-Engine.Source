@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { evaluateKnipBaseline } from "./CheckKnipBaseline.mjs";
+import { evaluateKnipBaseline, staleKnipBaselineEntries } from "./CheckKnipBaseline.mjs";
 
 test("allows paid-down Knip debt and rejects same-count replacement debt", () => {
 	const report = {
@@ -26,4 +26,11 @@ test("allows paid-down Knip debt and rejects same-count replacement debt", () =>
 			JSON.stringify(["src/b.ts", "exports", "three"]),
 		].sort(),
 	});
+});
+
+test("reports shrink-only baseline entries the report no longer carries", () => {
+	const kept = JSON.stringify(["src/a.ts", "exports", "one"]);
+	const paid = JSON.stringify(["src/a.ts", "exports", "gone"]);
+	assert.deepEqual(staleKnipBaselineEntries([kept], [paid, kept]), [paid]);
+	assert.deepEqual(staleKnipBaselineEntries([kept], [kept]), []);
 });

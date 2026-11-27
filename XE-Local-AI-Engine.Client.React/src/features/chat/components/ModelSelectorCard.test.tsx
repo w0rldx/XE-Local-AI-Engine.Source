@@ -1,22 +1,12 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ModelOption } from "@/core/models/ModelOption";
 import { localDefaultModelValue } from "@/core/models/NodeChatModelSelection";
 import { ModelSelectorCard } from "@/features/chat/components/ModelSelectorCard";
-import { testMantineTheme } from "@/test/MantineTestRender";
-
-function renderWithProviders(ui: ReactElement) {
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			{ui}
-		</MantineProvider>,
-	);
-}
+import { renderWithMantine } from "@/test/MantineTestRender";
 
 function localDefaultOption(): ModelOption {
 	return {
@@ -64,7 +54,7 @@ describe("ModelSelectorCard", () => {
 	it("surfaces the no-chat-models hint when only the local default is offered (all chat models filtered out)", async () => {
 		// The strict picker filter drops embedding and unknown-kind models, so a node with none leaves only the
 		// local-default option. The dropdown must explain that, not just show a bare list.
-		renderWithProviders(
+		renderWithMantine(
 			<ModelSelectorCard modelOptions={[localDefaultOption()]} selectedModel={localDefaultModelValue} onModelChange={vi.fn()} />,
 		);
 
@@ -75,7 +65,7 @@ describe("ModelSelectorCard", () => {
 	});
 
 	it("does not show the no-chat-models hint when a chat model is available", async () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ModelSelectorCard
 				modelOptions={[localDefaultOption(), chatOption("llama3:8b")]}
 				selectedModel={localDefaultModelValue}
@@ -91,7 +81,7 @@ describe("ModelSelectorCard", () => {
 	});
 
 	it("does not render the cloud group when cloudModelOptions is absent", async () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ModelSelectorCard modelOptions={[localDefaultOption()]} selectedModel={localDefaultModelValue} onModelChange={vi.fn()} />,
 		);
 
@@ -102,7 +92,7 @@ describe("ModelSelectorCard", () => {
 	});
 
 	it("does not render the cloud group when cloudModelOptions is an empty array", async () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ModelSelectorCard
 				modelOptions={[localDefaultOption()]}
 				cloudModelOptions={[]}
@@ -125,7 +115,7 @@ describe("ModelSelectorCard", () => {
 			isCloud: true,
 		};
 
-		renderWithProviders(
+		renderWithMantine(
 			<ModelSelectorCard
 				modelOptions={[localDefaultOption()]}
 				cloudModelOptions={[cloudOption]}
@@ -159,7 +149,7 @@ describe("ModelSelectorCard", () => {
 			provider: "AzureFoundry",
 		};
 
-		renderWithProviders(
+		renderWithMantine(
 			<ModelSelectorCard
 				modelOptions={[localDefaultOption()]}
 				cloudModelOptions={[codexOption, azureOption]}
@@ -188,7 +178,7 @@ describe("ModelSelectorCard", () => {
 			isCloud: true,
 		};
 
-		renderWithProviders(
+		renderWithMantine(
 			<ModelSelectorCard
 				modelOptions={[localDefaultOption()]}
 				cloudModelOptions={[cloudOption]}
@@ -207,7 +197,7 @@ describe("ModelSelectorCard", () => {
 
 	// The search box appears only past the threshold, and its placeholder was its only naming.
 	it("names the search box for assistive technology", async () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ModelSelectorCard
 				modelOptions={[
 					localDefaultOption(),

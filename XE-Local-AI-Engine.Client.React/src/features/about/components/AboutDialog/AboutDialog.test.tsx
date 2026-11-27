@@ -2,10 +2,8 @@
 
 import "@/i18n";
 
-import { MantineProvider } from "@mantine/core";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import type { ReactElement, ReactNode } from "react";
+import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Stub out the app-update section so the existing tests are not affected by the
@@ -17,26 +15,15 @@ vi.mock("@/features/app-update/components/AppUpdateSection", () => ({
 import { AboutDialog } from "@/features/about/components/AboutDialog/AboutDialog";
 import { OnboardingContext, type OnboardingContextValue } from "@/core/onboarding/context/OnboardingContext";
 import { applicationInfo, runtimeLegalDocumentsForUserAgent } from "@/features/about/data/AboutData";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { createProvidersWrapper } from "@/test/RenderWithProviders";
 
-function renderWithProviders(ui: ReactElement) {
-	const queryClient = new QueryClient({
-		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-	});
-	function Wrapper({ children }: { children: ReactNode }) {
-		return (
-			<QueryClientProvider client={queryClient}>
-				<MantineProvider env="test" theme={testMantineTheme}>
-					{children}
-				</MantineProvider>
-			</QueryClientProvider>
-		);
-	}
-	return render(ui, { wrapper: Wrapper });
+// A `wrapper`, not a wrapped element, so `rerender` keeps the providers.
+function renderKeepingProviders(ui: ReactElement) {
+	return render(ui, { wrapper: createProvidersWrapper().wrapper });
 }
 
 function renderWithOnboarding(ui: ReactElement, onboarding: OnboardingContextValue) {
-	return renderWithProviders(<OnboardingContext.Provider value={onboarding}>{ui}</OnboardingContext.Provider>);
+	return renderKeepingProviders(<OnboardingContext.Provider value={onboarding}>{ui}</OnboardingContext.Provider>);
 }
 
 function createOnboardingContext(): OnboardingContextValue {
@@ -86,7 +73,7 @@ describe("AboutDialog", () => {
 	});
 
 	it("shows application info on the Application tab", () => {
-		renderWithProviders(<AboutDialog opened={true} onClose={vi.fn()} />);
+		renderKeepingProviders(<AboutDialog opened={true} onClose={vi.fn()} />);
 
 		const dialog = screen.getByRole("dialog");
 		// Version is injected at build time from Directory.Build.props, so assert against the live source rather than a
@@ -96,7 +83,7 @@ describe("AboutDialog", () => {
 	});
 
 	it("keeps the update lifecycle mounted while the dialog is hidden", () => {
-		const { rerender } = renderWithProviders(<AboutDialog opened={true} onClose={vi.fn()} />);
+		const { rerender } = renderKeepingProviders(<AboutDialog opened={true} onClose={vi.fn()} />);
 		expect(screen.getByTestId("app-update-lifecycle")).toBeTruthy();
 
 		rerender(<AboutDialog opened={false} onClose={vi.fn()} />);
@@ -105,7 +92,7 @@ describe("AboutDialog", () => {
 	});
 
 	it("renders generated frontend and backend packages with a source type", () => {
-		renderWithProviders(<AboutDialog opened={true} onClose={vi.fn()} />);
+		renderKeepingProviders(<AboutDialog opened={true} onClose={vi.fn()} />);
 
 		fireEvent.click(screen.getByRole("tab", { name: "Licenses" }));
 
@@ -118,7 +105,7 @@ describe("AboutDialog", () => {
 	});
 
 	it("shows exactly the three optional tutorials in a dedicated tab", () => {
-		renderWithProviders(<AboutDialog opened={true} onClose={vi.fn()} />);
+		renderKeepingProviders(<AboutDialog opened={true} onClose={vi.fn()} />);
 		fireEvent.click(screen.getByRole("tab", { name: "Tutorials" }));
 		expect(screen.getByTestId("tutorial-card-quick-start")).toBeTruthy();
 		expect(screen.getByTestId("tutorial-card-agents-basics")).toBeTruthy();
@@ -176,7 +163,7 @@ describe("AboutDialog", () => {
 	});
 
 	it("links every bundled runtime license and notice from the Licenses tab", () => {
-		renderWithProviders(<AboutDialog opened={true} onClose={vi.fn()} />);
+		renderKeepingProviders(<AboutDialog opened={true} onClose={vi.fn()} />);
 
 		fireEvent.click(screen.getByRole("tab", { name: "Licenses" }));
 
@@ -200,7 +187,7 @@ describe("AboutDialog", () => {
 	});
 
 	it("filters the third-party license table by query", () => {
-		renderWithProviders(<AboutDialog opened={true} onClose={vi.fn()} />);
+		renderKeepingProviders(<AboutDialog opened={true} onClose={vi.fn()} />);
 
 		fireEvent.click(screen.getByRole("tab", { name: "Licenses" }));
 		expect(screen.getByText("react")).toBeTruthy();
@@ -214,7 +201,7 @@ describe("AboutDialog", () => {
 
 	// The placeholder was the filter box's only naming, and it disappears the moment a query is typed.
 	it("names the package filter for assistive technology", () => {
-		renderWithProviders(<AboutDialog opened={true} onClose={vi.fn()} />);
+		renderKeepingProviders(<AboutDialog opened={true} onClose={vi.fn()} />);
 
 		fireEvent.click(screen.getByRole("tab", { name: "Licenses" }));
 

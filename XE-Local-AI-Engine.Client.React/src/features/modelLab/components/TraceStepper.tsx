@@ -6,13 +6,14 @@ import { useTranslation } from "react-i18next";
 
 import type { XeLocalAiEngineClientServicesModelLabModelLabTraceResult as TraceResult } from "@/core/api/generated/types.gen";
 import { logprobTextLabel } from "@/core/directInference/DirectInferenceModels";
+import { formatNumber } from "@/core/formatting/NumberFormatting";
 import { BasisBadge, ExplanationEntry, ExplanationLevelSwitch } from "@/features/modelLab/components/ArchitectureExplanation";
 import { TraceAttentionPanel } from "@/features/modelLab/components/TraceAttentionPanel";
 import { TraceLensPanel } from "@/features/modelLab/components/TraceLensPanel";
 import { TraceRoutingPanel } from "@/features/modelLab/components/TraceRoutingPanel";
 import { TraceStepCandidates } from "@/features/modelLab/components/TraceStepCandidates";
 import { type ExplanationLevel, explanationKey } from "@/features/modelLab/models/ModelLabExplanation";
-import { moveFocusAmongButtons } from "@/features/modelLab/models/ModelLabFocus";
+import { moveFocusAmongButtons, useRovingTabStop } from "@/features/modelLab/models/ModelLabFocus";
 import type { ModelLabJump } from "@/features/modelLab/models/ModelLabNavigation";
 import {
 	type CandidateBasis,
@@ -55,18 +56,12 @@ export function TraceStepper({
 	modelName,
 	onJump,
 }: TraceStepperProps) {
-	const { t, i18n } = useTranslation();
+	const { t } = useTranslation();
 	const [pickedBlock, setPickedBlock] = useState<number>();
 	const tokens = result.tokens ?? [];
 	const total = tokens.length;
 	const current = Math.min(step, Math.max(total - 1, 0));
-	// The strip's one Tab stop follows focus, so Tab leaves from where the arrows went; a new step brings it back.
-	const [focusedToken, setFocusedToken] = useState(current);
-	const [stepSeen, setStepSeen] = useState(current);
-	if (current !== stepSeen) {
-		setStepSeen(current);
-		setFocusedToken(current);
-	}
+	const tokenStop = useRovingTabStop(current, total);
 	const blocks = stepperBlocks(table, current, layerKinds);
 	const peak = Math.max(0, ...table.rows.flatMap((row) => row.norms.filter((norm) => norm !== null)));
 	const selected = blocks.find((block) => block.index === pickedBlock) ?? blocks[0];
@@ -150,8 +145,8 @@ export function TraceStepper({
 									ff="monospace"
 									styles={{ label: { whiteSpace: "pre" } }}
 									aria-current={index === current ? "step" : undefined}
-									tabIndex={index === focusedToken ? 0 : -1}
-									onFocus={() => setFocusedToken(index)}
+									tabIndex={tokenStop.tabIndexFor(index)}
+									onFocus={() => tokenStop.onFocusAt(index)}
 									aria-label={t("pages.modelLab.trace.stepButton", "Step {{step}}: {{text}}", {
 										step: index + 1,
 										text: logprobTextLabel(item.text),
@@ -206,7 +201,7 @@ export function TraceStepper({
 			{selected && (
 				<>
 					<Text size="sm" data-testid="model-lab-stepper-selected">
-						{blockLabel(t, i18n.language, selected, captured.includes(selected.index))}
+						{blockLabel(t, selected, captured.includes(selected.index))}
 					</Text>
 					{selected.kind !== "L" && captured.includes(selected.index) ? (
 						<TraceAttentionPanel
@@ -252,7 +247,7 @@ export function TraceStepper({
 	);
 }
 
-function blockLabel(t: TFunction, language: string, block: StepperBlock, recorded: boolean): string {
+function blockLabel(t: TFunction, block: StepperBlock, recorded: boolean): string {
 	const kind =
 		block.kind === "F"
 			? t("pages.modelLab.trace.stepper.kind.full", "full attention")
@@ -266,7 +261,7 @@ function blockLabel(t: TFunction, language: string, block: StepperBlock, recorde
 				? t("pages.modelLab.trace.stepper.noRecord", "no record at this step")
 				: t("pages.modelLab.trace.stepper.norm", "residual norm {{norm}}", {
 						// The run stores norms at three decimals; this keeps them and uses the language's separator.
-						norm: new Intl.NumberFormat(language, { maximumFractionDigits: 3 }).format(block.norm),
+						norm: formatNumber(block.norm, { maximumFractionDigits: 3 }),
 					});
 	const label = t("pages.modelLab.trace.stepper.block", "Block {{index}}, {{kind}}: {{norm}}", {
 		index: block.index,
@@ -286,12 +281,12 @@ interface BlockCellProps {
 }
 
 function BlockCell({ block, peak, recorded, selected, onSelect }: BlockCellProps) {
-	const { t, i18n } = useTranslation();
+	const { t } = useTranslation();
 	const shade = typeof block.norm === "number" && peak > 0 ? Math.round((maxShadePercent * block.norm) / peak) : 0;
 	return (
 		<UnstyledButton
 			aria-pressed={selected}
-			aria-label={blockLabel(t, i18n.language, block, recorded)}
+			aria-label={blockLabel(t, block, recorded)}
 			onClick={onSelect}
 			ff="monospace"
 			fz="xs"

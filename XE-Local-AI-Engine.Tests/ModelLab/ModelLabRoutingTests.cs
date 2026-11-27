@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.ModelLab;
 using XE_Local_AI_Engine.Tests.Testing;
 using static ModelLabAttentionTests;
-using static ModelLabExperimentServiceTests;
+using static ModelLabTestSupport;
 
 /// <summary>A trace's router choices: the cap, the routing lines beside the hook records and lens in one blob, their check, and the read route.</summary>
 [Category(TestCategories.Integration)]
@@ -412,7 +412,7 @@ public sealed class ModelLabRoutingTests
             await ExpectStatusAsync(host, client, $"/api/local/v1/model-lab/experiments/{id}/routing", HttpStatusCode.NotFound);
         }
 
-        var dense = AssertEx.NotNull(await host.Service.GetAsync(before, CancellationToken.None));
+        var dense = AssertEx.NotNull(await host.Reader.GetAsync(before, CancellationToken.None));
         AssertEx.Null(AssertEx.NotNull(ModelLabTraceSpec.ReadResultOrNull(dense.ResultJson!.Value)).Routing);
         await ExpectStatusAsync(host, client, $"/api/local/v1/model-lab/experiments/{before}/trace", HttpStatusCode.OK);
     }
@@ -433,7 +433,7 @@ public sealed class ModelLabRoutingTests
         var id = await RunAsync(host, process, recordAttention: false);
         if (tamper)
         {
-            var record = AssertEx.NotNull(await host.Service.GetAsync(id, CancellationToken.None));
+            var record = AssertEx.NotNull(await host.Reader.GetAsync(id, CancellationToken.None));
             var blob = Path.Combine(Scope(host, id), record.TraceBlobId!.Value.ToString("N") + ".blob");
             var bytes = await File.ReadAllBytesAsync(blob);
             bytes[^1] ^= 0xFF;
@@ -458,7 +458,7 @@ public sealed class ModelLabRoutingTests
         };
         await using var host = await LabHost.StartAsync(process);
         var id = await RunAsync(host, process, recordAttention: false);
-        AssertEx.Null(AssertEx.NotNull(ModelLabTraceSpec.ReadResultOrNull(AssertEx.NotNull(await host.Service.GetAsync(id, CancellationToken.None)).ResultJson!.Value)).Tokens,
+        AssertEx.Null(AssertEx.NotNull(ModelLabTraceSpec.ReadResultOrNull(AssertEx.NotNull(await host.Reader.GetAsync(id, CancellationToken.None)).ResultJson!.Value)).Tokens,
             "The stored result keeps its null token list.");
 
         using var client = host.Factory.CreateClient();

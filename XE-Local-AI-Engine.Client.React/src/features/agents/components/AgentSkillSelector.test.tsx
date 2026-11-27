@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SkillSummary } from "@/core/skills/models/SkillModels";
@@ -30,7 +28,7 @@ vi.mock("react-i18next", () => ({
 }));
 
 import { AgentSkillSelector } from "@/features/agents/components/AgentSkillSelector";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { installJsdomEnvironmentMocks, renderWithMantine } from "@/test/MantineTestRender";
 
 const skillDefaults = {
 	allowedTools: null,
@@ -63,45 +61,9 @@ const library: SkillSummary[] = [
 	},
 ];
 
-function renderWithProviders(ui: ReactElement) {
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			{ui}
-		</MantineProvider>,
-	);
-}
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-	Object.defineProperty(document, "fonts", {
-		writable: true,
-		value: { ready: Promise.resolve(), addEventListener: vi.fn(), removeEventListener: vi.fn() },
-	});
-}
-
 function renderSelector(selectedSkillIds: string[] = []) {
 	const onToggleSkill = vi.fn();
-	renderWithProviders(<AgentSkillSelector selectedSkillIds={selectedSkillIds} onToggleSkill={onToggleSkill} />);
+	renderWithMantine(<AgentSkillSelector selectedSkillIds={selectedSkillIds} onToggleSkill={onToggleSkill} />);
 	return { onToggleSkill };
 }
 

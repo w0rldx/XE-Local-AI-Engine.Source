@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
 using TUnit.Core.Interfaces;
+using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
@@ -45,7 +46,7 @@ public sealed class WorkSessionHostFixture : IAsyncInitializer, IAsyncDisposable
 /// </summary>
 public sealed class WorkSessionServiceHostFixture : IAsyncInitializer, IAsyncDisposable
 {
-    public TestServerWebAppFactory Factory { get; } = WorkSessionServiceTests.NewFactory();
+    public TestServerWebAppFactory Factory { get; } = WorkSessionTestSupport.NewFactory();
 
     public Task InitializeAsync() =>
         Task.CompletedTask;
@@ -465,5 +466,59 @@ internal static class WorkSessionTestSupport
             timeout ?? TestBudgets.Contended,
             $"Work session {sessionId} did not reach {expected} before the timeout.");
         return session!;
+    }
+
+    /// <summary>A host with deterministic capability answers; <paramref name="configuration" /> defaults to <see cref="Configuration" />.</summary>
+    internal static TestServerWebAppFactory NewFactory(Action<IServiceCollection>? configureExtra = null,
+        Dictionary<string, string?>? configuration = null) =>
+        new()
+        {
+            AdditionalConfiguration = configuration ?? Configuration(),
+            ConfigureAdditionalTestServices = services =>
+            {
+                // Deterministic capability answers: the real resolver probes providers, which would make these
+                // assertions depend on what happens to be installed.
+                services.RemoveAll<IModelCapabilityResolver>();
+                services.AddSingleton<IModelCapabilityResolver, StubModelCapabilityResolver>();
+                services.RemoveAll<ILocalDefaultChatModelResolver>();
+                services.AddSingleton<ILocalDefaultChatModelResolver, StubDefaultChatModelResolver>();
+                configureExtra?.Invoke(services);
+            }
+        };
+
+    internal static async Task<Guid> SeedAgentAsync(TestServerWebAppFactory factory, string modelProfile)
+    {
+        using var scope = factory.Services.CreateScope();
+        var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
+        // GUID-suffixed: the classes that call this share one host, so a fixed name would make the definition table
+        // unfilterable for a test that wants only its own agent.
+        var definition = await store.AddAsync(new AgentDefinitionInput
+        {
+            Name = $"Agent on {modelProfile} {Guid.NewGuid():N}",
+            Description = null,
+            Instructions = "Work the objective.",
+            ModelProfile = modelProfile,
+            ReasoningEffort = null,
+            Kind = AgentDefinitionKind.Single,
+            AllowedToolNames = [],
+            ToolApprovals = new Dictionary<string, bool>(StringComparer.Ordinal),
+            OrchestrationTopologyJson = null
+        });
+        return definition.Id;
+    }
+
+    /// <summary>Tool-capable unless the model's name says otherwise; cloud only for the explicitly cloud-named ones.</summary>
+    internal sealed class StubModelCapabilityResolver : IModelCapabilityResolver
+    {
+        public Task<ModelCapabilitySnapshot> ResolveAsync(string? model, CancellationToken cancellationToken) =>
+            Task.FromResult(new ModelCapabilitySnapshot(SupportsThinking: false,
+                model?.Contains("without-tools", StringComparison.Ordinal) != true,
+                model?.Contains("cloud", StringComparison.Ordinal) == true));
+    }
+
+    internal sealed class StubDefaultChatModelResolver : ILocalDefaultChatModelResolver
+    {
+        public Task<string?> ResolveAsync(string? persistedDefault, CancellationToken cancellationToken = default) =>
+            Task.FromResult<string?>("tool-capable-model");
     }
 }

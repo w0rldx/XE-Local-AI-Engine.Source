@@ -4,7 +4,6 @@ import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import i18next from "i18next";
-import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getNodeSettingsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
@@ -14,19 +13,7 @@ import { ChatDisplayShell } from "@/features/chat/components/ChatDisplayShell";
 import type { ChatConversationModel, ChatDisplayShellProps } from "@/features/chat/models/ChatModels";
 import de from "@/locales/de.json";
 import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
-
-// A streaming tool-call card can fire the resolve-approval TanStack mutation, so the tree needs a
-// QueryClientProvider even for turns that never surface an approval.
-function renderWithProviders(ui: ReactElement) {
-	const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
-	return render(
-		<QueryClientProvider client={queryClient}>
-			<MantineProvider env="test" theme={testMantineTheme}>
-				{ui}
-			</MantineProvider>
-		</QueryClientProvider>,
-	);
-}
+import { renderWithProviders } from "@/test/RenderWithProviders";
 
 const conversation: ChatConversationModel = {
 	id: "conversation-1",

@@ -18,7 +18,8 @@ stale-beliefs tables. Architecture: start at `docs/wiki/Home.md`.
   wiki 13, "Committing in a shared worktree".
 - Branch from and target `develop`. Nothing lands on `develop` without the operator's explicit approval: never
   merge into, reset or "repair" `develop` mid-task; a feature branch absorbs `develop`, never the reverse. Once the
-  operator approves the squash, absorb `develop` into the branch once, run the backend gate once on that tip, then run
+  operator approves the squash, absorb `develop` into the branch once; on that clean tip run
+  `scripts/run-gate-lane.sh frontend`, `scripts/run-gate-lane.sh openapi` and the backend gate once each, then run
   `scripts/squash-guard.sh <branch>` from the main checkout and squash only on its `OK` line.
 - Commit messages follow Conventional Commits (`fix(scope): …`), body only: no session-tracking, co-author or
   AI trailers. Never set git identity (`git -c user.*`, `git config user.*`, `GIT_AUTHOR_*`/`GIT_COMMITTER_*`);
@@ -91,7 +92,7 @@ Frontend, from `XE-Local-AI-Engine.Client.React/` (details in its `AGENTS.md`):
 
 ```bash
 pnpm install --frozen-lockfile
-../scripts/with-build-lock.sh -- pnpm run acceptance   # vitest timing assertions fail beside a backend gate
+../scripts/run-gate-lane.sh frontend   # acceptance under the build lock; writes the lane row squash-guard reads
 ```
 
 - `acceptance` first runs `XE-Local-AI-Engine.Client.React/scripts/CheckNodeMajor.mjs`, which fails on a Node major

@@ -5,15 +5,15 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Client.Services.Benchmarks;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 
 /// <summary>Downloads a project's flat benchmark run projection as RFC 4180 CSV.</summary>
 public sealed class ExportBenchmarkProjectCsvEndpoint : Endpoint<BenchmarkProjectRouteRequest>
 {
-    private readonly IBenchmarkExportQuery _exports;
+    private readonly BenchmarkExportQuery _exports;
     private readonly TimeProvider _timeProvider;
 
-    public ExportBenchmarkProjectCsvEndpoint(IBenchmarkExportQuery exports, TimeProvider timeProvider)
+    public ExportBenchmarkProjectCsvEndpoint(BenchmarkExportQuery exports, TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(exports);
         ArgumentNullException.ThrowIfNull(timeProvider);

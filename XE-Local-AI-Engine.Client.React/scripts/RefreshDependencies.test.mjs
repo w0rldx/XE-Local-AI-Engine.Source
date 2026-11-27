@@ -46,6 +46,8 @@ test("refreshDependencies runs required stages in order", () => {
 		calls.every(({ options }) => options.cwd === "/react"),
 		true,
 	);
+	// The status query sees only the checkout's own repository and index, never one the caller exported.
+	assert.equal(calls.at(-1).options.env?.GIT_CONFIG_KEY_0, "core.hooksPath");
 	assert.match(stdout.read(), /Dependency refresh completed successfully/);
 	assert.equal(stderr.read(), "");
 });

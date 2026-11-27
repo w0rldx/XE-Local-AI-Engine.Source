@@ -10,12 +10,12 @@ Continues [Agent Mode](../04-agent-mode.md#2-application-services-clientapplicat
 
 | Area | Key types | Responsibility |
 |---|---|---|
-| **Agents** | `AgentDefinitionService`, `AgentDefinitionResolver`, `AgentSkillService`, `ISkillImportService`, `AgentTemplateCatalog`/`Import`, `DefaultAgentSeeder`, `CoderAgentSeeder`, `OrchestrationResolver` | CRUD of agent definitions; per-turn resolution into a `ResolvedAgentRuntime` (prompt + gated tool offer + pinned model + skills + flags); two-phase import of third-party skills (§4.5). |
+| **Agents** | `AgentDefinitionService`, `AgentDefinitionResolver`, `AgentSkillService`, `SkillImportService`, `AgentTemplateCatalog`/`Import`, `DefaultAgentSeeder`, `CoderAgentSeeder`, `OrchestrationResolver` | CRUD of agent definitions; per-turn resolution into a `ResolvedAgentRuntime` (prompt + gated tool offer + pinned model + skills + flags); two-phase import of third-party skills (§4.5). |
 | **AgentHome** | `AgentHomeService`, `AgentHomeManifestService`, `AgentHomeWorkspaceService`, `AgentHomeGoalExecutor`, `AgentHomePatchService`, `NodePatchApplyService`, `IConversationSandboxStager`, `Tools/RunInAgentHomeToolHandler` | The write-back loop: sandboxed git workspace, bounded inner agent loop, patch export and apply, conversation-attachment staging. |
 | **Analysis** | `PlaybookAnalysisService`, `DefaultPlaybookAnalysisAgent`, `IPlaybookAnalysisAgent` | Playbook analysis → **Suggested** staging (node-local model only). |
 | **Eval** | (uses AI.Agent `IPlaybookEvalAgentRunner`) + `PlaybookActionService` gate logic | Golden-conversation eval gate (Suggested → Enabled). |
 | **Insights** | `FeedbackInsightsService` / `IFeedbackInsightsService` | Read-only per-agent feedback aggregation (n≥3 threshold). |
-| **Monitoring** | `PlaybookMonitorService` / `IPlaybookMonitorService` | Cohort monitoring of enabled playbook actions. |
+| **Monitoring** | `PlaybookMonitorService` | Cohort monitoring of enabled playbook actions. |
 | **Memory** | `MemoryExtractionService`, `MemoryExtractionDispatcher`, `DefaultMemoryExtractionAgent` | Adaptive agent memory: post-run node-local extraction → Suggested/Extracted, token-budgeted. |
 | **Approval/audit** | `NodeToolApprovalPolicy`, `IToolApprovalAuditRecorder`, `ToolApprovalAuditRecorder` | Tighten-only category/name approval policy plus content-free approval-decision telemetry. |
 | **Usage** | `AgentExecutionLogQueryService` (the endpoint's read door onto `IAgentExecutionLogStore`), `IUsageRateResolver`, `GetAgentUsageSummaryEndpoint` | Retained token-usage aggregation and operator-configured USD cost estimates; no message content. |

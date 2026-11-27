@@ -13,7 +13,7 @@ using Microsoft.Identity.Client;
 ///     loopback listener before binding a new one on the same port. Never logs token material or raw callback
 ///     content. Mirrors <see cref="EntraDeviceCodeSignInCoordinator" />.
 /// </remarks>
-public sealed class EntraAuthCodeSignInCoordinator : IEntraAuthCodeSignInCoordinator, IDisposable
+public sealed class EntraAuthCodeSignInCoordinator : IDisposable
 {
     private readonly IEntraAuthCodeAccountStore _accountStore;
     private readonly ICloudCredentialStore _credentialStore;
@@ -65,7 +65,15 @@ public sealed class EntraAuthCodeSignInCoordinator : IEntraAuthCodeSignInCoordin
         _onSignInSucceeded = onSignInSucceeded;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    ///     Starts (superseding any in-flight attempt) an authorization-code sign-in against the stored connection's
+    ///     tenant / client / secret / redirect URI and returns the authorize URL to open in a browser.
+    /// </summary>
+    /// <remarks>
+    ///     The exchange completes in the background; poll <see cref="Status" />. Throws
+    ///     <see cref="InvalidOperationException" /> when no Entra ID connection configured for authorization-code
+    ///     sign-in (tenant id, client id, client secret, and a loopback redirect URI) is stored.
+    /// </remarks>
     public async Task<EntraAuthCodeSignInHandle> StartAsync(CancellationToken cancellationToken)
     {
         var connection = await LoadConnectionOrThrowAsync(cancellationToken);
@@ -119,12 +127,15 @@ public sealed class EntraAuthCodeSignInCoordinator : IEntraAuthCodeSignInCoordin
         };
     }
 
-    /// <inheritdoc />
-    public EntraAuthCodeSignInStatus GetStatus()
+    /// <summary>The current sign-in status snapshot. Carries no token material.</summary>
+    public EntraAuthCodeSignInStatus Status
     {
-        lock (_gate)
+        get
         {
-            return _status;
+            lock (_gate)
+            {
+                return _status;
+            }
         }
     }
 

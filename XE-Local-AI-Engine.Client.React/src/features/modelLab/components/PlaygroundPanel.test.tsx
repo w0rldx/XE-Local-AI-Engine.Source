@@ -13,7 +13,7 @@ import de from "@/features/modelLab/locales/model-lab-de.json";
 import en from "@/features/modelLab/locales/model-lab-en.json";
 import { sameExperimentId } from "@/features/modelLab/models/ModelLabNavigation";
 import { loadModelLabStrings } from "@/features/modelLab/models/ModelLabStrings";
-import fixture from "@/features/modelLab/models/playgroundTrace.fixture.json";
+import fixture from "@/features/modelLab/test/playgroundTrace.fixture.json";
 import { acceptConfirm, openConfirm } from "@/test/ConfirmFlow";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
@@ -197,6 +197,45 @@ describe("PlaygroundPanel", () => {
 		} finally {
 			await act(() => i18next.changeLanguage("en"));
 		}
+	});
+
+	// A hand-edited `i18nextLng` such as `en_US` is not a well-formed tag; the replay still renders its numbers.
+	it("replays a run under a malformed stored language tag", async () => {
+		stubRuns();
+		await i18next.changeLanguage("en_US");
+		try {
+			renderWithProviders(<Panel initial={runId} />);
+			await openStepper();
+			expect(screen.getByTestId("model-lab-playground-final").textContent).toMatch(/\d/);
+			phase(strings.phase.update.label);
+			expect(screen.getByTestId("model-lab-playground-update-check").textContent).toMatch(/\d/);
+		} finally {
+			await act(() => i18next.changeLanguage("en"));
+		}
+	});
+
+	it("makes the loss row and each chip row one Tab stop, on the current or selected button", async () => {
+		stubRuns();
+		renderWithProviders(<Panel initial={runId} />);
+		await openStepper();
+		const stops = (row: string) =>
+			within(screen.getByTestId(row))
+				.getAllByRole("button")
+				.map((button) => button.getAttribute("tabindex"));
+		const losses = within(screen.getByTestId("model-lab-playground-losses")).getAllByRole("button");
+		expect(stops("model-lab-playground-losses")).toEqual(["0", "-1", "-1", "-1", "-1", "-1", "-1", "-1"]);
+
+		// The Tab stop follows focus, so Tab leaves the row from where the arrows went; a new step brings it back.
+		losses[0]?.focus();
+		fireEvent.keyDown(losses[0] as HTMLElement, { key: "End" });
+		expect(document.activeElement).toBe(losses[7]);
+		expect(stops("model-lab-playground-losses")).toEqual(["-1", "-1", "-1", "-1", "-1", "-1", "-1", "0"]);
+		fireEvent.click(screen.getByTestId("model-lab-playground-next"));
+		expect(stops("model-lab-playground-losses")).toEqual(["-1", "0", "-1", "-1", "-1", "-1", "-1", "-1"]);
+
+		expect(stops("model-lab-playground-occurrences")).toEqual(["0", "-1", "-1", "-1"]);
+		chip("model-lab-playground-occurrences", "head");
+		expect(stops("model-lab-playground-occurrences")).toEqual(["-1", "-1", "-1", "0"]);
 	});
 
 	it("steps through the recorded steps and shows each visit of the shared block on its one parameter set", async () => {

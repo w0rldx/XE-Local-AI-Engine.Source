@@ -105,20 +105,6 @@ internal static partial class CustomToolTemplate
         });
     }
 
-    /// <summary>The set of placeholder names a template references, for validation and parameterized-host detection.</summary>
-    public static IReadOnlySet<string> ReferencedPlaceholders(string template)
-    {
-        ArgumentNullException.ThrowIfNull(template);
-
-        var names = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var match in PlaceholderRegex().Matches(template).Cast<Match>())
-        {
-            names.Add(match.Groups["name"].Value);
-        }
-
-        return names;
-    }
-
     private static string EnforceType(CustomToolParameter parameter, JsonElement element)
     {
         var type = parameter.Type.Trim();

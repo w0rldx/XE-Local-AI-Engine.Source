@@ -1,7 +1,14 @@
+import { getModelLabExperimentRoutingOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import type {
 	XeLocalAiEngineClientEndpointsModelLabV1ModelLabRoutingBlockResponse as RoutingBlock,
 	XeLocalAiEngineClientEndpointsModelLabV1ModelLabRoutingStepResponse as RoutingStep,
 } from "@/core/api/generated/types.gen";
+
+// Every routing view's query, so they share one cache entry per run, whichever view asks first. A saved run's routing
+// never changes.
+export function modelLabRoutingOptions(experimentId: string) {
+	return { ...getModelLabExperimentRoutingOptions({ path: { experimentId } }), staleTime: Number.POSITIVE_INFINITY };
+}
 
 export interface ExpertChoice {
 	expert: number;

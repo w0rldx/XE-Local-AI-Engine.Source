@@ -643,7 +643,6 @@
 		"nodeSettings": "Node Settings",
 		"previewGroup": "Preview",
 		"recommendations": "Recommendations",
-		"schedule": "Schedule",
 		"scheduler": "Scheduler",
 		"settingsGroup": "Settings",
 		"skills": "Skills",
@@ -702,7 +701,6 @@
 			"saveError": "Could not save your choices. Try again.",
 			"title": "Two settings you can change"
 		},
-		"restart": "Restart tutorial",
 		"status": {
 			"completed": "Completed",
 			"inProgress": "In progress",
@@ -4821,6 +4819,7 @@
 					"Generic": "Image generation failed.",
 					"Interrupted": "Interrupted by an application shutdown; submit the job again to retry.",
 					"LoadedModelCapReached": "The maximum number of local image models are already loaded. Unload a model or raise the limit, then try again.",
+					"ModelUnloadedWhileStarting": "The image runtime unloaded the model while the generation was starting. Try again.",
 					"OutOfMemory": "The GPU ran out of memory while loading the image model. Unload other models and retry.",
 					"ProcessExited": "The image server stopped unexpectedly. It restarts with the next generation.",
 					"SourceImageMissing": "The source image no longer exists.",
@@ -5968,7 +5967,6 @@
 				"refreshButton": "Refresh now",
 				"schedulerLink": "Scheduler",
 				"sections": {
-					"canRun": "Can run (reduced quality)",
 					"canRunCount": "Can run ({{count}})",
 					"explore": "Explore trending on Hugging Face",
 					"recommended": "Recommended for your hardware"

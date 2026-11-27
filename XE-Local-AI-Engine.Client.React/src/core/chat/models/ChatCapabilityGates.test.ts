@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
-import { buildChatUiCapabilities, hiddenChatSurfaceLabels } from "@/core/chat/models/ChatCapabilityGates";
+import { buildChatUiCapabilities } from "@/core/chat/models/ChatCapabilityGates";
 
 describe("chat capability gates", () => {
 	it("surfaces the node's local chat controls", () => {
@@ -17,14 +17,5 @@ describe("chat capability gates", () => {
 			showImageAttachmentControls: true,
 			showLocalToolControls: true,
 		});
-	});
-
-	it("explains the hidden capability surfaces for the chat notice", () => {
-		// Every surface the notice can name ships on in the default node profile, so nothing is listed.
-		expect(hiddenChatSurfaceLabels(buildChatUiCapabilities(nodeCapabilities.chat))).toEqual([]);
-
-		// It still names a surface that is genuinely off — otherwise the assertion above would pass on an empty list.
-		const withApprovalsOff = buildChatUiCapabilities({ ...nodeCapabilities.chat, toolApprovals: false });
-		expect(hiddenChatSurfaceLabels(withApprovalsOff)).toEqual(["tool approval controls"]);
 	});
 });

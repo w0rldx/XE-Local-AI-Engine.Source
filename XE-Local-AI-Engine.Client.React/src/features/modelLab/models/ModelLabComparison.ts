@@ -3,9 +3,12 @@ import type {
 	XeLocalAiEngineClientServicesModelLabModelLabSteeringResult as SteeringResult,
 	XeLocalAiEngineClientEndpointsModelLabV1ModelLabTraceRecordResponse as TraceRecord,
 } from "@/core/api/generated/types.gen";
+import { formatNumber } from "@/core/formatting/NumberFormatting";
 import { steeringArmOrder } from "@/features/modelLab/models/ModelLabSteering";
 import type { TraceLayer } from "@/features/modelLab/models/ModelLabTrace";
 
+// Two decimals in the UI language, ungrouped.
+const twoDecimals: Intl.NumberFormatOptions = { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false };
 const minComparedRuns = 2;
 const maxComparedRuns = 4;
 
@@ -106,7 +109,9 @@ function factValue(run: ComparedRun, key: FactKey): string | null {
 		}
 		case "vectorNorm":
 			// Compared as shown: a difference below the shown precision is not listed.
-			return steering?.vectorNorm === null || steering?.vectorNorm === undefined ? null : steering.vectorNorm.toFixed(2);
+			return steering?.vectorNorm === null || steering?.vectorNorm === undefined
+				? null
+				: formatNumber(steering.vectorNorm, twoDecimals);
 		case "positivePrompts":
 			return steering?.positivePrompts?.length ? steering.positivePrompts.join("\n") : null;
 		case "negativePrompts":

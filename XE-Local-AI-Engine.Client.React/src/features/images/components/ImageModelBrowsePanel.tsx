@@ -18,6 +18,7 @@ import { type FormEvent, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { formatCount } from "@/core/formatting/NumberFormatting";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { humanizeBytes } from "@/core/model-downloads/models/DownloadRateEstimate";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
@@ -81,6 +82,7 @@ export function ImageModelBrowsePanel({ installedModelNames, isInstalling, onIns
 		setOpenRepoId(repoId);
 		// A new repo means a new file-set: carrying the previous repo's ticks over would silently install a mix.
 		setSelection({});
+		setFamilyTouched(false);
 		// The last path segment is the obvious default install name and is almost always what the operator wants.
 		setModelName(repoId.split("/").pop()?.toLowerCase() ?? repoId);
 	}, []);
@@ -477,12 +479,12 @@ function RepositoryResults({ isSearching, hasSearched, repositories, onOpen }: R
 				{
 					key: "downloads",
 					header: t("pages.images.models.browse.columns.downloads", "Downloads"),
-					cell: (repository) => repository.downloads.toLocaleString(),
+					cell: (repository) => formatCount(repository.downloads),
 				},
 				{
 					key: "likes",
 					header: t("pages.images.models.browse.columns.likes", "Likes"),
-					cell: (repository) => repository.likes.toLocaleString(),
+					cell: (repository) => formatCount(repository.likes),
 				},
 				{
 					key: "updated",

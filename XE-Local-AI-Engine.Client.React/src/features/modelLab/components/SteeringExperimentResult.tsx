@@ -6,7 +6,11 @@ import type {
 	XeLocalAiEngineClientServicesModelLabModelLabSteeringArm as SteeringArm,
 } from "@/core/api/generated/types.gen";
 import { humanizeBytes } from "@/core/formatting/BytesFormatting";
+import { formatNumber } from "@/core/formatting/NumberFormatting";
 import { layerKindLabel, savedLayerKind, steeringArmOrder as armOrder } from "@/features/modelLab/models/ModelLabSteering";
+
+// Two decimals in the UI language, ungrouped.
+const twoDecimals: Intl.NumberFormatOptions = { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false };
 
 // A saved steering run: what the numbers do not say, what was derived, and each prompt's three outputs side by side.
 export function SteeringExperimentResult({ result, running }: { result: ModelLabResult | null | undefined; running: boolean }) {
@@ -53,7 +57,7 @@ export function SteeringExperimentResult({ result, running }: { result: ModelLab
 							layer: steering.layer,
 							kind: layerKindLabel(t, savedLayerKind(steering.layerKind)),
 							scale: steering.scale,
-							norm: steering.vectorNorm?.toFixed(2) ?? "?",
+							norm: steering.vectorNorm == null ? "?" : formatNumber(steering.vectorNorm, twoDecimals),
 							hash: steering.vectorSha256?.slice(0, 12) ?? "?",
 							seconds: result?.seconds,
 							vram: humanizeBytes(result?.peakVramBytes ?? 0),

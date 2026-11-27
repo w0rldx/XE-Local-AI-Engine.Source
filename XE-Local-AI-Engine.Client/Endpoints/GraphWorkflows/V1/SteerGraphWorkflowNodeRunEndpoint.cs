@@ -16,9 +16,9 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Chat;
 /// <remarks>The 409s reach the client through <c>ConflictExceptionHandler</c>: <c>GraphWorkflowRunConflict</c> and <c>GraphWorkflowSteerLimitReached</c>.</remarks>
 public sealed class SteerGraphWorkflowNodeRunEndpoint : Endpoint<SteerGraphWorkflowNodeRunRequest, GraphWorkflowRunResponse>
 {
-    private readonly IGraphWorkflowChatService _chat;
+    private readonly GraphWorkflowChatService _chat;
 
-    public SteerGraphWorkflowNodeRunEndpoint(IGraphWorkflowChatService chat)
+    public SteerGraphWorkflowNodeRunEndpoint(GraphWorkflowChatService chat)
     {
         ArgumentNullException.ThrowIfNull(chat);
         _chat = chat;

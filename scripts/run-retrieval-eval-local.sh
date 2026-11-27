@@ -286,7 +286,7 @@ done
 SERVER_PATH="$(realpath "${SERVER_PATH}")"
 
 # A host's StaleProcessReaper kills every llama-server whose EXECUTABLE lies under its managed data root, so a host
-# starting mid-eval would kill servers run from there (docs/agent-knowledge/dev-runtime.md). Such a server runs from a
+# starting mid-eval would kill servers run from there (docs/agent-knowledge/dev-lab.md). Such a server runs from a
 # private copy, with the llama/ggml libraries beside it: the build's RUNPATH is $ORIGIN, so the copy loads its own.
 DATA_ROOT_REAL="$(realpath -m "${DATA_ROOT}")"
 if [[ "${SERVER_PATH}" == "${DATA_ROOT_REAL}/"* ]]; then

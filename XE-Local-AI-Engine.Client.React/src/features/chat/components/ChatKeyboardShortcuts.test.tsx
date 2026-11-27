@@ -1,22 +1,12 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import i18next from "i18next";
-import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ChatKeyboardShortcuts } from "@/features/chat/components/ChatKeyboardShortcuts";
 import de from "@/locales/de.json";
-import { testMantineTheme } from "@/test/MantineTestRender";
-
-function renderWithProviders(ui: ReactElement) {
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			{ui}
-		</MantineProvider>,
-	);
-}
+import { renderWithMantine } from "@/test/MantineTestRender";
 
 describe("ChatKeyboardShortcuts", () => {
 	beforeEach(() => {
@@ -49,7 +39,7 @@ describe("ChatKeyboardShortcuts", () => {
 
 	it("stops the running answer on Esc", () => {
 		const onStop = vi.fn();
-		renderWithProviders(<ChatKeyboardShortcuts onStop={onStop} />);
+		renderWithMantine(<ChatKeyboardShortcuts onStop={onStop} />);
 
 		fireEvent.keyDown(document.body, { key: "Escape" });
 
@@ -58,7 +48,7 @@ describe("ChatKeyboardShortcuts", () => {
 
 	it("leaves Esc alone during an IME composition, after another handler took it, or inside a popup", () => {
 		const onStop = vi.fn();
-		renderWithProviders(
+		renderWithMantine(
 			<>
 				<ChatKeyboardShortcuts onStop={onStop} />
 				<div role="menu">
@@ -79,7 +69,7 @@ describe("ChatKeyboardShortcuts", () => {
 
 	it("leaves Esc to an expanded combobox or popover target that keeps the focus", () => {
 		const onStop = vi.fn();
-		renderWithProviders(
+		renderWithMantine(
 			<>
 				<ChatKeyboardShortcuts onStop={onStop} />
 				{/* Closes itself on its own keydown, before the document sees the key, as a Mantine Select does once React
@@ -107,7 +97,7 @@ describe("ChatKeyboardShortcuts", () => {
 		i18next.addResourceBundle("de", "translation", de, true, true);
 		await i18next.changeLanguage("de");
 		try {
-			renderWithProviders(<ChatKeyboardShortcuts />);
+			renderWithMantine(<ChatKeyboardShortcuts />);
 
 			fireEvent.keyDown(document.body, { key: "/", ctrlKey: true });
 
@@ -123,7 +113,7 @@ describe("ChatKeyboardShortcuts", () => {
 
 	it("starts a new chat on Ctrl+Shift+O and Cmd+Shift+O", () => {
 		const onNewChat = vi.fn();
-		renderWithProviders(<ChatKeyboardShortcuts onNewChat={onNewChat} />);
+		renderWithMantine(<ChatKeyboardShortcuts onNewChat={onNewChat} />);
 
 		fireEvent.keyDown(document.body, { key: "O", ctrlKey: true, shiftKey: true });
 		fireEvent.keyDown(document.body, { key: "O", metaKey: true, shiftKey: true });
@@ -134,7 +124,7 @@ describe("ChatKeyboardShortcuts", () => {
 
 	it("opens the shortcut list on Ctrl+/ and closes it on Esc without stopping the answer", async () => {
 		const onStop = vi.fn();
-		renderWithProviders(<ChatKeyboardShortcuts onStop={onStop} />);
+		renderWithMantine(<ChatKeyboardShortcuts onStop={onStop} />);
 
 		fireEvent.keyDown(document.body, { key: "/", ctrlKey: true });
 

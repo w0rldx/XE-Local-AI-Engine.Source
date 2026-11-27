@@ -19,9 +19,6 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 /// </remarks>
 internal static class DockerWorkspaceHostFiles
 {
-    // O_WRONLY (0x1) | O_CREAT (0x40) | O_TRUNC (0x200) | O_NOFOLLOW (0x20000) | O_CLOEXEC (0x80000) on Linux. A raw (FileOptions) cast
-    // for O_NOFOLLOW throws, so the libc open() below is required — the same flag set as the process provider's copy-into write.
-    private const int WriteCreateNoFollowCloseOnExecFlags = 0x1 | 0x40 | 0x200 | 0x20000 | 0x80000;
     private const int DefaultCreateFileMode = 0b110_100_100;
 
     // statx(2). AT_FDCWD resolves relative to the working directory, though the path here is always absolute. AT_SYMLINK_NOFOLLOW makes
@@ -34,6 +31,10 @@ internal static class DockerWorkspaceHostFiles
     // which is why statx is used: a stat binding would have to know the target architecture and the glibc vintage for the same fields.
     private const int StatxUserIdOffset = 20;
     private const int StatxBufferBytes = 256;
+
+    // A raw (FileOptions) cast for O_NOFOLLOW throws, so the create goes through libc open(): the process provider's copy-into flag set.
+    internal static readonly int WriteCreateNoFollowCloseOnExecFlags =
+        LinuxOpenFlags.WriteOnly | LinuxOpenFlags.Create | LinuxOpenFlags.Truncate | LinuxOpenFlags.NoFollow | LinuxOpenFlags.CloseOnExec;
 
     /// <summary>
     ///     Writes <paramref name="content" /> to the host bytes behind <paramref name="sandboxPath" />. Throws
@@ -133,9 +134,7 @@ internal static class DockerWorkspaceHostFiles
             return;
         }
 
-        var pathBytes = new byte[Encoding.UTF8.GetByteCount(hostPath) + 1];
-        Encoding.UTF8.GetBytes(hostPath, pathBytes);
-        var fileDescriptor = open(pathBytes, WriteCreateNoFollowCloseOnExecFlags, DefaultCreateFileMode);
+        var fileDescriptor = LinuxOpenFlags.Open(hostPath, WriteCreateNoFollowCloseOnExecFlags, DefaultCreateFileMode);
         if (fileDescriptor < 0)
         {
             var error = Marshal.GetLastPInvokeError();
@@ -147,12 +146,8 @@ internal static class DockerWorkspaceHostFiles
         await RandomAccess.WriteAsync(handle, content, fileOffset: 0, cancellationToken);
     }
 
-    // DllImport rather than LibraryImport, matching ProcessSandboxRuntimeProvider: the generated form requires AllowUnsafeBlocks on the
-    // whole project and buys nothing for two calls. The caller marshals the path into a null-terminated UTF-8 array so filenames survive.
-    [DllImport("libc", EntryPoint = "open", SetLastError = true)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
-    private static extern int open(byte[] pathname, int flags, int mode);
-
+    // DllImport rather than LibraryImport: the generated form requires AllowUnsafeBlocks on the whole project. The caller marshals the
+    // path into a null-terminated UTF-8 array so filenames survive.
     [DllImport("libc", EntryPoint = "statx", SetLastError = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
     private static extern int statx(int directoryFileDescriptor, byte[] pathname, int flags, uint mask, byte[] buffer);

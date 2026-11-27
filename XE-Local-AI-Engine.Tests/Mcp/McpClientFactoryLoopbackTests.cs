@@ -4,7 +4,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
@@ -168,7 +167,7 @@ public sealed class McpClientFactoryLoopbackTests
         });
         return new McpClientFactory(options,
             new FakeSandboxRuntimeProvider(TimeProvider.System),
-            new StubIdentityProvider(),
+            new FixedAgentHomeIdentityProvider("owner", "node"),
             new FakeNodeDataDirectory(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".xe-node-data-fixture")),
             Options.Create(new ComputeOptions()),
             Options.Create(new LocalContainerOptions()),
@@ -216,22 +215,5 @@ public sealed class McpClientFactoryLoopbackTests
             CreatedAtUtc = 0,
             UpdatedAtUtc = 0
         };
-    }
-
-    /// <summary>
-    ///     A hand-written stub rather than a substitute: <c>IAgentHomeIdentityProvider</c> is internal to the
-    ///     application assembly, and Castle's dynamic proxy cannot subclass an internal interface from an assembly that
-    ///     is not strong-named and does not expose itself to <c>DynamicProxyGenAssembly2</c>.
-    /// </summary>
-    private sealed class StubIdentityProvider : IAgentHomeIdentityProvider
-    {
-        public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(new AgentHomeOwnerIdentity
-            {
-                OwnerUserId = "owner",
-                NodeId = "node"
-            });
-        }
     }
 }

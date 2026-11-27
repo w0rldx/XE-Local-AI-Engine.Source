@@ -77,6 +77,7 @@ from modellablib import (
     validate_job,
     vector_norm,
 )
+from test_stubs import run_standalone
 
 
 def _load_modellab():
@@ -1618,7 +1619,4 @@ def test_a_source_refusal_reaches_the_host_under_its_own_category():
 
 
 if __name__ == "__main__":
-    for name, test in sorted(globals().items()):
-        if name.startswith("test_") and callable(test):
-            test()
-            print(f"ok {name}")
+    run_standalone(globals())

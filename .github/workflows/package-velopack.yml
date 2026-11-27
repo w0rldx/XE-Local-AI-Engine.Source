@@ -220,6 +220,24 @@ jobs:
             exit 1
           fi
 
+      # The same check as the local packagers' forbidden list: repository-only Python tests never ship, and the
+      # training runtime does.
+      - name: Verify payload carries the training runtime without its tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          scripts_dir="${{ matrix.publish-dir }}/training-scripts"
+          if [[ ! -f "$scripts_dir/train.py" ]]; then
+            echo "::error::$scripts_dir/train.py is missing: the training runtime did not ship."
+            exit 1
+          fi
+          tests="$(find "$scripts_dir" -name 'test_*.py' -print)"
+          if [[ -n "$tests" ]]; then
+            echo "::error::Python test modules found in the publish output; they are repository-only:"
+            printf '%s\n' "$tests"
+            exit 1
+          fi
+
       - name: Verify packaged update release track
         shell: bash
         run: |

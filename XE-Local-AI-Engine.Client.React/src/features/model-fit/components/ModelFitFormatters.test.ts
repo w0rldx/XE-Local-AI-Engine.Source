@@ -1,6 +1,7 @@
+import i18next from "i18next";
 import { describe, expect, it } from "vitest";
 
-import { formatModelFitReleaseDate } from "@/features/model-fit/components/ModelFitFormatters";
+import { formatContextTokens, formatModelFitReleaseDate } from "@/features/model-fit/components/ModelFitFormatters";
 
 describe("formatModelFitReleaseDate", () => {
 	it("formats a date-only ISO string as a locale-aware, date-only value", () => {
@@ -26,5 +27,18 @@ describe("formatModelFitReleaseDate", () => {
 
 	it("returns the em-dash placeholder for out-of-range parts that would otherwise roll over into a wrong day", () => {
 		expect(formatModelFitReleaseDate("2025-13-40")).toBe("—");
+	});
+});
+
+describe("formatContextTokens", () => {
+	// The UI language, not the browser locale: a German page groups thousands with a dot.
+	it("groups thousands in the UI language", async () => {
+		await i18next.changeLanguage("de");
+		try {
+			expect(formatContextTokens(1234)).toBe("1.234");
+			expect(formatContextTokens(null)).toBe("—");
+		} finally {
+			await i18next.changeLanguage("en");
+		}
 	});
 });

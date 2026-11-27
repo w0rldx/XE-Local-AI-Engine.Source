@@ -475,10 +475,10 @@ public sealed class ModelLabPlaygroundServiceTests
     private sealed class Lab : IAsyncDisposable
     {
         private readonly TempDirectory _scripts;
-        private readonly ModelLabExperimentServiceTests.ScriptedProcess _unused;
+        private readonly ModelLabTestSupport.ScriptedProcess _unused;
         private int _published;
 
-        private Lab(ModelLabExperimentServiceTests.LabHost host, ModelLabExperimentServiceTests.ScriptedProcess unused, TempDirectory scripts)
+        private Lab(ModelLabTestSupport.LabHost host, ModelLabTestSupport.ScriptedProcess unused, TempDirectory scripts)
         {
             Host = host;
             _unused = unused;
@@ -486,7 +486,7 @@ public sealed class ModelLabPlaygroundServiceTests
             Events.EventPublished += (_, _) => Interlocked.Increment(ref _published);
         }
 
-        public ModelLabExperimentServiceTests.LabHost Host { get; }
+        public ModelLabTestSupport.LabHost Host { get; }
 
         public ModelLabPlaygroundService Service => Host.Services.GetRequiredService<ModelLabPlaygroundService>();
 
@@ -512,10 +512,10 @@ public sealed class ModelLabPlaygroundServiceTests
         public static async Task<Lab> StartAsync(ScriptedPlaygroundJob script, bool? rowLandsBeforeTheThrow = null)
         {
 #pragma warning disable CA2000 // The lab owns them.
-            var unused = new ModelLabExperimentServiceTests.ScriptedProcess();
+            var unused = new ModelLabTestSupport.ScriptedProcess();
             var scripts = new TempDirectory("playground-script");
 #pragma warning restore CA2000
-            var host = await ModelLabExperimentServiceTests.LabHost.StartAsync(unused, configure: services =>
+            var host = await ModelLabTestSupport.LabHost.StartAsync(unused, configure: services =>
             {
                 services.RemoveAll<ITrainingProcessSpawner>();
                 services.AddSingleton<ITrainingProcessSpawner>(script);
@@ -597,7 +597,7 @@ public sealed class ModelLabPlaygroundServiceTests
         {
             var ids = new List<Guid>();
             await using var scope = Host.Services.CreateAsyncScope();
-            var clock = new SteppingClock();
+            var clock = new SteppingTimeProvider();
             var store = new ModelLabPlaygroundRunStore(scope.ServiceProvider.GetRequiredService<NodeChatDbContext>(), clock);
             for (var index = 0; index < count; index++)
             {
@@ -644,15 +644,6 @@ public sealed class ModelLabPlaygroundServiceTests
 
             throw new InvalidOperationException("The scripted row save failed.");
         }
-    }
-
-    /// <summary>Each read is a second later than the last, from long before any real run.</summary>
-    private sealed class SteppingClock : TimeProvider
-    {
-        private long _ticks = DateTimeOffset.UnixEpoch.Ticks;
-
-        public override DateTimeOffset GetUtcNow() =>
-            new(Interlocked.Add(ref _ticks, TimeSpan.TicksPerSecond), TimeSpan.Zero);
     }
 
     /// <summary>A scripted <c>nnplayground.py</c>: it records each job, writes the outputs it is given and says its lines with the spawn's token.</summary>

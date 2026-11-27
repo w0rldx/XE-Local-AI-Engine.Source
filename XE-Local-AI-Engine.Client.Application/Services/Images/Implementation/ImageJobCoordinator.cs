@@ -455,14 +455,15 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         }
         catch (Exception exception)
         {
-            // Sanitized: never surface a raw message (it may carry internal/model detail) and never log the prompt. A daemon
-            // death, a GPU out-of-memory and a full loaded-model cap are the runtime texts passed through: fixed, display-safe and telling the operator what happened.
+            // Sanitized: never surface a raw message (it may carry internal/model detail) and never log the prompt. A daemon death, a GPU
+            // out-of-memory, a full model cap and a model unloaded at start pass the runtime's fixed, display-safe text through.
             var failure = exception switch
             {
                 StableDiffusionRuntimeException { FeatureUnsupported: true } => new ImageJobFailure(ImageJobFailureReason.EditModeUnsupported, EditModeUnsupportedByRuntime),
                 StableDiffusionRuntimeException { ProcessExited: true } => new ImageJobFailure(ImageJobFailureReason.ProcessExited, exception.Message),
                 StableDiffusionRuntimeException { OutOfMemory: true } => new ImageJobFailure(ImageJobFailureReason.OutOfMemory, exception.Message),
                 StableDiffusionRuntimeException { LoadedModelCapReached: true } => new ImageJobFailure(ImageJobFailureReason.LoadedModelCapReached, exception.Message),
+                StableDiffusionRuntimeException { ModelUnloadedWhileStarting: true } => new ImageJobFailure(ImageJobFailureReason.ModelUnloadedWhileStarting, exception.Message),
                 _ => new ImageJobFailure(ImageJobFailureReason.Generic, "Image generation failed.")
             };
             await FailJobAsync(jobId, failure);

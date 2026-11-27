@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
 
 using System.Globalization;
-using System.Runtime.InteropServices;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>Linux <see cref="ISandboxProcessGroupKiller" />.</summary>
@@ -33,7 +32,7 @@ public sealed class LinuxSandboxProcessGroupKiller : ISandboxProcessGroupKiller
 
     /// <summary>The time source is injected: ActivatorUtilities injects the registered one for the reaper and the provider.</summary>
     public LinuxSandboxProcessGroupKiller(TimeProvider timeProvider)
-        : this(timeProvider, LinuxPidFd.Open, static (pidFd, signal, group) => pidFd.Send(signal, group), Signal, ReadStat)
+        : this(timeProvider, LinuxPidFd.Open, static (pidFd, signal, group) => pidFd.Send(signal, group), LinuxKill.Send, ReadStat)
     {
     }
 
@@ -268,13 +267,4 @@ public sealed class LinuxSandboxProcessGroupKiller : ISandboxProcessGroupKiller
 
     private static LinuxProcStat ReadStat(int processId) =>
         processId > 0 ? LinuxProcStat.Read(string.Create(CultureInfo.InvariantCulture, $"/proc/{processId}/stat")) : LinuxProcStat.Missing;
-
-    private static int Signal(int pid, int signal) =>
-        kill(pid, signal) == 0 ? 0 : Marshal.GetLastPInvokeError();
-
-    // int kill(pid_t pid, int sig) — a negative pid signals the process group abs(pid). DllImport rather than LibraryImport keeps this
-    // project free of AllowUnsafeBlocks, matching the libc open() import in ProcessSandboxRuntimeProvider.
-    [DllImport("libc", EntryPoint = "kill", SetLastError = true)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
-    private static extern int kill(int pid, int sig);
 }

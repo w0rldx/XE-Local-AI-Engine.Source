@@ -3,12 +3,17 @@ namespace XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog.Implementation
 using System.Text.Json;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
-/// <summary>File-backed <see cref="IExternalAppCatalogCacheStore" />: one small JSON file under the node data directory, guarded by a lock and written owner-only on non-Windows.</summary>
+/// <summary>
+///     Persists the last successfully fetched-and-validated remote catalog so it survives a restart: one small JSON file
+///     under the node data directory, guarded by a lock and written owner-only on non-Windows.
+/// </summary>
 /// <remarks>
-///     Copied from <c>ModelCatalogCacheStore</c> in shape and intent; the catalog cache is a raw fetched document,
-///     not node state, so it stays a file rather than a database row.
+///     When the node starts with a configured <see cref="ExternalAppCatalogOptions.RefreshUrl" /> but the network is
+///     unreachable, the provider serves this instead of regressing to the (potentially much older) bundled seed. Same
+///     shape and intent as <c>ModelCatalogCacheStore</c>; the catalog cache is a raw fetched document, not node state,
+///     so it stays a file rather than a database row.
 /// </remarks>
-internal sealed class ExternalAppCatalogCacheStore : IExternalAppCatalogCacheStore, IDisposable
+internal sealed class ExternalAppCatalogCacheStore : IDisposable
 {
     private const string CacheDirectoryName = "external-apps";
     private const string CacheFileName = "catalog-remote-cache.json";
@@ -55,6 +60,7 @@ internal sealed class ExternalAppCatalogCacheStore : IExternalAppCatalogCacheSto
         }
     }
 
+    /// <summary>Loads the persisted last-good catalog, or <see langword="null" /> when none has ever been saved or it could not be read.</summary>
     public async Task<StoredExternalAppCatalogCache?> LoadAsync(CancellationToken cancellationToken = default)
     {
         await _lock.WaitAsync(cancellationToken);
@@ -94,6 +100,7 @@ internal sealed class ExternalAppCatalogCacheStore : IExternalAppCatalogCacheSto
         }
     }
 
+    /// <summary>Persists <paramref name="cache" />, overwriting any previously saved copy.</summary>
     public async Task SaveAsync(StoredExternalAppCatalogCache cache, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(cache);

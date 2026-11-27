@@ -6,7 +6,6 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
-using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
@@ -62,7 +61,6 @@ public sealed class BenchmarkCatalogServiceTests
         var service = new BenchmarkCatalogService(definitions,
             resolver,
             capabilities,
-            new BenchmarkEligibilityPolicy(),
             models,
             new LeaseProvider(new Dictionary<string, InstalledModelSnapshot>
             {
@@ -264,7 +262,6 @@ public sealed class BenchmarkCatalogServiceTests
         return new BenchmarkCatalogService(definitions,
             resolver,
             capabilities,
-            new BenchmarkEligibilityPolicy(),
             models,
             leases,
             classifications ?? Substitute.For<IModelClassificationStore>(),

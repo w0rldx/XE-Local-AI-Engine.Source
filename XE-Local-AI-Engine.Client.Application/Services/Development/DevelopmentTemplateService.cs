@@ -7,26 +7,6 @@ using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     Public so tests can substitute it, matching the other Development seams: this assembly is not strong-named, so
-///     Castle DynamicProxy cannot proxy an internal interface.
-/// </summary>
-public interface IDevelopmentTemplateService
-{
-    Task<IReadOnlyList<DevelopmentTemplateReference>> ListTemplatesAsync(CancellationToken cancellationToken = default);
-
-    Task<DevelopmentTemplateReference> AddTemplateAsync(string templateAlias, string hostPath, CancellationToken cancellationToken = default);
-
-    /// <summary>Throws <see cref="DevelopmentNotFoundException" /> when no template has that id.</summary>
-    Task RemoveTemplateAsync(Guid templateId, CancellationToken cancellationToken = default);
-
-    Task<DevelopmentTemplateMaterializationResult> CreateFromTemplateAsync(Guid templateId,
-        string destinationPath,
-        string repositoryAlias,
-        string baseBranch,
-        CancellationToken cancellationToken = default);
-}
-
-/// <summary>
 ///     Creates a new Development repository from a template the operator already has on this host.
 /// </summary>
 /// <remarks>
@@ -36,7 +16,7 @@ public interface IDevelopmentTemplateService
 ///     an option, because a worktree shares the template's object store, which would make every managed worktree a
 ///     child of the template's repository and leave an inherited <c>origin</c> a stray push can land in.
 /// </remarks>
-internal sealed class DevelopmentTemplateService : IDevelopmentTemplateService
+public sealed class DevelopmentTemplateService
 {
     private readonly INodeDataDirectory _dataDirectory;
     private readonly DevelopmentOptions _options;
@@ -98,6 +78,7 @@ internal sealed class DevelopmentTemplateService : IDevelopmentTemplateService
         };
     }
 
+    /// <summary>Throws <see cref="DevelopmentNotFoundException" /> when no template has that id.</summary>
     public async Task RemoveTemplateAsync(Guid templateId, CancellationToken cancellationToken = default)
     {
         if (!await _templateStore.RemoveAsync(templateId, cancellationToken))

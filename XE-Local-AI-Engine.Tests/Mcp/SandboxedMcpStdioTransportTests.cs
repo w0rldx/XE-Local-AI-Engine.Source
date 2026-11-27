@@ -1467,7 +1467,7 @@ public sealed class SandboxedMcpStdioTransportTests
 
     private static IAgentHomeIdentityProvider IdentityProvider()
     {
-        return new StubIdentityProvider();
+        return new FixedAgentHomeIdentityProvider("owner", "node");
     }
 
     private static INodeDataDirectory NodeDataDirectory()
@@ -1793,22 +1793,5 @@ public sealed class SandboxedMcpStdioTransportTests
             CreatedAtUtc = 0,
             UpdatedAtUtc = 0
         };
-    }
-
-    /// <summary>
-    ///     A hand-written stub rather than a substitute: <c>IAgentHomeIdentityProvider</c> is internal to the
-    ///     application assembly, and Castle's dynamic proxy cannot subclass an internal interface from an assembly that
-    ///     is not strong-named and does not expose itself to <c>DynamicProxyGenAssembly2</c>.
-    /// </summary>
-    private sealed class StubIdentityProvider : IAgentHomeIdentityProvider
-    {
-        public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(new AgentHomeOwnerIdentity
-            {
-                OwnerUserId = "owner",
-                NodeId = "node"
-            });
-        }
     }
 }

@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { cleanup, render, screen } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { cleanup, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { McpServerToolsView } from "@/features/mcp/models/McpServerToolsModels";
@@ -16,43 +14,7 @@ vi.mock("@/features/mcp/queries/useMcpServers", () => ({
 }));
 
 import { McpServerToolsPanel } from "@/features/mcp/components/McpServerToolsPanel";
-import { testMantineTheme } from "@/test/MantineTestRender";
-
-function renderWithProviders(ui: ReactElement) {
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			{ui}
-		</MantineProvider>,
-	);
-}
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-	Object.defineProperty(document, "fonts", {
-		writable: true,
-		value: { ready: Promise.resolve(), addEventListener: vi.fn(), removeEventListener: vi.fn() },
-	});
-}
+import { installJsdomEnvironmentMocks, renderWithMantine } from "@/test/MantineTestRender";
 
 function mockTools(view: McpServerToolsView): void {
 	useMcpServerToolsMock.mockReturnValue({ data: view, isLoading: false, error: null });
@@ -71,7 +33,7 @@ describe("McpServerToolsPanel", () => {
 	it("renders nothing when no server is selected", () => {
 		mockTools({ status: "disabled", error: null, failureReason: null, tools: [] });
 
-		const { container } = renderWithProviders(<McpServerToolsPanel serverId={null} />);
+		const { container } = renderWithMantine(<McpServerToolsPanel serverId={null} />);
 
 		// The query hook is still called (hooks must run unconditionally) but the panel renders null.
 		expect(container.querySelector('[data-testid="mcp-server-tools-panel"]')).toBeNull();
@@ -80,7 +42,7 @@ describe("McpServerToolsPanel", () => {
 	it("renders the connecting status as a distinct connecting label, not an error", () => {
 		mockTools({ status: "connecting", error: null, failureReason: null, tools: [] });
 
-		renderWithProviders(<McpServerToolsPanel serverId="mcp-1" />);
+		renderWithMantine(<McpServerToolsPanel serverId="mcp-1" />);
 
 		// Connecting renders its own label, NOT the error one.
 		expect(screen.getByText("connecting…")).toBeTruthy();
@@ -97,7 +59,7 @@ describe("McpServerToolsPanel", () => {
 			tools: [{ name: "mcp__fs__read", description: "Reads a file.", requiresApproval: true }],
 		});
 
-		renderWithProviders(<McpServerToolsPanel serverId="mcp-1" />);
+		renderWithMantine(<McpServerToolsPanel serverId="mcp-1" />);
 
 		expect(screen.getByText("connected")).toBeTruthy();
 		expect(screen.getByTestId("mcp-discovered-tool-mcp__fs__read")).toBeTruthy();
@@ -108,7 +70,7 @@ describe("McpServerToolsPanel", () => {
 	it("renders the error status and the redacted connection error when no reason is reported", () => {
 		mockTools({ status: "error", error: "redacted reason", failureReason: null, tools: [] });
 
-		renderWithProviders(<McpServerToolsPanel serverId="mcp-1" />);
+		renderWithMantine(<McpServerToolsPanel serverId="mcp-1" />);
 
 		expect(screen.getByText("error")).toBeTruthy();
 		expect(screen.getByTestId("mcp-server-tools-connection-error").textContent).toContain("redacted reason");
@@ -118,7 +80,7 @@ describe("McpServerToolsPanel", () => {
 		const hint = "The command 'codegraph' is not on the sandbox PATH (/usr/bin:/bin).";
 		mockTools({ status: "error", error: hint, failureReason: "ServerNotFound", tools: [] });
 
-		renderWithProviders(<McpServerToolsPanel serverId="mcp-1" />);
+		renderWithMantine(<McpServerToolsPanel serverId="mcp-1" />);
 
 		expect(screen.getByTestId("mcp-server-tools-connection-error").textContent).toContain(
 			"The server's command was not found or could not be started. Check the command and that it is installed on this machine.",
@@ -130,7 +92,7 @@ describe("McpServerToolsPanel", () => {
 		const detail = "The MCP server process exited. Exit code 1.\nstderr: Error: Cannot find module 'x'\n    at node:internal";
 		mockTools({ status: "error", error: detail, failureReason: "ServerExited", tools: [] });
 
-		renderWithProviders(<McpServerToolsPanel serverId="mcp-1" />);
+		renderWithMantine(<McpServerToolsPanel serverId="mcp-1" />);
 
 		const block = screen.getByTestId("mcp-server-tools-connection-detail");
 		expect(block.tagName).toBe("PRE");
@@ -147,7 +109,7 @@ describe("McpServerToolsPanel", () => {
 			tools: [],
 		});
 
-		renderWithProviders(<McpServerToolsPanel serverId="mcp-1" />);
+		renderWithMantine(<McpServerToolsPanel serverId="mcp-1" />);
 
 		const alert = screen.getByTestId("mcp-server-tools-connection-error");
 		expect(alert.textContent).toContain("The sandbox refused to start this server.");
@@ -164,7 +126,7 @@ describe("McpServerToolsPanel", () => {
 			tools: [],
 		});
 
-		renderWithProviders(<McpServerToolsPanel serverId="mcp-1" />);
+		renderWithMantine(<McpServerToolsPanel serverId="mcp-1" />);
 
 		const alert = screen.getByTestId("mcp-server-tools-connection-error");
 		expect(alert.textContent).toContain("This node cannot run a server in the sandbox.");
@@ -175,7 +137,7 @@ describe("McpServerToolsPanel", () => {
 		// An unexpected status string must not crash — it renders the raw value (graceful fallback).
 		mockTools({ status: "future-state" as McpServerToolsView["status"], error: null, failureReason: null, tools: [] });
 
-		renderWithProviders(<McpServerToolsPanel serverId="mcp-1" />);
+		renderWithMantine(<McpServerToolsPanel serverId="mcp-1" />);
 
 		expect(screen.getByText("future-state")).toBeTruthy();
 	});

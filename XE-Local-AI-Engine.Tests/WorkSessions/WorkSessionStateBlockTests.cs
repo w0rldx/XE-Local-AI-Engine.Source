@@ -105,6 +105,18 @@ public sealed class WorkSessionStateBlockTests
         AssertEx.Equal(active.Id, AssertEx.NotNull(WorkSessionStateBlockComposer.ResolveCurrentTask(state), "An Active task is always the current one.").Id);
     }
 
+    /// <summary>A finding cut at its 400-character budget drops a surrogate pair the cut would split, so no lone half reaches the prompt.</summary>
+    [Test]
+    public void Compose_CutsALongFindingOnAWholeCharacter()
+    {
+        var block = WorkSessionStateBlockComposer.Compose(StateWith(findings: [Finding(new string('a', count: 399) + "\U0001F600 tail")]),
+            step: 1,
+            maxStepsPerRun: 25);
+
+        AssertEx.Contains(block, $"] {new string('a', count: 399)}…");
+        AssertEx.False(block.Any(char.IsSurrogate), "half of a surrogate pair survived the cut");
+    }
+
     [Test]
     public void Compose_WhenTheSessionIsOperatorDriven_SaysNothingAboutAskUser()
     {

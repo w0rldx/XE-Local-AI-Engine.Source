@@ -31,9 +31,9 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
     private const long MaxDownloadBytes = 3L * 1024 * 1024 * 1024;
 
     private readonly string _activeTag;
+    private readonly ManagedRuntimeArchiveInstaller _archiveInstaller;
     private readonly Architecture _arch;
     private readonly string _cacheRoot;
-    private readonly HttpClient _httpClient;
     private readonly IManagedRuntimeStore<SdGpuBackend>? _installedRuntimeStore;
     private readonly ILogger _logger;
     private readonly IManagedSourceBuildSignal<SdGpuBackend>? _managedSourceSignal;
@@ -77,8 +77,12 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
         ILogger? logger = null)
     {
         _logger = logger ?? NullLogger.Instance;
-        ArgumentNullException.ThrowIfNull(httpClient);
-        _httpClient = httpClient;
+        _archiveInstaller = new ManagedRuntimeArchiveInstaller(httpClient,
+            "stable-diffusion.cpp",
+            "sdcpp",
+            MaxDownloadBytes,
+            static (message, inner) => inner is null ? new StableDiffusionRuntimeException(message) : new StableDiffusionRuntimeException(message, inner),
+            _logger);
         ArgumentException.ThrowIfNullOrWhiteSpace(cacheRoot);
         ArgumentException.ThrowIfNullOrWhiteSpace(activeTag);
         _cacheRoot = cacheRoot;
@@ -149,7 +153,13 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
         // A missing or renamed sd-server lands here too, so the repair is visible rather than a silent wait.
         _logger.LogInformation("No cached sd-server for stable-diffusion.cpp {Tag} ({Backend}); downloading the pinned runtime.", _activeTag, backend);
         var startedAt = Stopwatch.GetTimestamp();
-        await DownloadVerifyExtractAsync(StableDiffusionReleasePins.DownloadUri(_activeTag, pin.AssetName), pin.AssetName, pin.Sha256, backendDir, ct).ConfigureAwait(false);
+        // Every stable-diffusion.cpp asset is a .zip, unlike llama.cpp's and whisper.cpp's tar.gz on Linux.
+        await _archiveInstaller.InstallAsync(StableDiffusionReleasePins.DownloadUri(_activeTag, pin.AssetName),
+            pin.AssetName,
+            pin.Sha256,
+            ManagedRuntimeArchiveKind.Zip,
+            backendDir,
+            ct).ConfigureAwait(false);
         _logger.LogInformation("Downloaded and verified stable-diffusion.cpp {Tag} ({Backend}) in {ElapsedMs} ms.",
             _activeTag,
             backend,
@@ -385,7 +395,7 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
         var stagingDir = Path.Combine(Path.GetTempPath(), $"sdcpp-cudart-{Guid.NewGuid():N}");
         try
         {
-            await DownloadToFileAsync(url, tempArchive, ct).ConfigureAwait(false);
+            await _archiveInstaller.DownloadToFileAsync(url, tempArchive, ct).ConfigureAwait(false);
 
             if (!await FileSha256.MatchesAsync(tempArchive, expectedSha256, ct).ConfigureAwait(false))
             {
@@ -445,112 +455,6 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
 
         var serverFileName = Path.GetFileName(pin.ServerRelativePath);
         return Directory.EnumerateFiles(backendDir, serverFileName, SearchOption.AllDirectories).FirstOrDefault();
-    }
-
-    /// <summary>
-    ///     Shared download → SHA256-verify → atomic-extract pipeline against the pinned hash. A transient failure or a
-    ///     hash mismatch is discarded and retried exactly once, then surfaced sanitized.
-    /// </summary>
-    private async Task DownloadVerifyExtractAsync(Uri url, string assetName, string expectedSha256, string backendDir, CancellationToken ct)
-    {
-        var firstError = await DownloadVerifyExtractOrErrorAsync(url, assetName, expectedSha256, backendDir, ct).ConfigureAwait(false);
-        if (firstError is null)
-        {
-            return;
-        }
-
-        var secondError = await DownloadVerifyExtractOrErrorAsync(url, assetName, expectedSha256, backendDir, ct).ConfigureAwait(false);
-        if (secondError is null)
-        {
-            return;
-        }
-
-        throw new StableDiffusionRuntimeException("The stable-diffusion.cpp runtime could not be downloaded or failed integrity verification after a retry. "
-                                                  + "Check the network connection and try again.",
-            secondError);
-    }
-
-    private async Task<Exception?> DownloadVerifyExtractOrErrorAsync(Uri url, string assetName, string expectedSha256, string backendDir, CancellationToken ct)
-    {
-        // Defense-in-depth: strip any directory component before it composes a temp path so a name can never traverse.
-        var tempArchive = Path.Combine(Path.GetTempPath(), $"sdcpp-{Guid.NewGuid():N}-{Path.GetFileName(assetName)}");
-        try
-        {
-            await DownloadToFileAsync(url, tempArchive, ct).ConfigureAwait(false);
-
-            if (!await FileSha256.MatchesAsync(tempArchive, expectedSha256, ct).ConfigureAwait(false))
-            {
-                return new StableDiffusionRuntimeException("The stable-diffusion.cpp runtime download failed integrity verification.");
-            }
-
-            await ExtractArchiveAsync(tempArchive, backendDir, ct).ConfigureAwait(false);
-            return null;
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            return exception;
-        }
-        finally
-        {
-            BestEffortFile.TryDeleteFile(tempArchive);
-        }
-    }
-
-    private async Task DownloadToFileAsync(Uri url, string destination, CancellationToken ct)
-    {
-        using var response = await _httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-
-        await using var source = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-
-        try
-        {
-            await using var target = new FileStream(destination, FileMode.Create, FileAccess.Write, FileShare.None);
-
-            var buffer = new byte[81920];
-            long written = 0;
-            int read;
-            while ((read = await source.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
-            {
-                written += read;
-                if (written > MaxDownloadBytes)
-                {
-                    throw new StableDiffusionRuntimeException("The stable-diffusion.cpp runtime download exceeded the maximum allowed size.");
-                }
-
-                await target.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
-            }
-        }
-        catch
-        {
-            BestEffortFile.TryDeleteFile(destination);
-            throw;
-        }
-    }
-
-    private async Task ExtractArchiveAsync(string archivePath, string backendDir, CancellationToken ct)
-    {
-        // Every stable-diffusion.cpp asset is a .zip (unlike llama.cpp's tar.gz on Linux). Extract into a temp sibling, then
-        // publish it swap-aside so neither a partial extract nor a failed publish replaces a cached install.
-        var stagingDir = $"{backendDir}.{Guid.NewGuid():N}.tmp";
-        Directory.CreateDirectory(stagingDir);
-        try
-        {
-            await ZipFile.ExtractToDirectoryAsync(archivePath, stagingDir, ct).ConfigureAwait(false);
-
-            await StagedDirectoryPublish.PublishAsync(stagingDir, backendDir, _logger, ct).ConfigureAwait(false);
-        }
-        finally
-        {
-            if (Directory.Exists(stagingDir))
-            {
-                Directory.Delete(stagingDir, recursive: true);
-            }
-        }
     }
 
     private static string BackendSlug(SdGpuBackend backend)

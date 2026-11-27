@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { BenchmarkRunSummary } from "@/features/benchmarks/models/BenchmarkModels";
-import { noBenchmarkRunThroughput } from "@/features/benchmarks/models/BenchmarkModels";
+import type { BenchmarkRunSummary, BenchmarkRunThroughput } from "@/features/benchmarks/models/BenchmarkModels";
 import {
 	benchmarkRepeatCohortKey,
 	benchmarkRepeatStats,
@@ -12,6 +11,16 @@ import {
 	throughputEvidenceEntries,
 } from "@/features/benchmarks/models/BenchmarkThroughput";
 import { benchmarkRunSummaryFixture } from "@/features/benchmarks/test/BenchmarkTestFixtures";
+
+const noBenchmarkRunThroughput: BenchmarkRunThroughput = {
+	ttftMs: null,
+	promptTokens: null,
+	promptTokensPerSecond: null,
+	generationTokens: null,
+	generationTokensPerSecond: null,
+	cachedPromptTokens: null,
+	segmentCount: null,
+};
 
 describe("BenchmarkThroughput", () => {
 	// An unmeasured number is a dash, never a zero: a run whose runtime reported no timings must not read as a run that

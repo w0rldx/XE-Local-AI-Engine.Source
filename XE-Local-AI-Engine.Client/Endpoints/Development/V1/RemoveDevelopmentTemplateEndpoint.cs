@@ -7,9 +7,9 @@ using XE_Local_AI_Engine.Client.Services.Development;
 
 public sealed class RemoveDevelopmentTemplateEndpoint : Endpoint<DevelopmentTemplateRequest>, IDevelopmentEndpoint
 {
-    private readonly IDevelopmentTemplateService _service;
+    private readonly DevelopmentTemplateService _service;
 
-    public RemoveDevelopmentTemplateEndpoint(IDevelopmentTemplateService service)
+    public RemoveDevelopmentTemplateEndpoint(DevelopmentTemplateService service)
     {
         ArgumentNullException.ThrowIfNull(service);
         _service = service;

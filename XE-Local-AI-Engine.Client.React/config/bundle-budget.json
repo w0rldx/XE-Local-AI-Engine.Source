@@ -1,4 +1,6 @@
 {
+	"headroomPercent": 2,
+	"eagerJavaScriptBytes": 1680000,
 	"applicationJavaScriptBytes": 6230000,
 	"lazyEditorJavaScriptBytes": 3450000,
 	"lazySceneViewerJavaScriptBytes": 700000,

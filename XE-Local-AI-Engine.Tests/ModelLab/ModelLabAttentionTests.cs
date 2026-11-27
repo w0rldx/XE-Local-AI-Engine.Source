@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.ModelLab;
 using XE_Local_AI_Engine.Tests.Testing;
-using static ModelLabExperimentServiceTests;
+using static ModelLabTestSupport;
 
 /// <summary>A trace that records attention: the job's capture fields, the second blob and its cleanup, the read route, and the refusals.</summary>
 [Category(TestCategories.Integration)]
@@ -50,7 +50,7 @@ public sealed class ModelLabAttentionTests
         process.Finish(CompleteRun, exitCode: 0);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
-        var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId.Value, CancellationToken.None));
+        var record = AssertEx.NotNull(await host.Reader.GetAsync(start.ExperimentId.Value, CancellationToken.None));
         AssertEx.Equal(ModelLabExperimentStatus.Succeeded, record.Status, record.ErrorMessage ?? "no error");
         AssertEx.True(record.AttentionBlobId.HasValue);
         AssertEx.Equal((long)Encoding.UTF8.GetByteCount(process.AttentionContent!), record.AttentionByteCount!.Value);
@@ -145,7 +145,7 @@ public sealed class ModelLabAttentionTests
             await ExpectStatusAsync(host, client, $"/api/local/v1/model-lab/experiments/{id}/attention/3", HttpStatusCode.NotFound);
         }
 
-        AssertEx.Null((await host.Service.GetAsync(plain, CancellationToken.None))!.AttentionBlobId, "A trace without capture stores one blob.");
+        AssertEx.Null((await host.Reader.GetAsync(plain, CancellationToken.None))!.AttentionBlobId, "A trace without capture stores one blob.");
     }
 
     [Test]
@@ -164,7 +164,7 @@ public sealed class ModelLabAttentionTests
         var id = await RunAsync(host, process);
         if (tamper)
         {
-            var record = AssertEx.NotNull(await host.Service.GetAsync(id, CancellationToken.None));
+            var record = AssertEx.NotNull(await host.Reader.GetAsync(id, CancellationToken.None));
             var blob = Path.Combine(Scope(host, id), record.AttentionBlobId!.Value.ToString("N") + ".blob");
             var bytes = await File.ReadAllBytesAsync(blob);
             bytes[^1] ^= 0xFF;
@@ -190,7 +190,7 @@ public sealed class ModelLabAttentionTests
 
         var id = await RunAsync(host, process);
 
-        var record = AssertEx.NotNull(await host.Service.GetAsync(id, CancellationToken.None));
+        var record = AssertEx.NotNull(await host.Reader.GetAsync(id, CancellationToken.None));
         AssertEx.Equal(ModelLabExperimentStatus.Failed, record.Status);
         AssertEx.Contains(record.ErrorMessage!, expected, StringComparison.Ordinal);
         AssertEx.Null(record.TraceBlobId);
@@ -213,7 +213,7 @@ public sealed class ModelLabAttentionTests
         var id = await RunAsync(host, process);
 
         AssertEx.Equal(expected: 1, blobsAtTheSecondWrite, "The trace blob had landed when the second write failed.");
-        var record = AssertEx.NotNull(await host.Service.GetAsync(id, CancellationToken.None));
+        var record = AssertEx.NotNull(await host.Reader.GetAsync(id, CancellationToken.None));
         AssertEx.Equal(ModelLabExperimentStatus.Failed, record.Status);
         AssertEx.Null(record.TraceBlobId);
         AssertEx.False(Directory.Exists(Scope(host, id)), "No blob outlives a run that names none.");
@@ -254,7 +254,7 @@ public sealed class ModelLabAttentionTests
         AssertEx.Contains(start.RefusalMessage!, expected, StringComparison.Ordinal);
         AssertEx.Null(process.Request);
         AssertEx.Null(host.Gate.ExclusiveKind);
-        AssertEx.Empty(await host.Service.ListAsync(CancellationToken.None));
+        AssertEx.Empty(await host.Reader.ListAsync(CancellationToken.None));
     }
 
     [Test]

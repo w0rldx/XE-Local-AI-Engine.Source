@@ -1,10 +1,12 @@
 namespace XE_Local_AI_Engine.Tests.Providers.Image;
 
+using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 [Category(TestCategories.Unit)]
 public sealed class ImageModelRegistryTests
@@ -45,6 +47,29 @@ public sealed class ImageModelRegistryTests
 
         AssertEx.Null(await registry.FindAsync(sd15.ModelName, CancellationToken.None));
         AssertEx.Empty(await registry.ListAsync(CancellationToken.None));
+    }
+
+    /// <summary>The manifest is written owner-only whatever the process umask, and a fresh registry reads the same model back from it.</summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    [SupportedOSPlatform("linux")]
+    public async Task ImageModelRegistry_Upsert_WritesTheManifestOwnerOnly()
+    {
+        using var dir = new TempDirectory("xe-image-reg");
+        var model = WriteSinglePartModel(dir.Path, "a");
+        using (var registry = new ImageModelRegistry(Options(dir.Path), NullLogger<ImageModelRegistry>.Instance))
+        {
+            await registry.UpsertAsync(model, CancellationToken.None);
+        }
+
+        var manifestPath = Path.Combine(dir.Path, ImageModelRegistry.ManifestFileName);
+        var umask = (await File.ReadAllLinesAsync("/proc/self/status")).Single(static line => line.StartsWith("Umask:", StringComparison.Ordinal));
+        var mode = File.GetUnixFileMode(manifestPath);
+        AssertEx.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, mode, $"{umask}; written as {mode}");
+        using var reread = new ImageModelRegistry(Options(dir.Path), NullLogger<ImageModelRegistry>.Instance);
+        var found = AssertEx.NotNull(await reread.FindAsync("a", CancellationToken.None));
+        AssertEx.Equal(model.Parts.Single().LocalPath, found.Parts.Single().LocalPath);
+        AssertEx.Empty(Directory.GetFiles(dir.Path, "*.tmp"), "the temp sibling is renamed over the manifest");
     }
 
     [Test]

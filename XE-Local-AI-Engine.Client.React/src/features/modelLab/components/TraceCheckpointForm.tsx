@@ -40,6 +40,7 @@ import { ModelPickerNotice } from "@/features/modelLab/components/ModelPickerNot
 import { SteeringForm } from "@/features/modelLab/components/SteeringForm";
 import { TraceLayerPicker } from "@/features/modelLab/components/TraceLayerPicker";
 import { licenseConfirmationLabel } from "@/features/modelLab/models/ModelLabLicense";
+import { installedModelsStaleMs } from "@/features/modelLab/models/ModelLabNavigation";
 import { starterSteeringDraft } from "@/features/modelLab/models/ModelLabSteering";
 
 // The transfer has no hub of its own, so the page reads its progress while it runs.
@@ -53,7 +54,7 @@ const maxNewTokensLimit = 256;
 export function TraceCheckpointForm({ busy }: { busy: boolean }) {
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
-	const models = useQuery({ ...listLocalModelsOptions(), staleTime: 30_000 });
+	const models = useQuery({ ...listLocalModelsOptions(), staleTime: installedModelsStaleMs });
 	const ggufNames = (models.data?.items ?? []).flatMap((item) =>
 		item.provider === LLAMACPP_PROVIDER && item.modelName ? [item.modelName] : [],
 	);

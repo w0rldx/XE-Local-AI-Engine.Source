@@ -3,6 +3,7 @@ import type { TFunction } from "i18next";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { formatCount, formatNumber } from "@/core/formatting/NumberFormatting";
 import { formatTime } from "@/core/formatting/TimeFormatting";
 import type { StepConsumption, WorkSessionEventResponse } from "@/features/workSessions/models/WorkSessionModels";
 
@@ -57,19 +58,17 @@ function parseConsumption(
 /**
  * Token counts read as magnitudes here, not as figures: 18,247 becomes "18.2k" so the line stays one glance wide.
  *
- * Both halves are locale-driven. `Intl.NumberFormat` on the active i18next language supplies the decimal separator —
+ * Both halves are locale-driven. `formatNumber` in the active UI language supplies the decimal separator —
  * hardcoding `toFixed(1)` printed "18.2k" to a German reader, who writes "18,2k" — and the thousands suffix comes from
  * the translation catalog rather than from this file, so a locale that does not abbreviate with "k" can say so.
  */
-function formatTokens(value: number, language: string, t: TFunction): string {
+function formatTokens(value: number, t: TFunction): string {
 	const rounded = Math.max(0, Math.round(value));
 	if (rounded < 1000) {
-		return new Intl.NumberFormat(language).format(rounded);
+		return formatCount(rounded);
 	}
 
-	const thousands = new Intl.NumberFormat(language, { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(
-		rounded / 1000,
-	);
+	const thousands = formatNumber(rounded / 1000, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 	return t("pages.workSessions.events.tokensThousands", "{{value}}k", { value: thousands });
 }
 
@@ -83,7 +82,7 @@ export interface WorkSessionEventsTabProps {
 }
 
 export function WorkSessionEventsTab({ events, hasMore, canLoadMore, onLoadMore }: WorkSessionEventsTabProps) {
-	const { t, i18n } = useTranslation();
+	const { t } = useTranslation();
 	const [expandedId, setExpandedId] = useState<string | undefined>(undefined);
 
 	if (events.length === 0) {
@@ -104,7 +103,7 @@ export function WorkSessionEventsTab({ events, hasMore, canLoadMore, onLoadMore 
 
 		// Every figure here is a step TOTAL. The provider's own reported usage is deliberately absent: it is a
 		// per-round reading, so beside these it would contradict them on any multi-round step.
-		const tokens = formatTokens(consumption.estimatedInputTokens, i18n.language, t);
+		const tokens = formatTokens(consumption.estimatedInputTokens, t);
 		if (consumption.attachedBudgets > 1) {
 			// The cap bounds each invocation, not their sum, so a step that spawned sub-agents has no single ratio to
 			// show. Rendering "18/10" here would read as a breached cap and argue for raising one nothing hit.

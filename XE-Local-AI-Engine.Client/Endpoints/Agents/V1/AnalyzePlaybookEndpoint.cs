@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Agents.V1;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Agents.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
-using XE_Local_AI_Engine.Client.Services.Analysis;
+using XE_Local_AI_Engine.Client.Services.Analysis.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
 /// <summary>
@@ -16,9 +16,9 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 /// </remarks>
 public sealed class AnalyzePlaybookEndpoint : Endpoint<AnalyzePlaybookRequest, ListPlaybookActionsResponse>
 {
-    private readonly IPlaybookAnalysisService _analysisService;
+    private readonly PlaybookAnalysisService _analysisService;
 
-    public AnalyzePlaybookEndpoint(IPlaybookAnalysisService analysisService)
+    public AnalyzePlaybookEndpoint(PlaybookAnalysisService analysisService)
     {
         ArgumentNullException.ThrowIfNull(analysisService);
         _analysisService = analysisService;

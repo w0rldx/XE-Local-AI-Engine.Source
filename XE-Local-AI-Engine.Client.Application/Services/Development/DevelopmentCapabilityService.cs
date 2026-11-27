@@ -8,11 +8,6 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Providers.Python;
 
-public interface IDevelopmentCapabilityService
-{
-    Task<DevelopmentCapability> GetAsync(CancellationToken cancellationToken = default);
-}
-
 /// <summary>
 ///     Reports Development Mode's availability, and the state of the runtime it will actually execute on.
 /// </summary>
@@ -23,7 +18,7 @@ public interface IDevelopmentCapabilityService
 ///     over-reported dependency is a false blocker on a working feature. Registered whether or not Development Mode is
 ///     on, because the capability endpoint answers the disabled state.
 /// </remarks>
-internal sealed class DevelopmentCapabilityService : IDevelopmentCapabilityService
+public sealed class DevelopmentCapabilityService
 {
     internal const string NoHomeDirectoryReason =
         "this account has no home directory (HOME is unset), so the Sandboxed trust tier cannot tell a server's package tree from the operator's credential stores and refuses every connection. "

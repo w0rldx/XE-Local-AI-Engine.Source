@@ -9,8 +9,6 @@ using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 /// <remarks>Every member is Linux-only and returns null / false on a read failure rather than throwing.</remarks>
 internal static partial class LinuxProcFs
 {
-    private const int Enosys = 38;
-
     /// <summary>State (field 3), parent pid (field 4), process group (field 5) and start time (field 22) of <c>/proc/[pid]/stat</c>, or null when unreadable.</summary>
     public static ProcessStat? ReadStatOrNull(int processId)
     {
@@ -75,15 +73,8 @@ internal static partial class LinuxProcFs
     }
 
     /// <summary>Sends <paramref name="signal" /> to <paramref name="pid" /> (a negative pid is the process group). Returns 0 when the kernel accepted it, else the errno (ENOSYS off Linux).</summary>
-    public static int Signal(int pid, int signal)
-    {
-        if (!OperatingSystem.IsLinux())
-        {
-            return Enosys;
-        }
-
-        return Kill(pid, signal) == 0 ? 0 : Marshal.GetLastPInvokeError();
-    }
+    public static int Signal(int pid, int signal) =>
+        LinuxKill.Send(pid, signal);
 
     // char *realpath(const char *path, char *resolved_path); — a null resolved_path makes libc allocate the result.
     [LibraryImport("libc", EntryPoint = "realpath", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
@@ -94,9 +85,4 @@ internal static partial class LinuxProcFs
     [LibraryImport("libc", EntryPoint = "free")]
     [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
     private static partial void Free(IntPtr ptr);
-
-    // int kill(pid_t pid, int sig); — a negative pid signals the process group abs(pid).
-    [LibraryImport("libc", EntryPoint = "kill", SetLastError = true)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
-    private static partial int Kill(int pid, int sig);
 }

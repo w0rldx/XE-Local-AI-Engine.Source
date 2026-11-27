@@ -1,7 +1,5 @@
 # XE Local AI Engine — Developer Wiki
 
-> Reviewed: 2026-10-02 · Code-grounded.
-
 XE Local AI Engine (product name **XE AI-Engine**) is a **self-contained local AI node**. A single
 **Node Web Server process** (`XE-Local-AI-Engine.Client`) serves the React management UI, exposes
 loopback-only local APIs (`/api/local/v1`) plus SignalR hubs, persists selected sensitive payloads in SQLite with **per-column AEAD encryption**, and runs the local model runtimes
@@ -27,7 +25,7 @@ Framework pins, while the wiki covers architecture.
 - Each page opens with a short summary (what it covers, who should read it, where to skip to); long pages follow it with a `Contents` list.
 - The largest pages keep their explanation and move lookup material (option tables, flag catalogues, route and mode matrices) to `reference/NN-*.md`; the parent page keeps every heading as a stub that links there, so a citation such as `wiki 03 §2.5` still lands.
 - Code comments and other docs cite sections as `wiki NN §M` and link to heading anchors, so headings are never renamed or renumbered.
-- The `Reviewed:` date on line 3 is the last time the page was checked against the code. Where the page and the code disagree, the code wins.
+- Pages describe current behavior; where a page and the code disagree, the code wins. History stays in git and the ADRs: a removed feature gets at most one locked-decision line in [agent-knowledge](../agent-knowledge.md), never a "Gone" block or a dated narrative on a wiki page.
 - Pages describe how things work. The traps (failures already paid for, and the rule that prevents each) live in the companion [agent-knowledge index](../agent-knowledge.md).
 
 ## Architecture invariants
@@ -67,7 +65,7 @@ Framework pins, while the wiki covers architecture.
 | 06 | [Scheduler](06-scheduler.md) | Quartz.NET jobs, run history, cancellation, live hub, encoded gotchas |
 | 07 | [Model-fit / Advisor](07-model-fit.md) | Cache-read vs scheduler refresh, `MemoryFitEstimator`, hardware profiler, sanitization |
 | 08 | [Data & Persistence](08-data-and-persistence.md) | EF Core + SQLite, per-column AEAD encryption, entities, schema milestones |
-| 09 | [API & Hubs](09-api-and-hubs.md) | FastEndpoints `/api/local/v1` (one route family per nested class in `LocalApiRoutes`), the local SignalR hubs registered by the `MapHub<>` block in `Client/Program.cs` (all unconditional except `DevelopmentAttemptHub`) — this page owns the hub list, operator-authored custom tools, the inbound MCP tool surface, OpenAPI→hey-api |
+| 09 | [API & Hubs](09-api-and-hubs.md) | FastEndpoints `/api/local/v1` (one route family per nested class in `LocalApiRoutes`), the local SignalR hubs registered by the `MapHub<>` block in `Client/Program.cs` (all unconditional except `DevelopmentAttemptHub`) — this page and its reference pages own the endpoint inventory and the hub list, operator-authored custom tools, the inbound MCP tool surface, OpenAPI→hey-api |
 | 10 | [React Client](10-react-client.md) | The feature directories under `Client.React/src/features/`, TanStack Query/Zustand, hey-api, shared hub connections, dialog system, i18n, SPA serving |
 | 11 | [Hosting & Deployment](11-hosting-and-deployment.md) | Aspire AppHost, desktop launcher, native desktop shell, publish profiles, update channels, vault unlock, legacy/manual cleanup |
 | 12 | [Security & Privacy](12-security-and-privacy.md) | Egress boundary, secret handling, vault key custody, web access consent, loopback/Host-Origin, redaction, node-local AI ops, Development Mode execution boundary |
@@ -80,9 +78,9 @@ Framework pins, while the wiki covers architecture.
 | 19 | [Compute Tools](19-compute-tools.md) | Sandboxed code execution: the `run_python` tool, process-sandbox isolation, uv-pinned venv (numpy/scipy/sympy), security/gating (WriteExecute + approval-required, profile-opt-in), Linux x64 and Windows x64, operator enablement |
 | 20 | [Benchmarks](20-benchmarks.md) | Task suites and long-context probes, freeze fan-out and cell ranking, verifiable criteria incl. `pythonTests` execution scoring, pairwise Bradley-Terry and paired-difference intervals, quant fidelity (perplexity/KLD, base-logit cache, comparability digest), the four-kind work queue, scheduled matrices and the training hand-off, export schema 4 |
 | 21 | [Graph Workflows](21-graph-workflows.md) | Operator-authored DAGs: the graph contract and its validation rules, the run and node-run lifecycles, the node kinds including direct LLM calls, chat inputs and decision models and their documents, Standard vs Chat graphs, the route family and the `graphWorkflowChanged` hub contract, the React editor and run view, the options table, and the one-shot Open Canvas import |
-| 22 | [Workflow Engines Divergence Register](22-workflow-engines-divergence-register.md) | A retired-engine note: Dev Workflows converged into Graph Workflows ([ADR 0023](../adr/0023-dev-workflows-converge-into-graph-workflows.md)) and is gone; the page keeps the open addendum on Development Mode's second tool-invocation stack |
 | 23 | [External Apps](23-external-apps.md) | Curated containerised applications: the catalog document and its fingerprint, the engine-owned container runtime layer beside the sandbox SPI, the container policy and what it verifies on read-back, per-instance storage and the storage-wipe helper container, the lifecycle and the boot reconciler, runtime selection and the daemon identity pin, the `ExternalApps:Enabled` kill switch and what disabling does not do |
 | 24 | [Audio Transcription](24-audio-transcription.md) | Local speech-to-text on whisper.cpp: the supervised `whisper-server` runtime in brief, the encrypted session and segment tables and their AAD layout, the batch upload path (streaming multipart, engine-owned temp slot, container sniffing, engine-side ffmpeg transcode, `Seq` from 1), the session route family, the React feature area, the never-persist-audio rule and its four enforcement points, the options table, and what the live capture slices have not built yet |
+| 25 | [Model Lab](25-model-lab.md) | The Advanced-only `/model-lab` page: GGUF architecture from the header, next-token scores on llama.cpp, checkpoint traces (candidates, attention, logit lens, expert routing) and steering on the training runtime, the warm serve worker and its GPU session, the CPU training stepper |
 
 ### Reference pages
 
@@ -92,13 +90,17 @@ Lookup material split out of the largest pages. Each is complete on its own and 
 | --- | --- |
 | 03 Local Runtime & Providers | [supervisor internals](reference/03-llama-server-supervisor.md) · [launch flags](reference/03-llama-server-launch-flags.md) · [clients](reference/03-llama-server-clients.md) · [runtime binaries & tuning](reference/03-runtime-binaries-and-tuning.md) · [satellite & cloud providers](reference/03-satellite-and-cloud-providers.md) |
 | 04 Agent Mode | [AI.Agent runtime](reference/04-ai-agent-runtime.md) · [application services](reference/04-application-services.md) · [agent skills](reference/04-agent-skills.md) · [work sessions](reference/04-work-sessions.md) |
+| 09 API & Hubs | [endpoint inventory](reference/09-endpoint-inventory.md) · [SignalR hubs](reference/09-signalr-hubs.md) |
+| 10 React Client | [feature folders](reference/10-feature-folders.md) |
 | 12 Security & Privacy | [admin API surface](reference/12-admin-api-surface.md) · [sandbox modes & options](reference/12-sandbox-modes-and-options.md) |
 | 13 Testing & Validation | [quality review](reference/13-quality-review.md) |
+| 21 Graph Workflows | [node kinds](reference/21-node-kinds.md) |
+| 25 Model Lab | [Model Lab reference](reference/25-model-lab.md) |
 
 ## Conventions in this wiki
 
 - Every structural claim cites source as `path/to/File.cs` (and symbol names where useful).
-- Every page carries a `Reviewed:` date on line 3. When you change a subsystem, update the matching page.
+- When you change a subsystem, update the matching page in the same change.
 - Architecture invariants (egress, secrets, loopback, node-local privacy ops) are **rules**, not
   suggestions — see [Security & Privacy](12-security-and-privacy.md) and
   [Architecture Overview](01-architecture-overview.md).

@@ -16,7 +16,7 @@ import type { UsageRateRow } from "@/features/node-settings/models/NodeSettingsU
 import type { NodeSettingsSectionId } from "@/features/node-settings/models/NodeSettingsSections";
 import { RestartRequiredFieldsContext } from "@/features/node-settings/models/RestartRequiredFieldsContext";
 import { nonEnglishLocales } from "@/test/Locales";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 
 // Deterministic i18n: t returns the supplied default (with {{var}} interpolation applied) so the human copy is
 // asserted, not the raw key — this doubles as the i18n-keys-resolve check (the card never renders a bare dotted key).
@@ -34,30 +34,6 @@ vi.mock("react-i18next", () => ({
 		},
 	}),
 }));
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-}
 
 // The node's restart gate as the settings response serves it (`restartRequiredFields`, NodeSettingsRestartGate.Fields).
 const nodeRestartGate: ReadonlySet<string> = new Set([

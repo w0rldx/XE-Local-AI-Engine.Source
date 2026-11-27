@@ -1,14 +1,13 @@
 // @vitest-environment jsdom
 
 import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { type ChatUiCapabilities, defaultChatUiCapabilities } from "@/core/chat/models/ChatCapabilityGates";
 import { ChatInputArea } from "@/features/chat/components/ChatInputArea";
 import type { ReasoningEffort } from "@/features/chat/models/ChatModels";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { installJsdomEnvironmentMocks, renderWithMantine, testMantineTheme } from "@/test/MantineTestRender";
 
 // The web review switch reads node settings and tutorial state through TanStack Query; its own behavior is covered in
 // WebContentAutoAcceptToggle.test.tsx. Here it is a marker, so these tests can assert WHERE the composer places it.
@@ -25,42 +24,6 @@ vi.mock("@/features/chat/components/ContextUsagePopover/ContextUsagePopover", ()
 }));
 vi.mock("@/features/chat/components/CompactButton", () => ({ CompactButton: () => null }));
 vi.mock("@/features/chat/components/ContextStatePanel", () => ({ ContextStateButton: () => null }));
-
-function renderWithProviders(ui: ReactElement) {
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			{ui}
-		</MantineProvider>,
-	);
-}
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-	Object.defineProperty(document, "fonts", {
-		writable: true,
-		value: { ready: Promise.resolve(), addEventListener: vi.fn(), removeEventListener: vi.fn() },
-	});
-}
 
 function toolsCapabilities(): ChatUiCapabilities {
 	return { ...defaultChatUiCapabilities, showLocalToolControls: true };
@@ -92,7 +55,7 @@ describe("ChatInputArea local tools toggle", () => {
 	});
 
 	it("hides the local tools toggle when the capability gate is off", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ChatInputArea
 				{...baseProps()}
 				capabilities={defaultChatUiCapabilities}
@@ -106,7 +69,7 @@ describe("ChatInputArea local tools toggle", () => {
 	});
 
 	it("hides the local tools toggle when the active model is not tool-capable even with the gate on", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ChatInputArea
 				{...baseProps()}
 				capabilities={toolsCapabilities()}
@@ -121,7 +84,7 @@ describe("ChatInputArea local tools toggle", () => {
 
 	it("shows the toggle and fires onToggleTools when the gate is on and the model is tool-capable", () => {
 		const onToggleTools = vi.fn();
-		renderWithProviders(
+		renderWithMantine(
 			<ChatInputArea
 				{...baseProps()}
 				capabilities={toolsCapabilities()}
@@ -139,7 +102,7 @@ describe("ChatInputArea local tools toggle", () => {
 	});
 
 	it("reflects the enabled state via aria-pressed", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ChatInputArea
 				{...baseProps()}
 				capabilities={toolsCapabilities()}
@@ -153,7 +116,7 @@ describe("ChatInputArea local tools toggle", () => {
 	});
 
 	it("offers the web content review mode for the open conversation only while local tools are on", () => {
-		const { rerender } = renderWithProviders(
+		const { rerender } = renderWithMantine(
 			<ChatInputArea
 				{...baseProps()}
 				capabilities={toolsCapabilities()}
@@ -182,7 +145,7 @@ describe("ChatInputArea local tools toggle", () => {
 	});
 
 	it("disables the toggle while a message is sending", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ChatInputArea
 				{...baseProps()}
 				isSending={true}
@@ -211,7 +174,7 @@ describe("ChatInputArea image attachment gate", () => {
 	});
 
 	it("omits the image accept hint when the active model is not multimodal even with the gate on", () => {
-		const { container } = renderWithProviders(
+		const { container } = renderWithMantine(
 			<ChatInputArea
 				{...baseProps()}
 				capabilities={attachmentCapabilities()}
@@ -226,7 +189,7 @@ describe("ChatInputArea image attachment gate", () => {
 	});
 
 	it("omits the image accept hint when the active model is multimodal but the node-wide gate is off", () => {
-		const { container } = renderWithProviders(
+		const { container } = renderWithMantine(
 			<ChatInputArea
 				{...baseProps()}
 				capabilities={attachmentCapabilities({ showImageAttachmentControls: false })}
@@ -240,7 +203,7 @@ describe("ChatInputArea image attachment gate", () => {
 	});
 
 	it("includes the image accept hint when the gate is on and the active model is multimodal", () => {
-		const { container } = renderWithProviders(
+		const { container } = renderWithMantine(
 			<ChatInputArea
 				{...baseProps()}
 				capabilities={attachmentCapabilities()}
@@ -254,7 +217,7 @@ describe("ChatInputArea image attachment gate", () => {
 	});
 
 	it("offers the code and config files the server extracts in the file picker", () => {
-		const { container } = renderWithProviders(
+		const { container } = renderWithMantine(
 			<ChatInputArea {...baseProps()} capabilities={attachmentCapabilities()} onUploadFiles={vi.fn()} />,
 		);
 
@@ -265,7 +228,7 @@ describe("ChatInputArea image attachment gate", () => {
 	// The paperclip ActionIcon is the labeled control; the input behind it is display:none and only opens the OS
 	// picker, so it belongs out of the accessibility tree rather than in it as a nameless file field.
 	it("keeps the hidden file input out of the accessibility tree", () => {
-		const { container } = renderWithProviders(
+		const { container } = renderWithMantine(
 			<ChatInputArea {...baseProps()} capabilities={attachmentCapabilities()} onUploadFiles={vi.fn()} />,
 		);
 
@@ -276,7 +239,7 @@ describe("ChatInputArea image attachment gate", () => {
 
 	it("blocks adding attachments in a workflow that refuses them but still lets a chip be removed", () => {
 		const onRemoveAttachment = vi.fn();
-		renderWithProviders(
+		renderWithMantine(
 			<ChatInputArea
 				{...baseProps()}
 				capabilities={attachmentCapabilities()}
@@ -304,7 +267,7 @@ describe("ChatInputArea image attachment gate", () => {
 	});
 
 	it("still shows the paperclip trigger for image-only attachments when file attachments are off", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ChatInputArea
 				{...baseProps()}
 				capabilities={attachmentCapabilities({ showFileAttachmentControls: false })}
@@ -327,13 +290,13 @@ describe("ChatInputArea reasoning-effort menu capability gating", () => {
 	});
 
 	it("disables the reasoning menu when only one effort is available", () => {
-		renderWithProviders(<ChatInputArea {...baseProps()} availableReasoningEfforts={["none"]} reasoningEffort="none" />);
+		renderWithMantine(<ChatInputArea {...baseProps()} availableReasoningEfforts={["none"]} reasoningEffort="none" />);
 
 		expect(screen.getByTestId("chat-reasoning-effort-menu-trigger").hasAttribute("disabled")).toBe(true);
 	});
 
 	it("enables the reasoning menu when multiple efforts are available (graded reasoning model)", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ChatInputArea {...baseProps()} availableReasoningEfforts={["none", "low", "medium", "high"]} reasoningEffort="medium" />,
 		);
 
@@ -341,7 +304,7 @@ describe("ChatInputArea reasoning-effort menu capability gating", () => {
 	});
 
 	it("enables the reasoning menu with binary On/Off for a non-thinking model that reasons by default", () => {
-		renderWithProviders(<ChatInputArea {...baseProps()} availableReasoningEfforts={["on", "none"]} reasoningEffort="on" />);
+		renderWithMantine(<ChatInputArea {...baseProps()} availableReasoningEfforts={["on", "none"]} reasoningEffort="on" />);
 
 		// Two options (on/none) => the menu is interactive, and the brain control reads "enabled" for "on".
 		const trigger = screen.getByTestId("chat-reasoning-effort-menu-trigger");
@@ -349,7 +312,7 @@ describe("ChatInputArea reasoning-effort menu capability gating", () => {
 	});
 
 	it("enables the reasoning menu with the full Codex effort set including minimal and xhigh", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ChatInputArea
 				{...baseProps()}
 				availableReasoningEfforts={["none", "minimal", "low", "medium", "high", "xhigh"]}
@@ -366,7 +329,7 @@ describe("ChatInputArea reasoning-effort menu capability gating", () => {
 		// Codex-only effort values and propagates them through the change handler — proving the full
 		// codexReasoningEfforts set is wired correctly at the ChatInputArea boundary.
 		const onReasoningEffortChange = vi.fn();
-		renderWithProviders(
+		renderWithMantine(
 			<ChatInputArea
 				{...baseProps()}
 				availableReasoningEfforts={["none", "minimal", "low", "medium", "high", "xhigh"]}
@@ -380,7 +343,7 @@ describe("ChatInputArea reasoning-effort menu capability gating", () => {
 	});
 
 	it("does NOT render minimal or xhigh options when a local graded set is passed", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ChatInputArea {...baseProps()} availableReasoningEfforts={["none", "low", "medium", "high"]} reasoningEffort="medium" />,
 		);
 
@@ -391,7 +354,7 @@ describe("ChatInputArea reasoning-effort menu capability gating", () => {
 	});
 
 	it("does NOT render minimal or xhigh options when a binary effort set is passed", () => {
-		renderWithProviders(<ChatInputArea {...baseProps()} availableReasoningEfforts={["on", "none"]} reasoningEffort="on" />);
+		renderWithMantine(<ChatInputArea {...baseProps()} availableReasoningEfforts={["on", "none"]} reasoningEffort="on" />);
 
 		expect(screen.queryByTestId("chat-reasoning-effort-option-minimal")).toBeNull();
 		expect(screen.queryByTestId("chat-reasoning-effort-option-xhigh")).toBeNull();
@@ -412,7 +375,7 @@ describe("ChatInputArea knowledge base toggle (30b)", () => {
 	});
 
 	it("disables the toggle with a no-documents tooltip when there are no indexed documents", async () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ChatInputArea
 				{...baseProps()}
 				capabilities={knowledgeBaseCapabilities()}
@@ -433,7 +396,7 @@ describe("ChatInputArea knowledge base toggle (30b)", () => {
 
 	it("does not fire the toggle callback when clicked with no indexed documents", () => {
 		const onToggleKnowledgeBase = vi.fn();
-		renderWithProviders(
+		renderWithMantine(
 			<ChatInputArea
 				{...baseProps()}
 				capabilities={knowledgeBaseCapabilities()}
@@ -449,7 +412,7 @@ describe("ChatInputArea knowledge base toggle (30b)", () => {
 
 	it("enables the toggle when at least one document is indexed", () => {
 		const onToggleKnowledgeBase = vi.fn();
-		renderWithProviders(
+		renderWithMantine(
 			<ChatInputArea
 				{...baseProps()}
 				capabilities={knowledgeBaseCapabilities()}
@@ -477,7 +440,7 @@ describe("ChatInputArea Enter-key send gating", () => {
 
 	it("does not send on Enter when sendDisabled is set (e.g. the selected conversation is still loading)", () => {
 		const onSend = vi.fn();
-		renderWithProviders(<ChatInputArea {...baseProps()} onSend={onSend} sendDisabled={true} />);
+		renderWithMantine(<ChatInputArea {...baseProps()} onSend={onSend} sendDisabled={true} />);
 
 		const input = screen.getByTestId("chat-input");
 		fireEvent.change(input, { target: { value: "hello" } });
@@ -488,7 +451,7 @@ describe("ChatInputArea Enter-key send gating", () => {
 
 	it("sends on Enter with the trimmed content when sendDisabled is clear", () => {
 		const onSend = vi.fn();
-		renderWithProviders(<ChatInputArea {...baseProps()} onSend={onSend} sendDisabled={false} />);
+		renderWithMantine(<ChatInputArea {...baseProps()} onSend={onSend} sendDisabled={false} />);
 
 		const input = screen.getByTestId("chat-input");
 		fireEvent.change(input, { target: { value: "  hello  " } });
@@ -500,7 +463,7 @@ describe("ChatInputArea Enter-key send gating", () => {
 
 	it("does not send on an Enter that confirms an IME composition, then sends on a plain Enter", () => {
 		const onSend = vi.fn();
-		renderWithProviders(<ChatInputArea {...baseProps()} onSend={onSend} sendDisabled={false} />);
+		renderWithMantine(<ChatInputArea {...baseProps()} onSend={onSend} sendDisabled={false} />);
 
 		const input = screen.getByTestId("chat-input");
 		fireEvent.change(input, { target: { value: "hello" } });
@@ -537,14 +500,14 @@ describe("ChatInputArea message-size pre-check", () => {
 	}
 
 	it("shows no size notice while the draft is well under the limit", () => {
-		renderWithProviders(<ChatInputArea {...baseProps()} maxMessageSizeKb={limitKb} />);
+		renderWithMantine(<ChatInputArea {...baseProps()} maxMessageSizeKb={limitKb} />);
 		typeDraft("hello");
 
 		expect(screen.queryByTestId("composer-size-notice")).toBeNull();
 	});
 
 	it("shows the size readout once the draft passes 80 percent of the limit", () => {
-		renderWithProviders(<ChatInputArea {...baseProps()} maxMessageSizeKb={limitKb} />);
+		renderWithMantine(<ChatInputArea {...baseProps()} maxMessageSizeKb={limitKb} />);
 		typeDraft("a".repeat(9000));
 
 		expect(noticeText()).toContain("KiB /");
@@ -554,7 +517,7 @@ describe("ChatInputArea message-size pre-check", () => {
 
 	it("warns and disables sending when the draft is over the limit", () => {
 		const onSend = vi.fn();
-		renderWithProviders(<ChatInputArea {...baseProps()} onSend={onSend} maxMessageSizeKb={limitKb} />);
+		renderWithMantine(<ChatInputArea {...baseProps()} onSend={onSend} maxMessageSizeKb={limitKb} />);
 		typeDraft("a".repeat(20_480));
 
 		expect(noticeText()).toContain("attach the text as a file");
@@ -567,7 +530,7 @@ describe("ChatInputArea message-size pre-check", () => {
 
 	it("runs no pre-check at all until the node reports its limit", () => {
 		const onSend = vi.fn();
-		renderWithProviders(<ChatInputArea {...baseProps()} onSend={onSend} />);
+		renderWithMantine(<ChatInputArea {...baseProps()} onSend={onSend} />);
 		typeDraft("a".repeat(20_480));
 
 		expect(screen.queryByTestId("composer-size-notice")).toBeNull();
@@ -580,7 +543,7 @@ describe("ChatInputArea message-size pre-check", () => {
 	// The placeholder was the composer's only naming, and it vanishes as soon as there is a draft: the box a screen
 	// reader lands in must still say what it is.
 	it("names the composer for assistive technology, draft or not", () => {
-		renderWithProviders(<ChatInputArea {...baseProps()} onSend={vi.fn()} />);
+		renderWithMantine(<ChatInputArea {...baseProps()} onSend={vi.fn()} />);
 
 		expect(screen.getByRole("textbox", { name: "Type your message" })).toBe(screen.getByTestId("chat-input"));
 
@@ -616,7 +579,7 @@ describe("ChatInputArea compact viewport", () => {
 	])("folds the reasoning and local-tools toggles into the overflow menu at %i×%i", async (width, height) => {
 		setViewport(width, height);
 		const onToggleTools = vi.fn();
-		renderWithProviders(
+		renderWithMantine(
 			<ChatInputArea
 				{...baseProps()}
 				capabilities={toolsCapabilities()}
@@ -640,7 +603,7 @@ describe("ChatInputArea compact viewport", () => {
 	// The folded toggles are out of sight, so the trigger itself has to say when one of them is on.
 	it("marks the overflow trigger active only while a folded toggle is on", () => {
 		setViewport(390, 844);
-		renderWithProviders(
+		renderWithMantine(
 			<ChatInputArea
 				{...baseProps()}
 				reasoningEffort="none"
@@ -653,7 +616,7 @@ describe("ChatInputArea compact viewport", () => {
 		expect(screen.getByTestId("chat-composer-overflow-trigger").getAttribute("data-active")).toBeNull();
 		cleanup();
 
-		renderWithProviders(
+		renderWithMantine(
 			<ChatInputArea
 				{...baseProps()}
 				reasoningEffort="none"
@@ -666,7 +629,7 @@ describe("ChatInputArea compact viewport", () => {
 		expect(screen.getByTestId("chat-composer-overflow-trigger").getAttribute("data-active")).toBe("true");
 		cleanup();
 
-		renderWithProviders(<ChatInputArea {...baseProps()} reasoningEffort="medium" />);
+		renderWithMantine(<ChatInputArea {...baseProps()} reasoningEffort="medium" />);
 		expect(screen.getByTestId("chat-composer-overflow-trigger").getAttribute("data-active")).toBe("true");
 	});
 
@@ -676,7 +639,7 @@ describe("ChatInputArea compact viewport", () => {
 		[1280, 800, true],
 	])("shows the context-usage trigger at %i×%i: %s", (width, height, shown) => {
 		setViewport(width, height);
-		renderWithProviders(
+		renderWithMantine(
 			<ChatInputArea
 				{...baseProps()}
 				contextUsage={{ usedTokens: 100, maxTokens: 4096, isAuthoritative: true, modelLabel: "model", nodeLabel: "node" }}
@@ -688,7 +651,7 @@ describe("ChatInputArea compact viewport", () => {
 
 	it("keeps the toggles inline on a desktop viewport", () => {
 		setViewport(1280, 800);
-		renderWithProviders(<ChatInputArea {...baseProps()} capabilities={toolsCapabilities()} activeModelToolCapable={true} />);
+		renderWithMantine(<ChatInputArea {...baseProps()} capabilities={toolsCapabilities()} activeModelToolCapable={true} />);
 
 		expect(screen.queryByTestId("chat-composer-overflow-trigger")).toBeNull();
 		expect(screen.getByTestId("chat-reasoning-effort-menu-trigger")).toBeTruthy();

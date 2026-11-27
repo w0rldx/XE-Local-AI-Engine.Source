@@ -30,7 +30,8 @@ check() {
 }
 
 # Sets MAIN, WT, TIP, LOG for a fresh fixture whose branch is <branch> (default feature) and whose gate log
-# holds one green line for the branch tip.
+# holds one green backend line and one green openapi lane line for the branch tip. The branch commit is
+# Markdown, so no fixture needs a frontend row. develop carries a frontend file, so a case can rename or delete it.
 fixture() {
   local dir="$TMP/$1" branch="${2:-feature}"
   MAIN="$dir/main" WT="$dir/wt" LOG="$dir/main/.tmp/gate-history.log"
@@ -43,15 +44,33 @@ fixture() {
   # .tmp/ is ignored as in the real repository; the gate log lives there.
   printf '.tmp/\n' >"$MAIN/.gitignore"
   printf 'readme\n' >"$MAIN/README.md"
-  fg -C "$MAIN" add .gitignore README.md
+  mkdir -p "$MAIN/XE-Local-AI-Engine.Client.React"
+  printf 'app\n' >"$MAIN/XE-Local-AI-Engine.Client.React/app.ts"
+  fg -C "$MAIN" add .gitignore README.md XE-Local-AI-Engine.Client.React/app.ts
   fg -C "$MAIN" commit -q -m base
   fg -C "$MAIN" worktree add -q -b "$branch" "$WT"
-  printf 'change\n' >"$WT/change.txt"
-  fg -C "$WT" add change.txt
+  printf 'change\n' >"$WT/change.md"
+  fg -C "$WT" add change.md
   fg -C "$WT" commit -q -m change
   TIP="$(fg -C "$WT" rev-parse HEAD)"
   mkdir -p "$MAIN/.tmp"
   log_line "$TIP" 120/0/3 0 >"$LOG"
+  lane_line "$TIP" openapi 0 >>"$LOG"
+}
+
+# <tip> <lane> <lane exit> [worktree, default $WT]: one scripts/run-gate-lane.sh row.
+lane_line() {
+  printf '2026-10-08T11:00:00Z\t%s\t%s\tlane=%s\twall=60\tlane-exit=%s\n' "${4:-$WT}" "$1" "$2" "$3"
+}
+
+# Commits <change> in the branch worktree (a shell command run there) and rewrites the gate log for the new
+# tip: one green backend line plus one green row per lane named after it.
+branch_change() {
+  local change="$1" lane; shift
+  (cd "$WT" && eval "$change") && fg -C "$WT" add -A && fg -C "$WT" commit -q -m "$change"
+  TIP="$(fg -C "$WT" rev-parse HEAD)"
+  log_line "$TIP" 120/0/3 0 >"$LOG"
+  for lane in "$@"; do lane_line "$TIP" "$lane" 0 >>"$LOG"; done
 }
 
 # <tip> <tests p/f/s> <exit> [scope, default full]: one line in the shared tab-separated format, with
@@ -84,14 +103,29 @@ check "a happy path, --gate-log and --repo pointing at the branch worktree" 0 "$
 fixture a-twelve
 printf '2026-10-08T10:00:00Z\t%s\t%s\tTests=120/0/3\tPersistence=40/0/0\tAgent=30/0/0\tContracts=skipped\tscope=full\twall=900\treason=ok\tskips=unreported:3\texit=0\n' \
   "$WT" "$TIP" >"$LOG"
+lane_line "$TIP" openapi 0 >>"$LOG"
 guard feature --repo "$MAIN"
 check "a happy path, twelve-field row" 0 "$status"
 # A sixteen-field row written before 2026-10-28 (no Cli=) still certifies.
 fixture a-sixteen
 printf '2026-10-08T10:00:00Z\t%s\t%s\tTests=120/0/3\tPersistence=40/0/0\tAgent=30/0/0\tContracts=skipped\tscope=full\twall=900\treason=ok\tskips=needs-a-gpu:3\tunreported=0\tfailed=-\tflakes=-\tratchets=DbContextUser:31\texit=0\n' \
   "$WT" "$TIP" >"$LOG"
+lane_line "$TIP" openapi 0 >>"$LOG"
 guard feature --repo "$MAIN"
 check "a happy path, sixteen-field row" 0 "$status"
+# A seventeen-field row written before 2026-11-26 (no lanes=) still certifies; so does one with lanes=.
+fixture a-seventeen
+printf '2026-10-08T10:00:00Z\t%s\t%s\tTests=120/0/3\tPersistence=40/0/0\tAgent=30/0/0\tCli=20/0/0\tContracts=skipped\tscope=full\twall=900\treason=ok\tskips=-\tunreported=0\tfailed=-\tflakes=-\tratchets=DbContextUser:31\texit=0\n' \
+  "$WT" "$TIP" >"$LOG"
+lane_line "$TIP" openapi 0 >>"$LOG"
+guard feature --repo "$MAIN"
+check "a happy path, seventeen-field row" 0 "$status"
+fixture a-lanes
+printf '2026-10-08T10:00:00Z\t%s\t%s\tTests=120/0/3\tPersistence=40/0/0\tAgent=30/0/0\tCli=20/0/0\tContracts=skipped\tscope=full\twall=900\treason=ok\tskips=-\tunreported=0\tfailed=-\tflakes=-\tratchets=DbContextUser:31\tlanes=Tests:400,architecture:40\texit=0\n' \
+  "$WT" "$TIP" >"$LOG"
+lane_line "$TIP" openapi 0 >>"$LOG"
+guard feature --repo "$MAIN"
+check "a happy path, row with lanes=" 0 "$status"
 
 # (b) dirty main tree: an untracked file counts
 fixture b
@@ -127,7 +161,7 @@ check "f no gate log" 16 "$status"
 
 # (g) the green line is for an older tip; a newer RED run on the current tip does not count either
 fixture g
-printf 'more\n' >>"$WT/change.txt"
+printf 'more\n' >>"$WT/change.md"
 fg -C "$WT" commit -q -am more
 log_line "$(fg -C "$WT" rev-parse HEAD)" 119/1/3 1 >>"$LOG"
 guard feature --repo "$MAIN"
@@ -198,6 +232,159 @@ else
   check "o git status fails in the branch worktree" 2 "$status"
   grep -Fq "git status failed in $WT" "$TMP/out" || { echo "FAIL o: worktree not named"; cat "$TMP/out"; failures=$((failures + 1)); }
 fi
+
+# (p) lane rows (scripts/run-gate-lane.sh). Both append orders certify, and the OK output names the lanes.
+fixture p-lane-first
+{ lane_line "$TIP" openapi 0; log_line "$TIP" 120/0/3 0; } >"$LOG"
+guard feature --repo "$MAIN"
+check "p lane row before the backend row" 0 "$status"
+grep -Fxq "Lanes green on this tip: openapi 2026-10-08T11:00:00Z" "$TMP/out" \
+  || { echo "FAIL p: lanes line missing"; cat "$TMP/out"; failures=$((failures + 1)); }
+# A green lane is no backend gate.
+fixture p-lane-only
+lane_line "$TIP" openapi 0 >"$LOG"
+guard feature --repo "$MAIN"
+check "p lane row without a backend row" 16 "$status"
+# openapi is required at every squash; its newest row must be green on this tip and unsuffixed.
+fixture p-missing
+log_line "$TIP" 120/0/3 0 >"$LOG"
+guard feature --repo "$MAIN"
+check "p no openapi row" 20 "$status"
+grep -Fq "no openapi lane run recorded" "$TMP/out" || { echo "FAIL p: lane not named"; cat "$TMP/out"; failures=$((failures + 1)); }
+fixture p-other-worktree
+log_line "$TIP" 120/0/3 0 >"$LOG"
+lane_line "$TIP" openapi 0 "$TMP/elsewhere" >>"$LOG"
+guard feature --repo "$MAIN"
+check "p openapi row of another worktree" 20 "$status"
+fixture p-stale
+old_tip="$TIP"
+branch_change 'printf more >>change.md'
+lane_line "$old_tip" openapi 0 >>"$LOG"
+guard feature --repo "$MAIN"
+check "p openapi row for an older tip" 20 "$status"
+grep -Fq "ran on $old_tip" "$TMP/out" || { echo "FAIL p: stale tip not named"; cat "$TMP/out"; failures=$((failures + 1)); }
+for suffix in +dirty +moved; do
+  fixture "p$suffix"
+  lane_line "$TIP$suffix" openapi 0 >>"$LOG"
+  guard feature --repo "$MAIN"
+  check "p newest openapi row with tip $suffix" 20 "$status"
+  grep -Fq "recorded tip $TIP$suffix" "$TMP/out" || { echo "FAIL p: suffix not named"; cat "$TMP/out"; failures=$((failures + 1)); }
+done
+fixture p-red
+lane_line "$TIP" openapi 1 >>"$LOG"
+guard feature --repo "$MAIN"
+check "p newest openapi row red after a green one" 20 "$status"
+grep -Fq "recorded lane-exit=1" "$TMP/out" || { echo "FAIL p: red not named"; cat "$TMP/out"; failures=$((failures + 1)); }
+fixture p-red-then-green
+{ lane_line "$TIP" openapi 1; lane_line "$TIP" openapi 0; } >>"$LOG"
+guard feature --repo "$MAIN"
+check "p newest openapi row green after a red one" 0 "$status"
+
+# (q) frontend is required unless the diff is only docs/, tools/training/ or Markdown, renames and deletions included.
+frontend_changes=(
+  "mkdir -p third-party/npm && printf x >third-party/npm/frontend-license-overrides.json"
+  "mkdir -p .github/workflows && printf x >.github/workflows/build-and-test.yml"
+  "printf x >XE-Local-AI-Engine.Client.React/new.ts"
+  "printf x >Directory.Packages.props"
+  "mkdir -p sub/Proj && printf x >sub/Proj/Proj.csproj"
+  "mkdir -p scripts/compliance && printf x >scripts/compliance/overrides.json"
+  "mkdir -p elsewhere && fg mv XE-Local-AI-Engine.Client.React/app.ts elsewhere/app.ts"
+  "fg rm -q XE-Local-AI-Engine.Client.React/app.ts"
+)
+i=0
+for change in "${frontend_changes[@]}"; do
+  i=$((i + 1))
+  fixture "q$i"
+  branch_change "$change" openapi
+  guard feature --repo "$MAIN"
+  check "q frontend required, only openapi green: $change" 20 "$status"
+  grep -Fq "no frontend lane run recorded" "$TMP/out" || { echo "FAIL q: frontend not named"; cat "$TMP/out"; failures=$((failures + 1)); }
+  log_line "$TIP" 120/0/3 0 >"$LOG"
+  lane_line "$TIP" openapi 0 >>"$LOG"
+  lane_line "$TIP" frontend 0 >>"$LOG"
+  guard feature --repo "$MAIN"
+  check "q frontend required, both green: $change" 0 "$status"
+done
+# A diff of only docs/, tools/training/ and Markdown at any depth needs no frontend row.
+fixture q-docs-only
+branch_change "mkdir -p docs/wiki tools/training sub && printf x >docs/wiki/page.txt && printf x >tools/training/run.py && printf x >sub/notes.md" openapi
+guard feature --repo "$MAIN"
+check "q docs-only diff, only openapi green" 0 "$status"
+# A frontend-only diff still requires openapi.
+fixture q-frontend-only
+branch_change "printf x >XE-Local-AI-Engine.Client.React/new.ts" frontend
+guard feature --repo "$MAIN"
+check "q frontend-only diff without an openapi row" 20 "$status"
+grep -Fq "no openapi lane run recorded" "$TMP/out" || { echo "FAIL q: openapi not named"; cat "$TMP/out"; failures=$((failures + 1)); }
+# A merge base that cannot be read requires every lane. The git stub fails only that query.
+mkdir -p "$TMP/nobase-bin"
+cat >"$TMP/nobase-bin/git" <<'STUB'
+#!/usr/bin/env bash
+for a in "$@"; do [[ "$a" == --is-ancestor ]] && exec "$REAL_GIT" "$@"; done
+for a in "$@"; do [[ "$a" == merge-base ]] && exit 1; done
+exec "$REAL_GIT" "$@"
+STUB
+chmod +x "$TMP/nobase-bin/git"
+NOBASE=(REAL_GIT="$(command -v git)" PATH="$TMP/nobase-bin:$PATH")
+fixture q-no-base
+env "${SCRUB[@]}" "${NOBASE[@]}" "$GUARD" feature --repo "$MAIN" >"$TMP/out" 2>&1
+check "q no merge base, only openapi green" 20 $?
+grep -Fq "every lane is required" "$TMP/out" || { echo "FAIL q: no-base reason missing"; cat "$TMP/out"; failures=$((failures + 1)); }
+lane_line "$TIP" frontend 0 >>"$LOG"
+env "${SCRUB[@]}" "${NOBASE[@]}" "$GUARD" feature --repo "$MAIN" >"$TMP/out" 2>&1
+# Every lane is green, but without a merge base the allowlists cannot be compared: that fails closed too.
+check "q no merge base, every lane green" 21 $?
+grep -Fq "ratchet-baseline-check: ERROR" "$TMP/out" || { echo "FAIL q: no-base ratchet error missing"; cat "$TMP/out"; failures=$((failures + 1)); }
+
+# (r) a shrink-only allowlist: a new file is allowed once; widened against develop it fails 21 unless the operator
+# gives a reason, which is printed.
+ALLOWLIST=XE-Local-AI-Engine.Tests/Architecture/TupleAllowlist.txt
+fixture r
+branch_change "mkdir -p ${ALLOWLIST%/*} && printf 'a.cs|3\n' >$ALLOWLIST" openapi frontend
+guard feature --repo "$MAIN"
+check "r new allowlist file" 0 "$status"
+grep -Fq "NEW $ALLOWLIST" "$TMP/out" || { echo "FAIL r: new file not named"; cat "$TMP/out"; failures=$((failures + 1)); }
+fg -C "$MAIN" merge -q --ff-only feature
+branch_change "printf 'a.cs|4\n' >$ALLOWLIST" openapi frontend
+guard feature --repo "$MAIN"
+check "r raised allowlist limit" 21 "$status"
+grep -Fq "RAISED $ALLOWLIST: a.cs 3 -> 4" "$TMP/out" || { echo "FAIL r: raise not named"; cat "$TMP/out"; failures=$((failures + 1)); }
+env "${SCRUB[@]}" XE_RATCHET_WIDEN_REASON="reviewed" "$GUARD" feature --repo "$MAIN" >"$TMP/out" 2>&1
+check "r raised limit with the operator's reason" 0 $?
+grep -Fq "accepted by XE_RATCHET_WIDEN_REASON: reviewed" "$TMP/out" || { echo "FAIL r: reason not printed"; cat "$TMP/out"; failures=$((failures + 1)); }
+
+# (r) a new guard list plus its parser entry on the branch: the guard runs develop's checker, which cannot parse the
+# list, and still allows it once and names it. Once the list is on develop, a checker without its entry fails 21.
+NEW_LIST=XE-Local-AI-Engine.Tests/Architecture/NewGuardAllowlist.txt
+fixture r-unparsed
+branch_change "mkdir -p ${NEW_LIST%/*} scripts && printf 'Some.Type\n' >$NEW_LIST && printf '# parser entry\n' >scripts/ratchet-baseline-check.py" openapi frontend
+guard feature --repo "$MAIN"
+check "r new unparsed allowlist" 0 "$status"
+grep -Fq "NEW (unparsed by this checker) $NEW_LIST" "$TMP/out" || { echo "FAIL r: unparsed new list not named"; cat "$TMP/out"; failures=$((failures + 1)); }
+fg -C "$MAIN" merge -q --ff-only feature
+branch_change "printf 'Other.Type\n' >>$NEW_LIST" openapi frontend
+guard feature --repo "$MAIN"
+check "r unparsed allowlist at the merge base" 21 "$status"
+
+# (s) a python3 older than the checker's floor first on PATH (it reports 3.12 and, as 3.12 does, lacks
+# PurePath.full_match) fails 21 with the checker's reason, never a traceback, also on a branch Biome's includes judge.
+mkdir -p "$TMP/oldpy-bin" "$TMP/oldpy-site"
+cat >"$TMP/oldpy-site/sitecustomize.py" <<'SITE'
+import pathlib, sys
+sys.version_info = (3, 12, 9, "final", 0)
+for owner in pathlib.PurePosixPath.__mro__:
+    if "full_match" in vars(owner):
+        delattr(owner, "full_match")
+SITE
+printf '#!/bin/sh\nPYTHONPATH=%q exec %q "$@"\n' "$TMP/oldpy-site" "$(command -v python3)" >"$TMP/oldpy-bin/python3"
+chmod +x "$TMP/oldpy-bin/python3"
+fixture s
+branch_change "printf '{\"overrides\":[{\"includes\":[\"src/**\"]}]}' >XE-Local-AI-Engine.Client.React/biome.json" openapi frontend
+env "${SCRUB[@]}" PATH="$TMP/oldpy-bin:$PATH" "$GUARD" feature --repo "$MAIN" >"$TMP/out" 2>&1
+check "s python3 older than 3.13" 21 $?
+grep -Fq "ratchet-baseline-check: ERROR needs Python 3.13 or newer" "$TMP/out" \
+  || { echo "FAIL s: the interpreter floor is not named"; cat "$TMP/out"; failures=$((failures + 1)); }
+! grep -Fq "Traceback" "$TMP/out" || { echo "FAIL s: a traceback"; cat "$TMP/out"; failures=$((failures + 1)); }
 
 # (i) exported GIT_DIR/GIT_WORK_TREE at another repository change nothing, either way
 mkdir -p "$TMP/decoy"

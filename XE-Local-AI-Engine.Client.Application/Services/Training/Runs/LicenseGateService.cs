@@ -15,18 +15,7 @@ using XE_Local_AI_Engine.Client.Services.Training.BaseArtifacts;
 ///     different fact that no license metadata was found, which is exactly the case an operator most needs to see
 ///     before training weights they may not be allowed to redistribute.
 /// </remarks>
-public interface ILicenseGateService
-{
-    Task<TrainingLicenseGateView?> GetAsync(Guid baseArtifactId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    ///     Builds the confirmation document, hashing the exact text the operator was shown so a later reword cannot be
-    ///     mistaken for consent to the same terms.
-    /// </summary>
-    TrainingLicenseConfirmationV1 BuildConfirmation(TrainingLicenseGateView view);
-}
-
-public sealed class LicenseGateService : ILicenseGateService
+public sealed class LicenseGateService
 {
     private readonly ITrainingBaseArtifactStore _store;
     private readonly TimeProvider _timeProvider;
@@ -62,6 +51,10 @@ public sealed class LicenseGateService : ILicenseGateService
         };
     }
 
+    /// <summary>
+    ///     Builds the confirmation document, hashing the exact text the operator was shown so a later reword cannot be
+    ///     mistaken for consent to the same terms.
+    /// </summary>
     public TrainingLicenseConfirmationV1 BuildConfirmation(TrainingLicenseGateView view)
     {
         ArgumentNullException.ThrowIfNull(view);

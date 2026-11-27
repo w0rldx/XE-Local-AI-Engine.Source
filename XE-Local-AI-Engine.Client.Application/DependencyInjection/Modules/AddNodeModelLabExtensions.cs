@@ -40,6 +40,8 @@ internal static class AddNodeModelLabExtensions
 #pragma warning restore EXTEXP0001
         builder.Services.AddSingleton<ModelLabArmRunner>();
         builder.Services.AddSingleton<ModelLabExperimentService>();
+        // Stateless over the scope factory and the artifact blob convention: the catalog and result reads take no job lock.
+        builder.Services.AddSingleton<ModelLabExperimentReader>();
         // The service announces each start; the Client host's hub publisher wins over this no-op.
         builder.Services.TryAddSingleton<IJobCreatedPublisher, NullJobCreatedPublisher>();
         builder.Services.AddSingleton<IModelLabActiveJob>(static provider => provider.GetRequiredService<ModelLabExperimentService>());

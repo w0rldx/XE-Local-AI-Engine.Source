@@ -48,7 +48,7 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 import { McpServersPage } from "@/features/mcp/pages/McpServersPage";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 
 const stdioServer: McpServerRegistration = {
 	id: "mcp-1",
@@ -71,34 +71,6 @@ const stdioServer: McpServerRegistration = {
 
 function makeMutation() {
 	return { mutate: vi.fn(), isPending: false, error: null };
-}
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-	Object.defineProperty(document, "fonts", {
-		writable: true,
-		value: { ready: Promise.resolve(), addEventListener: vi.fn(), removeEventListener: vi.fn() },
-	});
 }
 
 function renderPage() {

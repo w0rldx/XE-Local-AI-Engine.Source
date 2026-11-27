@@ -70,7 +70,7 @@ vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastMock }));
 
 import { useGgufBrowseStore } from "@/core/model-downloads/stores/GgufBrowseStore";
 import { ModelRecommendationsPage } from "@/features/model-fit/pages/ModelRecommendationsPage";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 
 function modelFitJob(overrides: Partial<ScheduledJob> = {}): ScheduledJob {
 	return {
@@ -105,34 +105,6 @@ function makeMutation(overrides: Record<string, unknown> = {}) {
 
 function makeQuery<T>(data: T, overrides: Record<string, unknown> = {}) {
 	return { data, isLoading: false, isFetching: false, error: null, refetch: vi.fn().mockResolvedValue({}), ...overrides };
-}
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-	Object.defineProperty(document, "fonts", {
-		writable: true,
-		value: { ready: Promise.resolve(), addEventListener: vi.fn(), removeEventListener: vi.fn() },
-	});
 }
 
 function renderPage() {

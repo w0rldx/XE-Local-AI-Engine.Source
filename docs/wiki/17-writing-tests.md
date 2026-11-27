@@ -1,7 +1,5 @@
 # Writing Tests
 
-> Reviewed: 2026-10-02 · Code-grounded.
-
 **What this page covers.** The authoring guide for tests: which test project a new test belongs in, the
 `TestServerWebAppFactory` host fixture, parallelism, and recipes per test kind. The rules that matter most: every test
 is independent and self-validating, and no test sleeps to wait for or rule out an event. Backend tests are TUnit on
@@ -106,6 +104,23 @@ build error instead of a silently passing test.
 
 Never mock the thing the test exists to verify — a security or approval gate, the AEAD cipher, a migration's schema
 change. Substituting those proves only that the test calls the mock.
+
+### Shared doubles first
+
+Before writing a fake, take the shared one. `SharedTestDoubleConventionTests` fails a private copy of these in any
+of the four test projects; `Architecture/SharedTestDoubleAllowlist.txt` names the copies that stay, each with why.
+
+| Stand-in for | Shared double |
+|---|---|
+| `INodeSqliteKeyHolder` | `FixedNodeSqliteKeyHolder` (`XE-Local-AI-Engine.Client.Testing/Fakes/`): `CreateTestKey()` for a fixed key, `RandomNumberGenerator.GetBytes(32)` for a random one; it zeroes the key on dispose |
+| `IAgentHomeIdentityProvider` | `XE-Local-AI-Engine.Tests/Testing/FixedAgentHomeIdentityProvider.cs`; the interface is internal, and Client.Application grants `InternalsVisibleTo` to the test assemblies but not to `DynamicProxyGenAssembly2`, the assembly `Substitute.For` generates its proxies in |
+| a fixed or hand-advanced clock | `ManualTimeProvider(now)` (§4) |
+| a clock one second later on every read | `SteppingTimeProvider` (`XE-Local-AI-Engine.Client.Testing/Fakes/`) |
+| a timer that fires at once | `XE-Local-AI-Engine.Tests/Testing/ImmediateTimerTimeProvider.cs` |
+| a temp directory | `TempDirectory` (`XE-Local-AI-Engine.Client.Testing/Fakes/`): `unixMode` for a subject that checks the mode; cleanup is best effort |
+
+`XE-Local-AI-Engine.Client.Persistence.Tests` links the Client.Testing files it uses instead of referencing the
+project: a double new to it needs a `Compile Include` line in its project file.
 
 ## 1b. Test categories
 
@@ -254,7 +269,7 @@ A sleep is either flaky (too short on a loaded box) or slow (too long everywhere
 - the repo's `ManualTimeProvider` (`XE-Local-AI-Engine.Client.Testing/Fakes/ManualTimeProvider.cs`, in scope in
   the Tests project through a project-wide `Using`) to advance time deterministically with `Advance`; its
   `ArmedTimerCount` tells a test whether the code under test has registered its timer yet —
-  `Capabilities/CapabilityReporterTests.cs`, `Interaction/AskUserToolHandlerTests.cs`. No project references
+  `Chat/ConversationMaintenanceWorkerTests.cs`, `Interaction/AskUserToolHandlerTests.cs`. No project references
   `Microsoft.Extensions.Time.Testing`;
 - an unbounded `Channel` plus a bounded read, which turns "did the node do X?" into a wait with a real timeout
   and a legible `TimeoutException`.

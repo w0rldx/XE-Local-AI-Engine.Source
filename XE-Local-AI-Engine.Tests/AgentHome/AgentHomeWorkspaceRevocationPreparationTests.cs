@@ -91,7 +91,7 @@ public sealed class AgentHomeWorkspaceRevocationPreparationTests
         IAgentHomeExecutionLeaseManager leases)
     {
         var isolation = new AgentHomeWorkspaceIsolation(provider, leases, NullLogger<AgentHomeWorkspaceIsolation>.Instance);
-        return new AgentHomeWorkspaceRevocationPreparation(new IdentityProvider(),
+        return new AgentHomeWorkspaceRevocationPreparation(new FixedAgentHomeIdentityProvider("owner", "node"),
             leases,
             isolation,
             provider,
@@ -116,14 +116,4 @@ public sealed class AgentHomeWorkspaceRevocationPreparationTests
             HostPath = "/opaque/not/read",
             Mode = SelectedFolderMode.Copy
         };
-
-    private sealed class IdentityProvider : IAgentHomeIdentityProvider
-    {
-        public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(new AgentHomeOwnerIdentity
-            {
-                OwnerUserId = "owner",
-                NodeId = "node"
-            });
-    }
 }

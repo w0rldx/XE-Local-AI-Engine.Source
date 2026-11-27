@@ -1,0 +1,51 @@
+namespace XE_Local_AI_Engine.Client.Services.AgentHome;
+
+using XE_Local_AI_Engine.Client.Services.Workspace;
+
+/// <summary>Inputs for <see cref="Implementation.AgentHomePatchService.ExportPatchAsync" />.</summary>
+internal sealed record AgentHomePatchExportRequest
+{
+    /// <summary>The run id; the export artifacts live under <c>runs/&lt;run-id&gt;/patches/</c>.</summary>
+    public required string RunId { get; init; }
+
+    /// <summary>
+    ///     The worker-local host run directory (<c>&lt;RootPath&gt;/runs/&lt;run-id&gt;</c>), under which the export
+    ///     writes the <c>patches/</c> subdirectory, a sibling of the run's <c>logs/</c>.
+    /// </summary>
+    /// <remarks>
+    ///     This is the host root, not the in-sandbox <c>/agent-home</c> — the two-root host/sandbox split.
+    /// </remarks>
+    public required string HostRunDirectory { get; init; }
+
+    /// <summary>
+    ///     The selected folders that really copied into the workspace, used both to scope every export git command to
+    ///     their alias directories and to map a changed <c>&lt;alias&gt;</c> back to its selected-folder id.
+    /// </summary>
+    /// <remarks>
+    ///     A folder that copied no file still has its (empty) directory; an empty list means there is nothing to diff
+    ///     at all.
+    /// </remarks>
+    public required IReadOnlyList<ResolvedSelectedFolder> ResolvedFolders { get; init; }
+
+    /// <summary>
+    ///     The aliases that copied no file, so the baseline indexed nothing under them and only the working tree or a
+    ///     path the run staged itself can still match their pathspec.
+    /// </summary>
+    public IReadOnlyCollection<string> EmptyAliases { get; init; } = [];
+
+    /// <summary>
+    ///     The workspace-relative paths (<c>&lt;alias&gt;/&lt;rel&gt;</c>) the goal loop recorded writing, reconciled
+    ///     against what the diff reports so a write the patch does not carry cannot stay silent.
+    /// </summary>
+    public IReadOnlyList<string> WrittenFiles { get; init; } = [];
+
+    /// <summary>
+    ///     The run's logger, to which export's git commands are appended in <c>commands.jsonl</c> beside the model's
+    ///     own, attributed to the node.
+    /// </summary>
+    /// <remarks>
+    ///     They run on the same workspace the model just had write and command access to, after its turn ended, so an
+    ///     audit that could not see them would be missing the most interesting entries.
+    /// </remarks>
+    public required IAgentHomeRunLogger RunLogger { get; init; }
+}

@@ -280,24 +280,6 @@ public sealed partial class InvocationRunner
             };
         }
 
-        public Dictionary<string, long> ToTokenCounts()
-        {
-            var counts = new Dictionary<string, long>(StringComparer.Ordinal);
-            AddIfPresent(counts, "inputTokens", InputTokens);
-            AddIfPresent(counts, "outputTokens", OutputTokens);
-            AddIfPresent(counts, "reasoningTokens", ReasoningTokens);
-            AddIfPresent(counts, "totalTokens", TotalTokens);
-            return counts;
-        }
-
-        private static void AddIfPresent(Dictionary<string, long> counts, string key, int? value)
-        {
-            if (value is not null)
-            {
-                counts[key] = value.Value;
-            }
-        }
-
         // Folded onto the saturating Add so a DERIVED total clamps like an accumulated one; a checked sum of two
         // in-range counts past int.MaxValue faults the stream. Null-preserving when neither side reported.
         private static int? SumIfAny(int? left, int? right) =>

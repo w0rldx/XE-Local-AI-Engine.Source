@@ -139,8 +139,7 @@ public sealed class HeadlessToolExecutorTests
 
             var invocation = new ToolInvocationService(offerProvider, Policy, new StubToolRegistry(),
                 new EmptyClientLocalToolRegistry(), new NoUnattendedCustomTools(), Substitute.For<IServiceScopeFactory>(), NullLogger<ToolInvocationService>.Instance);
-            Executor = new HeadlessToolExecutor(offerProvider, Policy, Store,
-                new ToolMockEngine(), new ToolMockStaticVerifier(), invocation);
+            Executor = new HeadlessToolExecutor(offerProvider, Policy, Store, invocation);
         }
 
         public IHeadlessToolExecutor Executor { get; }

@@ -5,10 +5,14 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
-///     Default <see cref="IDefaultAssistantToolOfferService" />: the send path's model head, turn resolution and
-///     tool-offer gate, stopped before anything is persisted or run.
+///     Reads the tool offer a chat turn hands the seeded Default Assistant, so the agent form shows the server's list
+///     instead of guessing it.
 /// </summary>
-internal sealed class DefaultAssistantToolOfferService : IDefaultAssistantToolOfferService
+/// <remarks>
+///     It runs the send path's model head, turn resolution and tool-offer gate, stopped before anything is persisted or
+///     run.
+/// </remarks>
+public sealed class DefaultAssistantToolOfferService
 {
     private readonly IDefaultAgentProvider _defaultAgentProvider;
     private readonly ILocalDefaultChatModelResolver _localDefaultChatModelResolver;
@@ -42,6 +46,14 @@ internal sealed class DefaultAssistantToolOfferService : IDefaultAssistantToolOf
         _toolApprovalPolicy = toolApprovalPolicy;
     }
 
+    /// <summary>
+    ///     The Default Assistant's effective tool offer on <paramref name="modelName" />, or on the node's local default
+    ///     chat model when it is blank.
+    /// </summary>
+    /// <remarks>
+    ///     Read-only: it runs the send path's resolution (capabilities, trust boundary, node switches, approval policy)
+    ///     without loading a model.
+    /// </remarks>
     public async Task<DefaultAssistantToolOffer> GetAsync(string? modelName, CancellationToken cancellationToken = default)
     {
         // The same head a send with no model picked takes: the installed-GGUF local default.

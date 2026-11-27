@@ -24,7 +24,7 @@ interface FakeConnection {
 	resolveStart: () => void;
 }
 
-type WithUrlOptions = { accessTokenFactory?: () => Promise<string> } & Partial<
+type WithUrlOptions = { accessTokenFactory?: () => Promise<string>; headers?: Record<string, string> } & Partial<
 	typeof import("@/core/api/signalr/HubBearerTransport").hubBearerTransportOptions
 >;
 
@@ -34,6 +34,7 @@ const hoisted = vi.hoisted(() => {
 
 	let rejectFirstStart: Error | undefined;
 	let lastLogLevel: unknown;
+	let lastReconnectArgs: unknown[] | undefined;
 
 	const makeConnection = (): FakeConnection => {
 		let resolveStart!: () => void;
@@ -86,6 +87,10 @@ const hoisted = vi.hoisted(() => {
 		setLastLogLevel: (level: unknown) => {
 			lastLogLevel = level;
 		},
+		getLastReconnectArgs: () => lastReconnectArgs,
+		setLastReconnectArgs: (args: unknown[]) => {
+			lastReconnectArgs = args;
+		},
 		setLastWithUrl: (value: { url: string; options: WithUrlOptions }) => {
 			lastWithUrl = value;
 		},
@@ -99,7 +104,8 @@ vi.mock("@microsoft/signalr", async () => ({
 			hoisted.setLastWithUrl({ url, options });
 			return this;
 		}
-		withAutomaticReconnect() {
+		withAutomaticReconnect(...args: unknown[]) {
+			hoisted.setLastReconnectArgs(args);
 			return this;
 		}
 		configureLogging(level: unknown) {
@@ -208,6 +214,14 @@ describe("acquireHubConnection", () => {
 		expect(options?.WebSocket).toBe(hubBearerTransportOptions.WebSocket);
 		// Information would print the socket URL with the token (SignalR's "WebSocket connected to" line).
 		expect(hoisted.getLastLogLevel()).toBe(LogLevel.Warning);
+	});
+
+	it("reconnects on SignalR's default schedule and sends no extra headers", () => {
+		acquireHubConnection(HUB);
+
+		// No delays argument: withAutomaticReconnect falls back to the library's DefaultReconnectPolicy.
+		expect(hoisted.getLastReconnectArgs()?.[0]).toBeUndefined();
+		expect(hoisted.getLastWithUrl()?.options.headers).toBeUndefined();
 	});
 
 	it("token factory refreshes an expired store token before the negotiate", async () => {

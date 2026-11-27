@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Endpoints.Agents.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Eval;
+using XE_Local_AI_Engine.Client.Services.Eval.Implementation;
 
 /// <summary>
 ///     Runs golden-conversation evaluation over one agent's golden set for a pending Suggested/Analysis action and
@@ -17,9 +18,9 @@ using XE_Local_AI_Engine.Client.Services.Eval;
 /// </remarks>
 public sealed class RunPlaybookActionEvalEndpoint : Endpoint<SuggestedPlaybookActionRouteRequest, PlaybookActionResponse>
 {
-    private readonly IPlaybookEvalService _playbookEvalService;
+    private readonly PlaybookEvalService _playbookEvalService;
 
-    public RunPlaybookActionEvalEndpoint(IPlaybookEvalService playbookEvalService)
+    public RunPlaybookActionEvalEndpoint(PlaybookEvalService playbookEvalService)
     {
         ArgumentNullException.ThrowIfNull(playbookEvalService);
         _playbookEvalService = playbookEvalService;

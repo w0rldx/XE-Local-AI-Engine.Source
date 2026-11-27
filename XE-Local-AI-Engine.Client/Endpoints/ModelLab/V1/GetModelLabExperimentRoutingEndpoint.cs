@@ -8,9 +8,9 @@ using XE_Local_AI_Engine.Client.Services.ModelLab;
 /// <summary>404 for a run that recorded no routing (saved before contract 8, a model with no router) or a steering row; 422 when the stored lines fail their check.</summary>
 public sealed class GetModelLabExperimentRoutingEndpoint : Endpoint<ModelLabExperimentRouteRequest, ModelLabRoutingResponse>
 {
-    private readonly ModelLabExperimentService _experiments;
+    private readonly ModelLabExperimentReader _experiments;
 
-    public GetModelLabExperimentRoutingEndpoint(ModelLabExperimentService experiments)
+    public GetModelLabExperimentRoutingEndpoint(ModelLabExperimentReader experiments)
     {
         ArgumentNullException.ThrowIfNull(experiments);
         _experiments = experiments;

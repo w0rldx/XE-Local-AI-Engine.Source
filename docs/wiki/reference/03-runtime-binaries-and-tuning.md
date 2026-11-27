@@ -1,6 +1,6 @@
 # Runtime Binaries and Tuning
 
-> Reference page for [Local Runtime & Providers](../03-local-runtime-and-providers.md) §2 · Reviewed: 2026-10-02 · Code-grounded.
+> Reference page for [Local Runtime & Providers](../03-local-runtime-and-providers.md) §2.
 
 It lists GPU vendor detection, the llama.cpp binary manager and updater, runtime-acquisition status, inference profiles and the in-app source build.
 
@@ -108,7 +108,7 @@ The pinned Linux x64 CUDA prebuilt is the default; for a custom fork or a specif
 
 **Prebuilt download remains the default and only automatic path.** A source build never happens implicitly: it is always an explicit, Operator-gated POST. Once a build is adopted it becomes authoritative (§ binary manager, source 2) over the prebuilt until it is explicitly removed.
 
-**One contract.** `ILlamaCppSourceBuildService` is the whole surface — `StartAsync` / `GetStatus` / `Cancel` / `RecoverAsync` / `ShutdownAsync`. An older CUDA-only route family and its `CudaBuildHub` existed alongside it, reached through an adapter that forwarded a fixed `(Cuda, Official)` request; they were superseded by this one and removed, because no client ever called them. A record from that era (no provenance fields, `source-cuda/{tag}` path) is no longer special-cased at startup: reconciliation treats it like any record that does not name the managed `active` tree and leaves it as it is. **The one llama.cpp build surface in the SPA** is `SourceBuildCard.tsx` (`features/node-settings/`), which calls the generalized `sourceBuild*` operations exclusively — `CudaBuildLogView.tsx`, despite its name, is a generic phase/log renderer that card and the image runtime's `ImageRuntimeSourceBuildCard.tsx` both reuse.
+**One contract.** `ILlamaCppSourceBuildService` is the whole surface — `StartAsync` / `GetStatus` / `Cancel` / `RecoverAsync` / `ShutdownAsync`. A build record without provenance fields (a `source-cuda/{tag}` path) is not special-cased at startup: reconciliation treats it like any record that does not name the managed `active` tree and leaves it as it is. **The one llama.cpp build surface in the SPA** is `SourceBuildCard.tsx` (`features/node-settings/`), which calls the generalized `sourceBuild*` operations exclusively — `CudaBuildLogView.tsx`, despite its name, is a generic phase/log renderer that card and the image runtime's `ImageRuntimeSourceBuildCard.tsx` both reuse.
 
 **The endpoints' door onto the provider (endpoint-dependency rule).** `XE-Local-AI-Engine.Client.Application/Services/ModelFit/LlamaCppRuntimeOrchestrationService.cs` is a pass-through over `IInstalledRuntimeStore`, `ILlamaCppBinaryManager`, `ILlamaCppSourceBuildActivity`, `ILlamaCppSourceBuildPrerequisiteProbe`, `ILlamaCppSourceBuildService`, `ILlamaCppUpdateState` and `ILlamaServerProcessSupervisor`; the source-build, eject and running-models endpoints inject it, never the provider contracts. It also owns the shared remove gate the remove endpoint delegates to (`TryRemoveAsync` — eject-first, with the build-active check repeated under the runtime mutation lease).
 

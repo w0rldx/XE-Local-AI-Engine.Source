@@ -202,7 +202,7 @@ assert_no_runtime_state() {
 # publish output for the state and secret classes, a used checkout's local data that got past the project's Remove
 # lists, and source maps (a debug artifact), and names why each is disqualifying.
 assert_publish_output_clean() {
-  local pub="$1" entry pattern reason match
+  local pub="$1" entry pattern reason match dir
   local leaks=""
   # Same patterns and reasons as $forbiddenPublishArtifacts in publish/package-tester-win.ps1 — keep the two lists in
   # step, so a class caught on one platform is not silently shippable on the other.
@@ -234,17 +234,21 @@ assert_publish_output_clean() {
     "benchmarks|local data from a used checkout, past the project's Remove lists"
     "tmp|local data from a used checkout, past the project's Remove lists"
     "model-catalog-remote-cache.json|local data from a used checkout, past the project's Remove lists"
+    "training-scripts/**/test_*.py|Python test module (repository only, never shipped)"
   )
 
   for entry in "${forbidden[@]}"; do
     pattern="${entry%%|*}"
     reason="${entry#*|}"
     # -name matches directories as well as files, which is the point: logs/, dead-letter-queue/ and dp-keys/ are
-    # directories, and an EMPTY one still proves the executable ran here.
+    # directories, and an EMPTY one still proves the executable ran here. "<dir>/**/<name>" matches <name> under <dir> only.
+    dir="."
+    [[ "${pattern}" != */\*\*/* ]] || { dir="./${pattern%%/\*\*/*}"; pattern="${pattern##*/}"; }
+    [[ -d "${pub}/${dir}" ]] || continue
     while IFS= read -r match; do
       [[ -n "${match}" ]] || continue
       leaks+="  ${match#./} — ${reason}"$'\n'
-    done < <(cd "${pub}" && find . -name "${pattern}" -print)
+    done < <(cd "${pub}" && find "${dir}" -name "${pattern}" -print)
   done
 
   if [[ -n "${leaks}" ]]; then
@@ -254,10 +258,13 @@ assert_publish_output_clean() {
     echo "place — it writes logs, queues and (in desktop mode) its database and keys next to itself. Re-run this" >&2
     echo "script; it wipes the publish directory first. Smoke-test the zip instead, which is what a tester actually" >&2
     echo "receives. A *.map means the SPA was built with source maps; rebuild it without them. A used checkout's local" >&2
-    echo "data means an entry is missing from the Client project's Remove lists; add it there." >&2
+    echo "data means an entry is missing from the Client project's Remove lists; add it there. A test_*.py means the" >&2
+    echo "Client project's training-scripts Content exclude was lost." >&2
     exit 1
   fi
-  echo ">> Publish output carries no runtime state, local checkout data or source maps."
+  [[ -f "${pub}/training-scripts/train.py" ]] \
+    || { echo "Error: ${pub}/training-scripts/train.py is missing: the training runtime did not ship." >&2; exit 1; }
+  echo ">> Publish output carries no runtime state, local checkout data, source maps or Python tests, and the training runtime."
 }
 
 # Refuse to ship configuration that reads as live but is really placeholder text — the counterpart of the

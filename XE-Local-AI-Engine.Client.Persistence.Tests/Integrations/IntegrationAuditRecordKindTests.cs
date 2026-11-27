@@ -37,7 +37,7 @@ public sealed class IntegrationAuditRecordKindTests : IDisposable
         var agentDefinitionId = Guid.NewGuid();
 
         await using var context = await CreateSchemaAsync("integration-audit-row.sqlite");
-        var store = new AgentExecutionLogStore(context, new FixedTimeProvider(FixedNow));
+        var store = new AgentExecutionLogStore(context, new ManualTimeProvider(FixedNow));
 
         await store.AddIntegrationInvocationAsync(new IntegrationInvocationAuditInput
         {
@@ -78,7 +78,7 @@ public sealed class IntegrationAuditRecordKindTests : IDisposable
     public async Task AddIntegrationInvocationAsync_NonCompletedTerminalStatusPersistsSuccessFalse(string terminalStatus)
     {
         await using var context = await CreateSchemaAsync($"integration-audit-{terminalStatus}.sqlite");
-        var store = new AgentExecutionLogStore(context, new FixedTimeProvider(FixedNow));
+        var store = new AgentExecutionLogStore(context, new ManualTimeProvider(FixedNow));
 
         await store.AddIntegrationInvocationAsync(new IntegrationInvocationAuditInput
         {
@@ -101,7 +101,7 @@ public sealed class IntegrationAuditRecordKindTests : IDisposable
     public async Task AddIntegrationInvocationAsync_RowIsInvisibleToEveryOtherReadView()
     {
         await using var context = await CreateSchemaAsync("integration-audit-exclusion.sqlite");
-        var store = new AgentExecutionLogStore(context, new FixedTimeProvider(FixedNow));
+        var store = new AgentExecutionLogStore(context, new ManualTimeProvider(FixedNow));
 
         await store.AddIntegrationInvocationAsync(new IntegrationInvocationAuditInput
         {
@@ -132,18 +132,5 @@ public sealed class IntegrationAuditRecordKindTests : IDisposable
         var context = AgentDefinitionTestContextFactory.Create(Path.Combine(_rootPath, fileName), _keyHolder);
         _ = await context.Database.EnsureCreatedAsync();
         return context;
-    }
-
-    private sealed class FixedTimeProvider : TimeProvider
-    {
-        private readonly DateTimeOffset _now;
-
-        public FixedTimeProvider(DateTimeOffset now)
-        {
-            _now = now;
-        }
-
-        public override DateTimeOffset GetUtcNow() =>
-            _now;
     }
 }

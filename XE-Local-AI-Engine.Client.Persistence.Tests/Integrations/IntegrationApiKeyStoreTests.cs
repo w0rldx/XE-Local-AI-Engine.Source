@@ -24,7 +24,7 @@ public sealed class IntegrationApiKeyStoreTests
 
         await using (var context = await fixture.CreateSchemaAsync())
         {
-            var store = new IntegrationApiKeyStore(context, new FixedTimeProvider(FixedNow));
+            var store = new IntegrationApiKeyStore(context, new ManualTimeProvider(FixedNow));
             _ = await store.CreateAsync(new IntegrationApiKeyCreateCommand
             {
                 KeyId = Guid.NewGuid(),
@@ -49,7 +49,7 @@ public sealed class IntegrationApiKeyStoreTests
         }
 
         await using var readContext = fixture.CreateContext();
-        var readStore = new IntegrationApiKeyStore(readContext, new FixedTimeProvider(FixedNow));
+        var readStore = new IntegrationApiKeyStore(readContext, new ManualTimeProvider(FixedNow));
 
         var listed = await readStore.ListAsync();
         AssertEx.Equal(expected: 2, listed.Count);
@@ -71,7 +71,7 @@ public sealed class IntegrationApiKeyStoreTests
         var keyId = Guid.NewGuid();
 
         await using var context = await fixture.CreateSchemaAsync();
-        var store = new IntegrationApiKeyStore(context, new FixedTimeProvider(FixedNow));
+        var store = new IntegrationApiKeyStore(context, new ManualTimeProvider(FixedNow));
         _ = await store.CreateAsync(new IntegrationApiKeyCreateCommand
         {
             KeyId = keyId,
@@ -92,7 +92,7 @@ public sealed class IntegrationApiKeyStoreTests
             "A last-used stamp must not round-trip the credential through the interceptors — a fresh nonce on every authenticated request is exactly what this avoids.");
 
         await using var readContext = fixture.CreateContext();
-        var read = AssertEx.NotNull(await new IntegrationApiKeyStore(readContext, new FixedTimeProvider(FixedNow)).GetByPrefixAsync("xeint_aaaaaaaa"));
+        var read = AssertEx.NotNull(await new IntegrationApiKeyStore(readContext, new ManualTimeProvider(FixedNow)).GetByPrefixAsync("xeint_aaaaaaaa"));
         AssertEx.Equal(expected: 7_000L, read.LastUsedAtUtc);
         AssertEx.True(read.KeyHash.Span.SequenceEqual(digest), "And the digest must still decrypt afterwards.");
     }
@@ -104,7 +104,7 @@ public sealed class IntegrationApiKeyStoreTests
         var keyId = Guid.NewGuid();
 
         await using var context = await fixture.CreateSchemaAsync();
-        var store = new IntegrationApiKeyStore(context, new FixedTimeProvider(FixedNow));
+        var store = new IntegrationApiKeyStore(context, new ManualTimeProvider(FixedNow));
         _ = await store.CreateAsync(new IntegrationApiKeyCreateCommand
         {
             KeyId = keyId,
@@ -120,7 +120,7 @@ public sealed class IntegrationApiKeyStoreTests
         AssertEx.False(await store.RevokeAsync(Guid.NewGuid(), atUtc: 8_100));
 
         await using var readContext = fixture.CreateContext();
-        var read = AssertEx.NotNull(await new IntegrationApiKeyStore(readContext, new FixedTimeProvider(FixedNow)).GetByPrefixAsync("xeint_aaaaaaaa"));
+        var read = AssertEx.NotNull(await new IntegrationApiKeyStore(readContext, new ManualTimeProvider(FixedNow)).GetByPrefixAsync("xeint_aaaaaaaa"));
         AssertEx.Equal(expected: 8_000L, read.RevokedAtUtc);
         AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("integration_api_keys"),
             "The row survives: execution and audit rows reference its prefix.");
@@ -131,18 +131,5 @@ public sealed class IntegrationApiKeyStoreTests
         var value = await fixture.RawScalarAsync("SELECT key_hash FROM integration_api_keys WHERE id = $id;",
             command => command.Parameters.AddWithValue("$id", keyId));
         return AssertEx.NotNull(value as byte[]);
-    }
-
-    private sealed class FixedTimeProvider : TimeProvider
-    {
-        private readonly DateTimeOffset _now;
-
-        public FixedTimeProvider(DateTimeOffset now)
-        {
-            _now = now;
-        }
-
-        public override DateTimeOffset GetUtcNow() =>
-            _now;
     }
 }

@@ -30,6 +30,13 @@ internal static class EnforcedSourceFiles
         }
     }
 
+    /// <summary>Whether a file is production code: test projects and the shared test doubles are not.</summary>
+    internal static bool IsProduction(string relative) =>
+        !relative.Contains(".Tests/", StringComparison.Ordinal)
+        && !relative.Contains(".Tests.", StringComparison.Ordinal)
+        && !relative.Contains(".Testing/", StringComparison.Ordinal)
+        && !relative.Contains(".Testing.", StringComparison.Ordinal);
+
     /// <summary>The project directory names the solution file lists, sorted.</summary>
     internal static string[] SolutionProjects() =>
         XDocument.Load(RepositoryPaths.Combine("XE-Local-AI-Engine.slnx"))

@@ -1,22 +1,12 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, screen } from "@testing-library/react";
 import i18next from "i18next";
-import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MarkdownView } from "@/core/ui/components/MarkdownView/MarkdownView";
 import de from "@/locales/de.json";
-import { testMantineTheme } from "@/test/MantineTestRender";
-
-function renderWithProviders(ui: ReactElement) {
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			{ui}
-		</MantineProvider>,
-	);
-}
+import { renderWithMantine } from "@/test/MantineTestRender";
 
 describe("MarkdownView", () => {
 	beforeEach(() => {
@@ -48,44 +38,44 @@ describe("MarkdownView", () => {
 	});
 
 	it("renders plain paragraph text", () => {
-		renderWithProviders(<MarkdownView content="Hello world" />);
+		renderWithMantine(<MarkdownView content="Hello world" />);
 		expect(screen.getByText("Hello world")).toBeTruthy();
 	});
 
 	it("renders a heading via remark-gfm / commonmark", () => {
-		renderWithProviders(<MarkdownView content="# My Heading" />);
+		renderWithMantine(<MarkdownView content="# My Heading" />);
 		expect(screen.getByRole("heading", { level: 1 })).toBeTruthy();
 		expect(screen.getByText("My Heading")).toBeTruthy();
 	});
 
 	it("renders an unordered list item", () => {
 		// biome-ignore lint/style/useConsistentCurlyBraces: \n must be a real newline — JSX string attribute would treat it as literal backslash-n
-		renderWithProviders(<MarkdownView content={"- item one\n- item two"} />);
+		renderWithMantine(<MarkdownView content={"- item one\n- item two"} />);
 		expect(screen.getByText("item one")).toBeTruthy();
 		expect(screen.getByText("item two")).toBeTruthy();
 	});
 
 	it("renders inline code without a language label", () => {
-		renderWithProviders(<MarkdownView content="Use `const x = 1`" />);
+		renderWithMantine(<MarkdownView content="Use `const x = 1`" />);
 		expect(screen.getByText("const x = 1")).toBeTruthy();
 	});
 
 	it("renders a fenced code block with a language", () => {
 		// biome-ignore lint/style/useConsistentCurlyBraces: \n must be a real newline — JSX string attribute would treat it as literal backslash-n
-		renderWithProviders(<MarkdownView content={'```json\n{"key": "value"}\n```'} />);
+		renderWithMantine(<MarkdownView content={'```json\n{"key": "value"}\n```'} />);
 		// SyntaxHighlighter wraps the code — at minimum the raw text should be present
 		expect(screen.getByText(/"key"/)).toBeTruthy();
 	});
 
 	it("renders strikethrough via remark-gfm", () => {
-		renderWithProviders(<MarkdownView content="~~deleted~~" />);
+		renderWithMantine(<MarkdownView content="~~deleted~~" />);
 		// remark-gfm wraps in <del>; text content should still be accessible
 		expect(screen.getByText("deleted")).toBeTruthy();
 	});
 
 	it("renders GFM table parts as Mantine table parts, keeping column alignment", () => {
 		// biome-ignore lint/style/useConsistentCurlyBraces: \n must be a real newline — JSX string attribute would treat it as literal backslash-n
-		renderWithProviders(<MarkdownView content={"| A | B |\n|---|--:|\n| 1 | 2 |"} />);
+		renderWithMantine(<MarkdownView content={"| A | B |\n|---|--:|\n| 1 | 2 |"} />);
 
 		const header = screen.getByRole("columnheader", { name: "A" });
 		expect(header.classList.contains("mantine-Table-th")).toBe(true);
@@ -101,7 +91,7 @@ describe("MarkdownView", () => {
 		i18next.addResourceBundle("de", "translation", de, true, true);
 		await i18next.changeLanguage(language);
 
-		const { container } = renderWithProviders(<MarkdownView content="![](https://example.test/a.png)" />);
+		const { container } = renderWithMantine(<MarkdownView content="![](https://example.test/a.png)" />);
 
 		expect(screen.getByText(label)).toBeTruthy();
 		expect(container.querySelector("img")).toBeNull();

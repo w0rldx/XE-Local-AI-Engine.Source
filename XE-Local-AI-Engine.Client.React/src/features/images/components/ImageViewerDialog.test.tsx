@@ -1,13 +1,11 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ImageViewerDialog } from "@/features/images/components/ImageViewerDialog";
 import type { ImageJobView } from "@/features/images/models/ImageModels";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { renderWithMantine } from "@/test/MantineTestRender";
 
 const objectUrlResult: { url: string | undefined; blob: Blob | undefined; isLoading: boolean; isError: boolean } = {
 	url: "blob:generated-image",
@@ -47,14 +45,6 @@ vi.mock("@/features/images/GeneratedImageDownload", async (importOriginal) => {
 		downloadGeneratedImage: (blob: Blob, fileName: string) => downloadSpy(blob, fileName),
 	};
 });
-
-function renderWithProviders(ui: ReactElement) {
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			{ui}
-		</MantineProvider>,
-	);
-}
 
 function job(overrides: Partial<ImageJobView> = {}): ImageJobView {
 	return {
@@ -122,7 +112,7 @@ describe("ImageViewerDialog", () => {
 	});
 
 	it("renders the full-size image and its generation metadata", async () => {
-		renderWithProviders(<ImageViewerDialog job={job()} opened={true} onClose={vi.fn()} />);
+		renderWithMantine(<ImageViewerDialog job={job()} opened={true} onClose={vi.fn()} />);
 
 		const image = await screen.findByTestId("image-viewer-image");
 		expect(image.getAttribute("src")).toBe("blob:generated-image");
@@ -135,23 +125,21 @@ describe("ImageViewerDialog", () => {
 	});
 
 	it("omits the negative prompt row when the job had none", async () => {
-		renderWithProviders(<ImageViewerDialog job={job()} opened={true} onClose={vi.fn()} />);
+		renderWithMantine(<ImageViewerDialog job={job()} opened={true} onClose={vi.fn()} />);
 
 		await screen.findByTestId("image-viewer-image");
 		expect(screen.queryByTestId("image-viewer-negative-prompt")).toBeNull();
 	});
 
 	it("shows the negative prompt when the job had one", async () => {
-		renderWithProviders(
-			<ImageViewerDialog job={job({ negativePrompt: "blurry, low quality" })} opened={true} onClose={vi.fn()} />,
-		);
+		renderWithMantine(<ImageViewerDialog job={job({ negativePrompt: "blurry, low quality" })} opened={true} onClose={vi.fn()} />);
 
 		const negative = await screen.findByTestId("image-viewer-negative-prompt");
 		expect(negative.textContent).toBe("blurry, low quality");
 	});
 
 	it("downloads the in-memory blob under a sanitized file name", async () => {
-		renderWithProviders(<ImageViewerDialog job={job()} opened={true} onClose={vi.fn()} />);
+		renderWithMantine(<ImageViewerDialog job={job()} opened={true} onClose={vi.fn()} />);
 
 		fireEvent.click(await screen.findByTestId("image-viewer-download"));
 
@@ -163,7 +151,7 @@ describe("ImageViewerDialog", () => {
 	// button looks live during the fetch and silently does nothing.
 	it("disables the download until the bytes have arrived", async () => {
 		objectUrlResult.blob = undefined;
-		renderWithProviders(<ImageViewerDialog job={job()} opened={true} onClose={vi.fn()} />);
+		renderWithMantine(<ImageViewerDialog job={job()} opened={true} onClose={vi.fn()} />);
 
 		const button = await screen.findByTestId("image-viewer-download");
 		expect((button as HTMLButtonElement).disabled).toBe(true);
@@ -177,7 +165,7 @@ describe("ImageViewerDialog", () => {
 		objectUrlResult.url = undefined;
 		objectUrlResult.blob = undefined;
 
-		renderWithProviders(<ImageViewerDialog job={job()} opened={true} onClose={vi.fn()} />);
+		renderWithMantine(<ImageViewerDialog job={job()} opened={true} onClose={vi.fn()} />);
 
 		await waitFor(() => expect(screen.getByTestId("image-viewer-error")).toBeTruthy());
 		expect(screen.queryByTestId("image-viewer-image")).toBeNull();
@@ -186,7 +174,7 @@ describe("ImageViewerDialog", () => {
 	// The pinned sd-server never reports the seed it drew, so a random-seed job keeps the -1 sentinel. Offering that
 	// as a copyable "seed" would hand the operator a value that reproduces nothing.
 	it("labels a random seed instead of showing the -1 sentinel", async () => {
-		renderWithProviders(<ImageViewerDialog job={job({ seed: -1 })} opened={true} onClose={vi.fn()} />);
+		renderWithMantine(<ImageViewerDialog job={job({ seed: -1 })} opened={true} onClose={vi.fn()} />);
 
 		await screen.findByTestId("image-viewer-image");
 		expect(screen.getByTestId("image-viewer-seed-random").textContent).toContain("Random");
@@ -195,7 +183,7 @@ describe("ImageViewerDialog", () => {
 	});
 
 	it("downloads a random-seed image under a 'random' file name", async () => {
-		renderWithProviders(<ImageViewerDialog job={job({ seed: -1 })} opened={true} onClose={vi.fn()} />);
+		renderWithMantine(<ImageViewerDialog job={job({ seed: -1 })} opened={true} onClose={vi.fn()} />);
 
 		fireEvent.click(await screen.findByTestId("image-viewer-download"));
 
@@ -203,7 +191,7 @@ describe("ImageViewerDialog", () => {
 	});
 
 	it("renders no dialog content while closed", () => {
-		renderWithProviders(<ImageViewerDialog job={job()} opened={false} onClose={vi.fn()} />);
+		renderWithMantine(<ImageViewerDialog job={job()} opened={false} onClose={vi.fn()} />);
 
 		expect(screen.queryByTestId("image-viewer-image")).toBeNull();
 	});
@@ -215,7 +203,7 @@ describe("ImageViewerDialog edit", () => {
 	it("starts an edit and closes the viewer", () => {
 		const onEdit = vi.fn();
 		const onClose = vi.fn();
-		renderWithProviders(<ImageViewerDialog job={job()} opened={true} onClose={onClose} onEdit={onEdit} />);
+		renderWithMantine(<ImageViewerDialog job={job()} opened={true} onClose={onClose} onEdit={onEdit} />);
 
 		fireEvent.click(screen.getByTestId("image-viewer-edit"));
 
@@ -224,13 +212,13 @@ describe("ImageViewerDialog edit", () => {
 	});
 
 	it("has no Edit action when no model can edit", () => {
-		renderWithProviders(<ImageViewerDialog job={job()} opened={true} onClose={vi.fn()} />);
+		renderWithMantine(<ImageViewerDialog job={job()} opened={true} onClose={vi.fn()} />);
 
 		expect(screen.queryByTestId("image-viewer-edit")).toBeNull();
 	});
 
 	it("shows the edit mode and the source beside the other settings", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ImageViewerDialog
 				job={job({ editMode: "reference", sourceImageId: "src-9", strength: null })}
 				opened={true}

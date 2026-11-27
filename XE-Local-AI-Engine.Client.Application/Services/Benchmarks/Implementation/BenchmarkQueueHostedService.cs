@@ -100,11 +100,11 @@ public sealed class BenchmarkQueueHostedService : BackgroundService
                                                 .ExecuteAsync(work, stoppingToken);
                             break;
                         case BenchmarkWorkKind.Fidelity:
-                            await executionScope.ServiceProvider.GetRequiredService<IBenchmarkFidelityExecutor>()
+                            await executionScope.ServiceProvider.GetRequiredService<BenchmarkFidelityExecutor>()
                                                 .ExecuteAsync(work, stoppingToken);
                             break;
                         case BenchmarkWorkKind.Comparison:
-                            await executionScope.ServiceProvider.GetRequiredService<IBenchmarkComparisonExecutor>()
+                            await executionScope.ServiceProvider.GetRequiredService<BenchmarkComparisonExecutor>()
                                                 .ExecuteAsync(work, stoppingToken);
                             break;
                         default:

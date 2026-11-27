@@ -37,7 +37,7 @@ internal static class AddNodeExternalAppsCatalogExtensions
                });
         // The cache store persists a tiny node-local JSON file under external-apps/; the provider owns the bundled/remote/last-good
         // snapshot and TTL-gated refresh. Both singletons, neither on the startup path: the ExternalApps:Enabled kill switch 404s the first catalog request. Add no eager consumer.
-        builder.Services.AddSingleton<IExternalAppCatalogCacheStore, ExternalAppCatalogCacheStore>();
+        builder.Services.AddSingleton<ExternalAppCatalogCacheStore>();
         builder.Services.AddSingleton<IApplicationCatalogProvider, ApplicationCatalogProvider>();
 
         return builder;

@@ -9,9 +9,6 @@ public sealed class ToolMockingTests
 {
     private const string Schema = """{"type":"object","properties":{"path":{"type":"string"},"depth":{"type":"integer"}}}""";
 
-    private static readonly ToolMockStaticVerifier Verifier = new();
-    private static readonly ToolMockEngine Engine = new();
-
     [Test]
     [Arguments("{{ path }}")]
     [Arguments("${HOME}/secrets")]
@@ -24,7 +21,7 @@ public sealed class ToolMockingTests
     {
         var body = Body(new ToolMockRuleV1("path", ToolMockMatchKind.Equality, value, null, "ok"));
 
-        var verification = Verifier.Verify(body, Schema);
+        var verification = ToolMockStaticVerifier.Verify(body, Schema);
 
         AssertEx.False(verification.Passed, "An expression-like match value must never be admitted.");
         AssertEx.Contains(verification.Findings, finding => finding.Contains("expression-like", StringComparison.Ordinal));
@@ -36,7 +33,7 @@ public sealed class ToolMockingTests
     {
         var body = Body(new ToolMockRuleV1("not_a_parameter", ToolMockMatchKind.Presence, null, null, "ok"));
 
-        var verification = Verifier.Verify(body, Schema);
+        var verification = ToolMockStaticVerifier.Verify(body, Schema);
 
         AssertEx.False(verification.Passed);
         AssertEx.Contains(verification.Findings, finding => finding.Contains("not_a_parameter", StringComparison.Ordinal));
@@ -49,7 +46,7 @@ public sealed class ToolMockingTests
                               .Select(_ => new ToolMockRuleV1("path", ToolMockMatchKind.Presence, null, null, "ok"))
                               .ToArray();
 
-        var verification = Verifier.Verify(new ToolMockBodyV1
+        var verification = ToolMockStaticVerifier.Verify(new ToolMockBodyV1
         {
             Rules = rules
         }, Schema);
@@ -63,7 +60,7 @@ public sealed class ToolMockingTests
     {
         var body = Body(new ToolMockRuleV1("path", ToolMockMatchKind.Presence, null, null, new string('x', ToolMockBodyV1.MaxResponseLength + 1)));
 
-        var verification = Verifier.Verify(body, Schema);
+        var verification = ToolMockStaticVerifier.Verify(body, Schema);
 
         AssertEx.False(verification.Passed);
     }
@@ -73,7 +70,7 @@ public sealed class ToolMockingTests
     {
         var body = Body(new ToolMockRuleV1("path", ToolMockMatchKind.Equality, "README.md", null, "# Title"));
 
-        var verification = Verifier.Verify(body, Schema);
+        var verification = ToolMockStaticVerifier.Verify(body, Schema);
 
         AssertEx.True(verification.Passed, string.Join("; ", verification.Findings));
     }
@@ -81,7 +78,7 @@ public sealed class ToolMockingTests
     [Test]
     public void MockVerifier_MalformedBody_ReturnsAFailingVerdictInsteadOfThrowing()
     {
-        var parsed = Verifier.TryParse("not json"u8, out var body, out var failureReason);
+        var parsed = ToolMockStaticVerifier.TryParse("not json"u8, out var body, out var failureReason);
 
         AssertEx.False(parsed);
         AssertEx.Null(body);
@@ -93,7 +90,7 @@ public sealed class ToolMockingTests
     {
         var body = Body(new ToolMockRuleV1("path", ToolMockMatchKind.Equality, "OTHER.md", null, "# Other"));
 
-        AssertEx.False(Engine.TryRespond(body, Arguments("""{"path":"README.md"}"""), out _),
+        AssertEx.False(ToolMockEngine.TryRespond(body, Arguments("""{"path":"README.md"}"""), out _),
             "An unmatched call must not fall through to anything — the caller reports validation-only.");
     }
 
@@ -110,11 +107,11 @@ public sealed class ToolMockingTests
             DefaultResponse = "default"
         };
 
-        AssertEx.Succeeded(Engine.TryRespond(body, Arguments("""{"path":"README.md"}"""), out var first));
+        AssertEx.Succeeded(ToolMockEngine.TryRespond(body, Arguments("""{"path":"README.md"}"""), out var first));
         AssertEx.Equal("first", first);
-        AssertEx.Succeeded(Engine.TryRespond(body, Arguments("""{"path":"other.md"}"""), out var second));
+        AssertEx.Succeeded(ToolMockEngine.TryRespond(body, Arguments("""{"path":"other.md"}"""), out var second));
         AssertEx.Equal("second", second);
-        AssertEx.Succeeded(Engine.TryRespond(body, Arguments("""{"depth":2}"""), out var fallback));
+        AssertEx.Succeeded(ToolMockEngine.TryRespond(body, Arguments("""{"depth":2}"""), out var fallback));
         AssertEx.Equal("default", fallback);
     }
 
@@ -123,9 +120,9 @@ public sealed class ToolMockingTests
     {
         var body = Body(new ToolMockRuleV1("path", ToolMockMatchKind.Enum, null, ["a.md", "b.md"], "matched"));
 
-        AssertEx.Succeeded(Engine.TryRespond(body, Arguments("""{"path":"b.md"}"""), out var matched));
+        AssertEx.Succeeded(ToolMockEngine.TryRespond(body, Arguments("""{"path":"b.md"}"""), out var matched));
         AssertEx.Equal("matched", matched);
-        AssertEx.False(Engine.TryRespond(body, Arguments("""{"path":"c.md"}"""), out _));
+        AssertEx.False(ToolMockEngine.TryRespond(body, Arguments("""{"path":"c.md"}"""), out _));
     }
 
     private static ToolMockBodyV1 Body(ToolMockRuleV1 rule) =>

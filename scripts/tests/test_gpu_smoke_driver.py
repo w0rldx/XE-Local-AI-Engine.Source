@@ -111,5 +111,44 @@ class NegativeControlTests(unittest.TestCase):
         self.assertEqual((body["strength"], body["editMode"], body["sourceImageId"]), (0.6, "img2img", "up-1"))
 
 
+class DownloadPollTests(unittest.TestCase):
+    """poll_download against scripted answers; time.sleep is patched, so no poll waits."""
+
+    def poll(self, answers: list, retry=None) -> tuple[str, list[str]]:
+        asked: list[str] = []
+
+        def get(path: str) -> dict:
+            asked.append(path)
+            answer = answers.pop(0)
+            if isinstance(answer, Exception):
+                raise answer
+            return {"phase": answer}
+
+        extra = () if retry is None else (retry,)
+        with mock.patch.object(driver.time, "sleep"):
+            return driver.poll_download(get, "op 1", 60, *extra), asked
+
+    def test_polls_while_active_and_returns_the_terminal_phase(self) -> None:
+        phase, asked = self.poll(["queued", "Verifying", "Completed", "never asked"])
+        self.assertEqual(phase, "Completed")
+        self.assertEqual(asked, ["/model-fit/gguf/downloads/operations/op%201"] * 3)
+
+    def test_a_failed_poll_raises_unless_retry_asks_for_another(self) -> None:
+        with self.assertRaisesRegex(driver.DriverError, "HTTP 401"):
+            self.poll([driver.DriverError("HTTP 401")])
+        seen: list[str] = []
+
+        def retry(error: Exception) -> bool:
+            seen.append(str(error))
+            return True
+
+        phase, asked = self.poll([driver.DriverError("HTTP 401"), "failed"], retry)
+        self.assertEqual((phase, len(asked), seen), ("failed", 2, ["HTTP 401"]))
+
+    def test_no_time_left_polls_nothing(self) -> None:
+        with mock.patch.object(driver.time, "monotonic", side_effect=[0.0, 61.0]):
+            self.assertEqual(driver.poll_download(lambda _path: {"phase": "completed"}, "op", 60), "")
+
+
 if __name__ == "__main__":
     unittest.main()

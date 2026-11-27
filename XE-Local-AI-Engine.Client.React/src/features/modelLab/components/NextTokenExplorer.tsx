@@ -24,7 +24,7 @@ import { ExplanationLevelSwitch, ExplanationList } from "@/features/modelLab/com
 import { NextTokenPromptTokens } from "@/features/modelLab/components/NextTokenPromptTokens";
 import { NextTokenStepView } from "@/features/modelLab/components/NextTokenStepView";
 import { type ExplanationLevel, nextTokenTopics } from "@/features/modelLab/models/ModelLabExplanation";
-import { moveFocusAmongButtons } from "@/features/modelLab/models/ModelLabFocus";
+import { moveFocusAmongButtons, useRovingTabStop } from "@/features/modelLab/models/ModelLabFocus";
 import type { ModelLabIntent } from "@/features/modelLab/models/ModelLabNavigation";
 
 interface Step {
@@ -43,16 +43,20 @@ interface StepButtonsProps {
 	color: MantineColor;
 }
 
-// Native buttons, so Enter and Space select; the arrow keys move between them instead of tabbing through every step.
+// Native buttons, so Enter and Space select; one Tab stop (the selected step, else the first) and the arrow keys between.
 // Memoized: every streamed frame re-renders the tab, and up to a thousand buttons only change when an entry was kept.
 const StepButtons = memo(function StepButtons({ label, steps, selected, onSelect, color }: StepButtonsProps) {
+	const stop = useRovingTabStop(
+		steps.findIndex((step) => step.index === selected),
+		steps.length,
+	);
 	return (
 		<Stack gap={4}>
 			<Text size="xs" fw={600}>
 				{label}
 			</Text>
 			<Group gap={4} role="group" aria-label={label} onKeyDown={moveFocusAmongButtons}>
-				{steps.map(({ entry, index }) => (
+				{steps.map(({ entry, index }, position) => (
 					<Button
 						key={index}
 						size="compact-xs"
@@ -60,6 +64,8 @@ const StepButtons = memo(function StepButtons({ label, steps, selected, onSelect
 						color={color}
 						variant={index === selected ? "filled" : "default"}
 						aria-pressed={index === selected}
+						tabIndex={stop.tabIndexFor(position)}
+						onFocus={() => stop.onFocusAt(position)}
 						onClick={() => onSelect(index)}
 						styles={{ label: { whiteSpace: "pre" } }}
 						data-testid="model-lab-next-token-step-button"

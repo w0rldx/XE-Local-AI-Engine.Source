@@ -73,7 +73,7 @@ internal static class AddNodeGraphWorkflowsExtensions
 
         // The chat surface over runs (send, bound-run list, cancel on conversation delete), and the dispatcher's publish outbox
         // pass, which the tick resolves from its own scope.
-        builder.Services.AddScoped<IGraphWorkflowChatService, GraphWorkflowChatService>();
+        builder.Services.AddScoped<GraphWorkflowChatService>();
         builder.Services.AddSingleton<GraphWorkflowChatPublisher>();
         builder.Services.AddSingleton<IConversationDeletionObserver, GraphWorkflowConversationDeletionObserver>();
 

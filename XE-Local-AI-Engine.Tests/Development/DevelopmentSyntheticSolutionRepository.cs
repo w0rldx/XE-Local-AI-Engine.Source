@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
-using System.Diagnostics;
 using System.Reflection;
+using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Builds a throwaway Git repository that is a real, buildable .NET solution.
@@ -190,11 +190,11 @@ internal static class DevelopmentSyntheticSolutionRepository
             await WriteTestProjectAsync(repositoryRoot, testFrameworkVersion, cancellationToken);
         }
 
-        await RunGitAsync(repositoryRoot, cancellationToken, "init", "--initial-branch=main", ".");
-        await RunGitAsync(repositoryRoot, cancellationToken, "config", "user.email", "development-validation@example.invalid");
-        await RunGitAsync(repositoryRoot, cancellationToken, "config", "user.name", "Development Validation Test");
-        await RunGitAsync(repositoryRoot, cancellationToken, "add", "-A", "--", ".");
-        await RunGitAsync(repositoryRoot, cancellationToken, "commit", "-m", "synthetic solution fixture");
+        await TestGit.RunAsync(repositoryRoot, cancellationToken, "init", "--initial-branch=main", ".");
+        await TestGit.RunAsync(repositoryRoot, cancellationToken, "config", "user.email", "development-validation@example.invalid");
+        await TestGit.RunAsync(repositoryRoot, cancellationToken, "config", "user.name", "Development Validation Test");
+        await TestGit.RunAsync(repositoryRoot, cancellationToken, "add", "-A", "--", ".");
+        await TestGit.RunAsync(repositoryRoot, cancellationToken, "commit", "-m", "synthetic solution fixture");
     }
 
     private static async Task WriteTestProjectAsync(string repositoryRoot,
@@ -328,36 +328,5 @@ internal static class DevelopmentSyntheticSolutionRepository
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 
         await File.WriteAllTextAsync(path, Lf(content), cancellationToken);
-    }
-
-    private static async Task RunGitAsync(string workingDirectory,
-        CancellationToken cancellationToken,
-        params string[] arguments)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "git",
-            WorkingDirectory = workingDirectory,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false
-        };
-        foreach (var argument in arguments)
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
-
-        using var process = new Process
-        {
-            StartInfo = startInfo
-        };
-        process.Start();
-        var standardOutput = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var standardError = process.StandardError.ReadToEndAsync(cancellationToken);
-        await process.WaitForExitAsync(cancellationToken);
-        if (process.ExitCode != 0)
-        {
-            throw new InvalidOperationException($"git {string.Join(' ', arguments)} failed with exit code {process.ExitCode}: {await standardOutput}{await standardError}");
-        }
     }
 }

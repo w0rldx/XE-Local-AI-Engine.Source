@@ -16,6 +16,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { type AudioInputDevice, listAudioInputDevices } from "@/core/audio/capture/CaptureSource";
+import { formatTime } from "@/core/formatting/TimeFormatting";
 import { COMPACT_CONTROLS_BREAKPOINT } from "@/core/layout/constants/LayoutBreakpoints";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
@@ -212,10 +213,7 @@ export function NewTranscriptionSessionDialog({
 			// The upload endpoint never names the row, so the create call carries the title. This dialog offers no
 			// title field: a file's own name is what the operator already chose, and a live session has no name to
 			// borrow, so it is stamped with the time it started.
-			title:
-				stagedFile === null
-					? t("pages.transcription.dialog.liveTitle", { time: new Date().toLocaleTimeString() })
-					: stagedFile.name,
+			title: stagedFile === null ? t("pages.transcription.dialog.liveTitle", { time: formatTime(Date.now()) }) : stagedFile.name,
 			sourceKind,
 			languageMode: language === AUTO_LANGUAGE ? "auto" : "override",
 			languageOverride: language === AUTO_LANGUAGE ? null : language,

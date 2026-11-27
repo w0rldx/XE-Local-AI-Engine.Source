@@ -13,7 +13,6 @@ import type { Snapshot } from "@/core/diagnostics/Diagnostics";
 import { toast } from "@/core/ui/notifications/Toast";
 import { exportSnapshot, snapshotArchiveEntries } from "@/features/diagnostics/models/ExportSnapshot";
 
-export const SUPPORT_BUNDLE_PATH = "diagnostics/support-bundle";
 // The shared axios instance has no timeout. A node that accepts the request and never answers would otherwise keep the
 // Export button loading forever and the browser-only zip would never be saved. The bundle is ~1.5 MB of local reads.
 export const SUPPORT_BUNDLE_TIMEOUT_MS = 20_000;

@@ -6,13 +6,11 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
-using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
-using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity;
@@ -30,6 +28,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
+using static NodeChatStreamServiceTestSupport;
 
 [Category(TestCategories.Integration)]
 public sealed class NodeChatRegenerationServiceTests : IDisposable
@@ -87,7 +86,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Model = "model-x"
         });
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new RegenCompletingRunner(dispatcher);
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
@@ -156,7 +155,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversationId, originalId) = await SeedRegeneratableTurnAsync(persistence);
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var otherInvocationId = Guid.NewGuid();
         var runner = new RegenCompletingRunner(dispatcher,
             async invocationId =>
@@ -212,7 +211,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var gate = new GpuWorkGate();
         AssertEx.Succeeded(gate.TryBeginShared(GpuWorkKind.Benchmark, out var benchmark));
         using var benchmarkScope = benchmark;
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
 
         // A benchmark measurement runs under a conversation id no conversation has.
         await using var measurement = await dispatcher.ReportInvocationAssignedAsync(RuntimePackageBuilder.Valid().WithConversationId(Guid.NewGuid()).Build());
@@ -244,7 +243,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Kind = NodeConversationKind.WorkSession
         });
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         await using var holderLease = await dispatcher.ReportInvocationAssignedAsync(RuntimePackageBuilder.Valid().WithConversationId(holder.ConversationId).Build());
         var service = CreateService(persistence, dispatcher, new RegenCompletingRunner(dispatcher));
 
@@ -269,7 +268,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversationId, originalId) = await SeedRegeneratableTurnAsync(persistence);
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var runtimeSettings = StubNodeRuntimeSettings.Create().Build();
         runtimeSettings.GetEnableToolsAsync(Arg.Any<CancellationToken>())
                        .Returns<Task<bool>>(_ => throw new InvalidOperationException("node settings unavailable"));
@@ -294,7 +293,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await using var provider = await BuildProviderAsync("regeneration-parked-turn.sqlite");
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversationId, originalId) = await SeedRegeneratableTurnAsync(persistence);
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         await using var parkedLease = await dispatcher.ReportInvocationAssignedAsync(RuntimePackageBuilder.Valid().WithConversationId(conversationId).Build());
         var parked = AssertEx.NotNull(dispatcher.CurrentInvocation);
         parked.PendingApproval = new InvocationApprovalState
@@ -326,9 +325,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await using var provider = await BuildProviderAsync($"regeneration-workflow-live-{status}.sqlite");
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversationId, originalId) = await SeedRegeneratableTurnAsync(persistence);
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var service = CreateService(persistence, dispatcher, new RegenCompletingRunner(dispatcher),
-            graphWorkflows: NodeChatStreamServiceTestSupport.BoundRunStore(conversationId, status));
+            graphWorkflows: BoundRunStore(conversationId, status));
 
         var exception = await AssertEx.ThrowsAsync<NodeChatWorkflowRunLiveException>(async () =>
         {
@@ -352,7 +351,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversationId, originalId) = await SeedRegeneratableTurnAsync(persistence);
         var events = new List<ChatStreamEvent>();
-        var dispatcher = new RegenRecordingDispatcher
+        var dispatcher = new RecordingWorkerEventDispatcher
         {
             OnAssigned = async () =>
             {
@@ -430,7 +429,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     }
 
     private static NodeChatRegenerationService CreateService(NodeChatPersistenceService persistence,
-        RegenRecordingDispatcher dispatcher,
+        RecordingWorkerEventDispatcher dispatcher,
         IInvocationRunner runner,
         INodeRuntimeSettings? runtimeSettings = null,
         IGpuWorkGate? gpuWorkGate = null,
@@ -472,7 +471,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversation, originalId) = await SeedCompletedOriginalAsync(persistence);
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new RegenContextCapturingRunner(dispatcher);
         var scopeFactory = CreateKnowledgeScopeFactory(KnowledgeHit("Runbook", "Restart the service with the eject command.", score: 0.91));
         var service = CreateServiceWithScopeFactory(persistence, runner, dispatcher, scopeFactory);
@@ -509,7 +508,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await using var provider = await BuildProviderAsync($"regeneration-kb-scope-{pinned ?? "all"}.sqlite");
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversation, originalId) = await SeedCompletedOriginalAsync(persistence);
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new RegenContextCapturingRunner(dispatcher);
         var searchService = Substitute.For<IKnowledgeSearchService>();
         searchService.SearchAsync(Arg.Any<KnowledgeSearchRequest>(), Arg.Any<CancellationToken>())
@@ -539,7 +538,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await using var provider = await BuildProviderAsync("regeneration-kb-invalid-collection.sqlite");
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversation, originalId) = await SeedCompletedOriginalAsync(persistence);
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new RegenContextCapturingRunner(dispatcher);
         var service = CreateServiceWithScopeFactory(persistence, runner, dispatcher, CreateKnowledgeScopeFactory());
 
@@ -558,7 +557,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversation, originalId) = await SeedCompletedOriginalAsync(persistence);
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var toolHit = KnowledgeHit("Manual", "The eject command lives in the toolbar.", score: 0.5);
         var runner = new RegenContextCapturingRunner(dispatcher)
         {
@@ -592,7 +591,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversation, originalId) = await SeedCompletedOriginalAsync(persistence);
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new RegenContextCapturingRunner(dispatcher);
         var scopeFactory = CreateKnowledgeScopeFactory();
         var service = CreateServiceWithScopeFactory(persistence, runner, dispatcher, scopeFactory);
@@ -698,7 +697,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Model = cloudModel
         });
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new RegenContextCapturingRunner(dispatcher);
         var scopeFactory = CreateKnowledgeScopeFactory(KnowledgeHit("Runbook", "secret runbook body", score: 0.9));
         var service = CreateServiceWithScopeFactory(persistence, runner, dispatcher, scopeFactory, allowCloudModelAccess: false, trustResolver);
@@ -756,7 +755,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Content = "four"
         });
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new RegenCompletingRunner(dispatcher);
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
@@ -847,7 +846,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Model = "model-x"
         });
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new RegenContextCapturingRunner(dispatcher);
         var boundTool = CreateLocalToolDto("Calculate", "{\"type\":\"object\"}");
         var resolver = Substitute.For<IAgentDefinitionResolver>();
@@ -917,7 +916,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             UpdatedAtUtc = 14
         });
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new RegenContextCapturingRunner(dispatcher);
         var defaultAgentId = Guid.NewGuid();
         var resolver = Substitute.For<IAgentDefinitionResolver>();
@@ -1017,7 +1016,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Model = originalModel
         });
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new RegenContextCapturingRunner(dispatcher);
         var resolver = Substitute.For<IAgentDefinitionResolver>();
         resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
@@ -1124,7 +1123,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Model = "model-x"
         });
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new RegenContextCapturingRunner(dispatcher);
         var resolver = Substitute.For<IAgentDefinitionResolver>();
         // The agent was renamed since the original turn — the re-resolve picks up the fresh name.
@@ -1222,7 +1221,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Model = "model-x"
         });
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new RegenContextCapturingRunner(dispatcher);
 
         var store = Substitute.For<IAgentDefinitionStore>();
@@ -1328,7 +1327,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Model = "model-x"
         });
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new RegenContextCapturingRunner(dispatcher);
         var store = Substitute.For<IAgentDefinitionStore>();
         store.GetByIdAsync(agentDefinitionId, Arg.Any<CancellationToken>()).Returns(CreateOrchestratorRecord(agentDefinitionId));
@@ -1450,7 +1449,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Model = "model-x"
         });
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new RegenContextCapturingRunner(dispatcher);
 
         var store = Substitute.For<IAgentDefinitionStore>();
@@ -1546,7 +1545,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Model = "model-x"
         });
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new RegenContextCapturingRunner(dispatcher);
 
         var store = Substitute.For<IAgentDefinitionStore>();
@@ -1641,7 +1640,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Model = "model-x"
         });
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new RegenContextCapturingRunner(dispatcher);
 
         var store = Substitute.For<IAgentDefinitionStore>();
@@ -1734,7 +1733,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Model = "model-x"
         });
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new RegenContextCapturingRunner(dispatcher);
         var resolver = CreateAgentDefinitionResolver();
 
@@ -1820,7 +1819,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Model = "model-x"
         });
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new RegenContextCapturingRunner(dispatcher);
 
         var service = new NodeChatRegenerationService(persistence,
@@ -1908,7 +1907,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Model = "model-x"
         });
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new RegenContextCapturingRunner(dispatcher);
         var offerProvider = CreateOfferProvider(CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
         offerProvider.GetCloudWithheldToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>())
@@ -2019,7 +2018,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Model = "model-x"
         });
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new RegenToolEmittingRunner(dispatcher);
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
@@ -2120,7 +2119,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Model = "model-x"
         });
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
@@ -2211,7 +2210,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Model = "model-x"
         });
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
         var offerProvider = CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"),
             CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
@@ -2304,7 +2303,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Model = "model-x"
         });
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
         var offerProvider = CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"),
             CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
@@ -2392,7 +2391,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         });
 
         // First regenerate makes variant B (a sibling of the original whose parent is the ORIGINAL assistant turn).
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
@@ -2513,7 +2512,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var extractionDispatcher = Substitute.For<IMemoryExtractionDispatcher>();
         extractionDispatcher.Dispatch(Arg.Any<MemoryExtractionDispatchContext>(), Arg.Do<MemoryExtractionRunInput>(extractionRuns.Add));
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
@@ -2594,7 +2593,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var userThreeId = await SeedUserTurnAsync(persistence, conversationId, "u-three", createdAtUtc: 15);
         var answerThreeId = await SeedAssistantTurnAsync(persistence, conversationId, "a-three", createdAtUtc: 16);
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
         var service = CreateService(persistence, dispatcher, capturingRunner);
 
@@ -2698,7 +2697,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversationId, originalId) = await SeedRegeneratableTurnAsync(persistence);
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
         var service = CreateService(persistence, dispatcher, capturingRunner);
 
@@ -2726,7 +2725,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await using var provider = await BuildProviderAsync("regeneration-web-auto.sqlite");
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversationId, originalId) = await SeedRegeneratableTurnAsync(persistence);
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
         var service = CreateService(persistence, dispatcher, capturingRunner);
 
@@ -2744,7 +2743,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversationId, originalId) = await SeedRegeneratableTurnAsync(persistence);
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
         var service = CreateService(persistence, dispatcher, capturingRunner);
 
@@ -2849,7 +2848,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             UpdatedAtUtc = 17
         });
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
         var service = CreateService(persistence, dispatcher, capturingRunner);
 
@@ -2988,7 +2987,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             UpdatedAtUtc = 18
         });
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
         var service = CreateService(persistence, dispatcher, capturingRunner);
 
@@ -3095,7 +3094,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             UpdatedAtUtc = 17
         });
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
         var service = CreateService(persistence, dispatcher, capturingRunner);
 
@@ -3171,7 +3170,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             UpdatedAtUtc = 14
         });
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
         var service = CreateService(persistence, dispatcher, capturingRunner);
 
@@ -3232,7 +3231,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Model = "model-x"
         });
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
@@ -3313,7 +3312,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Model = "model-x"
         });
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
@@ -3368,7 +3367,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Origin = NodeChatOriginValues.Remote
         });
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
@@ -3450,7 +3449,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     // The regenerate rejects before any runner/dispatcher work, so the collaborators past persistence never run.
     private static NodeChatRegenerationService CreateMinimalRegenerationService(NodeChatPersistenceService persistence)
     {
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         return new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
@@ -3528,7 +3527,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Model = CodexModel
         });
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new RegenCompletingRunner(dispatcher);
         var offerProvider = CreateOfferProvider();
         var gguf = CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: false, SupportsVision: false));
@@ -3588,7 +3587,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversation, originalId) = await SeedCompletedOriginalAsync(persistence);
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new RegenGatedCompletingRunner(dispatcher);
         var service = CreateService(persistence, runner, dispatcher, new NodeChatStreamCancellationRegistry());
 
@@ -3634,7 +3633,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversation, originalId) = await SeedCompletedOriginalAsync(persistence);
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new RegenGatedCompletingRunner(dispatcher);
         var service = CreateService(persistence, runner, dispatcher, new NodeChatStreamCancellationRegistry());
 
@@ -3666,7 +3665,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversation, originalId) = await SeedCompletedOriginalAsync(persistence);
 
-        var dispatcher = new RegenRecordingDispatcher();
+        var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new RegenGatedCompletingRunner(dispatcher);
         var registry = new NodeChatStreamCancellationRegistry();
         var service = CreateService(persistence, runner, dispatcher, registry);
@@ -3751,7 +3750,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
     private static NodeChatRegenerationService CreateService(NodeChatPersistenceService persistence,
         IInvocationRunner runner,
-        RegenRecordingDispatcher dispatcher,
+        RecordingWorkerEventDispatcher dispatcher,
         NodeChatStreamCancellationRegistry registry)
     {
         return new NodeChatRegenerationService(persistence,
@@ -3781,54 +3780,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             new GpuWorkGate());
     }
 
-    private async Task<ServiceProvider> BuildProviderAsync(string fileName)
-    {
-        Directory.CreateDirectory(_rootPath);
-        var databasePath = Path.Combine(_rootPath, fileName);
-        var services = new ServiceCollection();
-        services.AddScoped<INodeSqliteKeyHolder, NullNodeSqliteKeyHolder>();
-        services.AddDbContext<NodeChatDbContext>(options => options.UseSqlite($"Data Source={databasePath}"));
-        services.AddSingleton<NodeChatPersistenceWriter>();
-
-        var provider = services.BuildServiceProvider(true);
-        await using var scope = provider.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        await dbContext.Database.EnsureDeletedAsync();
-        await dbContext.Database.EnsureCreatedAsync();
-
-        return provider;
-    }
-
-    private static ILocalToolOfferProvider CreateOfferProvider(params AllowedToolDto[] tools)
-    {
-        var provider = Substitute.For<ILocalToolOfferProvider>();
-        // Allow-listed, so a tool turn raises no allow-list ToolsWithheld notice unless a test opts out.
-        provider.IsToolCapable(Arg.Any<string?>()).Returns(true);
-        provider.GetOfferedTools(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>()).Returns(tools);
-        provider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>()).Returns(tools);
-        provider.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>()).Returns(tools);
-        provider.GetCloudWithheldToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>())
-                .Returns(Task.FromResult<IReadOnlyList<CloudWithheldTool>>([]));
-        return provider;
-    }
-
-    // The default scope factory: no IKnowledgeSearchService wired, so a regenerate that never touches the KB grounding
-    // path (the pre-existing tests) resolves nothing. Mirrors the send-path test harness (NodeChatStreamServiceTests).
-    private static IServiceScopeFactory CreateScopeFactory(IKnowledgeSearchService? searchService = null)
-    {
-        var factory = Substitute.For<IServiceScopeFactory>();
-        if (searchService is null)
-        {
-            return factory;
-        }
-
-        var provider = Substitute.For<IServiceProvider>();
-        provider.GetService(typeof(IKnowledgeSearchService)).Returns(searchService);
-        var scope = Substitute.For<IServiceScope>();
-        scope.ServiceProvider.Returns(provider);
-        factory.CreateScope().Returns(scope);
-        return factory;
-    }
+    private Task<ServiceProvider> BuildProviderAsync(string fileName) =>
+        NodeChatTestProvider.BuildAsync(Path.Combine(_rootPath, fileName), pooled: true);
 
     // The turn-context builder the regenerate shares with the send path. A regenerate reaches only its knowledge-base
     // grounding (attachments are a send-only concern), so the attachment collaborators are bare substitutes and the
@@ -3843,40 +3796,11 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             NullLogger<ChatTurnContextBuilder>.Instance);
     }
 
-    // A knowledge search service returning a fixed hit list, wired into a scope factory for the KB grounding tests.
-    private static IServiceScopeFactory CreateKnowledgeScopeFactory(params KnowledgeSearchHit[] hits)
-    {
-        var searchService = Substitute.For<IKnowledgeSearchService>();
-        searchService.SearchAsync(Arg.Any<KnowledgeSearchRequest>(), Arg.Any<CancellationToken>())
-                     .Returns(new KnowledgeSearchResult
-                     {
-                         Results = hits
-                     });
-        return CreateScopeFactory(searchService);
-    }
-
-    private static KnowledgeSearchHit KnowledgeHit(string title, string content, double score)
-    {
-        return new KnowledgeSearchHit
-        {
-            DocumentId = Guid.NewGuid(),
-            ChunkId = Guid.NewGuid(),
-            Title = title,
-            Section = "Section",
-            Content = content,
-            Source = "knowledge-base",
-            Score = score,
-            ChunkIndex = 0,
-            DocumentStatus = KnowledgeDocumentStatus.Indexed,
-            ServingLastKnownGood = false
-        };
-    }
-
     // Builds a regeneration service wired with the given scope factory (KB retrieval path) and cloud-egress opt-in,
     // mirroring the inline construction the other regen tests use. cloud-vs-local is chosen by the original turn's model.
     private static NodeChatRegenerationService CreateServiceWithScopeFactory(NodeChatPersistenceService persistence,
         IInvocationRunner runner,
-        RegenRecordingDispatcher dispatcher,
+        RecordingWorkerEventDispatcher dispatcher,
         IServiceScopeFactory scopeFactory,
         bool allowCloudModelAccess = false,
         FakeModelTrustResolver? trustResolver = null)
@@ -3906,122 +3830,6 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatRegenerationService>.Instance,
             new GpuWorkGate());
-    }
-
-    // The default node-settings store: no operator-selected node default, so model resolution falls through to the
-    // original turn's model (or the static config fallback) exactly as the send path does.
-    private static INodeSettingsStore CreateNodeSettingsStore(string? defaultModelName = null,
-        int maxMessageRequestTimeoutSeconds = StoredNodeSettings.DefaultMaxMessageRequestTimeoutSeconds)
-    {
-        var store = Substitute.For<INodeSettingsStore>();
-        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings
-        {
-            DefaultModelName = defaultModelName,
-            MaxMessageRequestTimeoutSeconds = maxMessageRequestTimeoutSeconds
-        });
-        return store;
-    }
-
-    // ChatTurnResolver resolves capabilities through the shared IModelCapabilityResolver, so these tests compose the
-    // real one over substituted collaborators — the routing decision under test lives in one place. The default: every
-    // model is a BOTH thinking- and tools-capable GGUF; the capability-gate tests pass an incapable one.
-    private static IModelCapabilityResolver CreateModelCapabilityResolver(IGgufModelCapabilityResolver? gguf = null,
-        FakeModelTrustResolver? trustResolver = null)
-    {
-        return new ModelCapabilityResolver(gguf ?? CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: true, SupportsTools: true, SupportsVision: false)),
-            trustResolver ?? new FakeModelTrustResolver());
-    }
-
-    private static IGgufModelCapabilityResolver CreateGgufModelCapabilityResolver(GgufModelCapabilities capabilities)
-    {
-        var resolver = Substitute.For<IGgufModelCapabilityResolver>();
-        resolver.ResolveOrNullAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(capabilities);
-        return resolver;
-    }
-
-    // No-op extraction dispatcher: these tests are not about post-run memory (the playbook-disabled default agent never
-    // fires the hook). A substitute's void Dispatch is a no-op, keeping the regenerate SSE assertions intact.
-    private static IMemoryExtractionDispatcher CreateMemoryExtractionDispatcher()
-    {
-        return Substitute.For<IMemoryExtractionDispatcher>();
-    }
-
-    // The default local-default resolver resolves to an installed GGUF chat model so a regenerate of a "Local runtime
-    // default" turn proceeds. Regenerate only consults it when the ORIGINAL turn carried no explicit model; the
-    // existing regen tests seed an explicit original model, so this is inert for them. It echoes the persisted node
-    // default when set and otherwise falls back to the static config model. The no-model test passes resolved=null +
-    // echoPersistedDefault=false to force the empty result.
-    private static ILocalDefaultChatModelResolver CreateLocalDefaultChatModelResolver(string? resolved = null, bool echoPersistedDefault = true)
-    {
-        var fallback = resolved ?? new LocalChatAgentOptions().DefaultModel;
-        var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
-        resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
-                .Returns(callInfo =>
-                {
-                    if (!echoPersistedDefault)
-                    {
-                        return Task.FromResult<string?>(resolved);
-                    }
-
-                    var persistedDefault = callInfo.Arg<string?>();
-                    return Task.FromResult<string?>(string.IsNullOrWhiteSpace(persistedDefault) ? fallback : persistedDefault);
-                });
-        return resolver;
-    }
-
-    // The default (unbound) resolver: ResolveAsync returns null, so the regeneration path keeps today's literals —
-    // these tests exercise the default chat persona. Bound-agent behavior is covered by the dedicated bound tests.
-    private static IAgentDefinitionResolver CreateAgentDefinitionResolver()
-    {
-        var resolver = Substitute.For<IAgentDefinitionResolver>();
-        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                .Returns((ResolvedAgentRuntime?)null);
-        return resolver;
-    }
-
-    // The default-agent provider: returns null so the effective-agent precedence falls through to a null id (no seeded
-    // Default Assistant in these unit tests), keeping the default-persona contract on the rerun.
-    private static IDefaultAgentProvider CreateDefaultAgentProvider(Guid? defaultAgentId = null)
-    {
-        var provider = Substitute.For<IDefaultAgentProvider>();
-        provider.GetDefaultAgentIdAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(defaultAgentId));
-        return provider;
-    }
-
-    // The default store/orchestration resolver: GetByIdAsync returns null so ResolveOrchestrationAsync never reaches the
-    // orchestration resolver — the package carries no spec and the single-agent regeneration path is byte-identical.
-    private static IAgentDefinitionStore CreateAgentDefinitionStore()
-    {
-        var store = Substitute.For<IAgentDefinitionStore>();
-        store.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((AgentDefinitionRecord?)null);
-        return store;
-    }
-
-    private static IOrchestrationResolver CreateOrchestrationResolver()
-    {
-        var resolver = Substitute.For<IOrchestrationResolver>();
-        resolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(OrchestrationResolution.NotOrchestrated);
-        return resolver;
-    }
-
-    private static AgentDefinitionRecord CreateOrchestratorRecord(Guid id)
-    {
-        return new AgentDefinitionRecord
-        {
-            Id = id,
-            Name = "Orchestrator",
-            Description = null,
-            Instructions = "Orchestrator prompt.",
-            ModelProfile = "qwen3:8b",
-            ReasoningEffort = null,
-            Kind = AgentDefinitionKind.Orchestrator,
-            AllowedToolNames = [],
-            ToolApprovals = new Dictionary<string, bool>(),
-            OrchestrationTopologyJson = null,
-            Version = 4,
-            CreatedAtUtc = 10,
-            UpdatedAtUtc = 10
-        };
     }
 
     private static OrchestrationSpec CreateSampleSpec()
@@ -4075,20 +3883,18 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
     // beforeStreaming lets a test raise dispatcher traffic (an approval, a notice) from INSIDE the run, which is the
     // only point at which the service's handlers are subscribed. Optional, so every existing construction is unchanged.
-    private sealed class RegenCompletingRunner : IInvocationRunner
+    private sealed class RegenCompletingRunner : InvocationRunnerStub
     {
-        private readonly RegenRecordingDispatcher _dispatcher;
+        private readonly RecordingWorkerEventDispatcher _dispatcher;
         private readonly Func<Guid, Task>? _beforeStreaming;
 
-        public RegenCompletingRunner(RegenRecordingDispatcher dispatcher, Func<Guid, Task>? beforeStreaming = null)
+        public RegenCompletingRunner(RecordingWorkerEventDispatcher dispatcher, Func<Guid, Task>? beforeStreaming = null)
         {
             _dispatcher = dispatcher;
             _beforeStreaming = beforeStreaming;
         }
 
-        public int ActiveInvocationCount => 0;
-
-        public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
+        public override async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
             if (_beforeStreaming is not null)
             {
@@ -4098,42 +3904,13 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             await _dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "regenerated answer");
             await _dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 5, outputTokens: 2, totalTokens: 7, reasoningTokens: 0);
         }
-
-        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(true);
-        }
-
-        public void Cancel(Guid invocationId)
-        {
-        }
-
-        public void CancelDetached(Guid invocationId)
-        {
-        }
-
-        public void CancelAll()
-        {
-        }
-
-        public void CleanupStaleToolCalls(TimeSpan maxAge)
-        {
-        }
-
-        public void ResolveApprovalResult(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
-        {
-        }
-
-        public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
-        {
-        }
     }
 
-    private sealed class RegenContextCapturingRunner : IInvocationRunner
+    private sealed class RegenContextCapturingRunner : InvocationRunnerStub
     {
-        private readonly RegenRecordingDispatcher _dispatcher;
+        private readonly RecordingWorkerEventDispatcher _dispatcher;
 
-        public RegenContextCapturingRunner(RegenRecordingDispatcher dispatcher)
+        public RegenContextCapturingRunner(RecordingWorkerEventDispatcher dispatcher)
         {
             _dispatcher = dispatcher;
         }
@@ -4172,12 +3949,10 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // Hits the run records the way search_knowledge_base does inside the tool loop.
         public IReadOnlyList<KnowledgeSearchHit> ToolHits { get; init; } = [];
 
-        public int ActiveInvocationCount => 0;
-
         // The collection the knowledge-base tools were fixed to while the rerun executed.
         public string? PinnedCollectionInRun { get; private set; }
 
-        public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
+        public override async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
             foreach (var hit in ToolHits)
             {
@@ -4198,49 +3973,18 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             await _dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "regenerated answer");
             await _dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 5, outputTokens: 2, totalTokens: 7, reasoningTokens: 0);
         }
-
-        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(true);
-        }
-
-        public void Cancel(Guid invocationId)
-        {
-        }
-
-        public void CancelDetached(Guid invocationId)
-        {
-        }
-
-        public void CancelAll()
-        {
-        }
-
-        public void CleanupStaleToolCalls(TimeSpan maxAge)
-        {
-        }
-
-        public void ResolveApprovalResult(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
-        {
-        }
-
-        public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
-        {
-        }
     }
 
-    private sealed class RegenToolEmittingRunner : IInvocationRunner
+    private sealed class RegenToolEmittingRunner : InvocationRunnerStub
     {
-        private readonly RegenRecordingDispatcher _dispatcher;
+        private readonly RecordingWorkerEventDispatcher _dispatcher;
 
-        public RegenToolEmittingRunner(RegenRecordingDispatcher dispatcher)
+        public RegenToolEmittingRunner(RecordingWorkerEventDispatcher dispatcher)
         {
             _dispatcher = dispatcher;
         }
 
-        public int ActiveInvocationCount => 0;
-
-        public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
+        public override async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
             await _dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
             {
@@ -4263,61 +4007,30 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             await _dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "regenerated answer");
             await _dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 5, outputTokens: 2, totalTokens: 7, reasoningTokens: 0);
         }
-
-        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(true);
-        }
-
-        public void Cancel(Guid invocationId)
-        {
-        }
-
-        public void CancelDetached(Guid invocationId)
-        {
-        }
-
-        public void CancelAll()
-        {
-        }
-
-        public void CleanupStaleToolCalls(TimeSpan maxAge)
-        {
-        }
-
-        public void ResolveApprovalResult(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
-        {
-        }
-
-        public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
-        {
-        }
     }
 
     // Streams one chunk, signals Started, then blocks until Release() (or the run token cancels — honoring a genuine
     // user cancel), then finishes Completed. Lets a test interleave a client-token cancel / teardown / user cancel with
     // an in-flight run.
-    private sealed class RegenGatedCompletingRunner : IInvocationRunner
+    private sealed class RegenGatedCompletingRunner : InvocationRunnerStub
     {
         private readonly TaskCompletionSource _started = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private readonly RegenRecordingDispatcher _dispatcher;
+        private readonly RecordingWorkerEventDispatcher _dispatcher;
 
-        public RegenGatedCompletingRunner(RegenRecordingDispatcher dispatcher)
+        public RegenGatedCompletingRunner(RecordingWorkerEventDispatcher dispatcher)
         {
             _dispatcher = dispatcher;
         }
 
         public Task Started => _started.Task;
 
-        public int ActiveInvocationCount => 0;
-
         public void Release()
         {
             _release.TrySetResult();
         }
 
-        public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
+        public override async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
             await _dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "gated answer");
             _started.TrySetResult();
@@ -4327,330 +4040,6 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
             await _dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, " done");
             await _dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 5, outputTokens: 2, totalTokens: 7, reasoningTokens: 0);
-        }
-
-        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(true);
-        }
-
-        public void Cancel(Guid invocationId)
-        {
-        }
-
-        public void CancelDetached(Guid invocationId)
-        {
-        }
-
-        public void CancelAll()
-        {
-        }
-
-        public void CleanupStaleToolCalls(TimeSpan maxAge)
-        {
-        }
-
-        public void ResolveApprovalResult(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
-        {
-        }
-
-        public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
-        {
-        }
-    }
-
-    private sealed class RegenRecordingDispatcher : IWorkerEventDispatcher
-    {
-        public event EventHandler<InvocationStateChangedEventArgs>? InvocationStateChanged;
-
-        public event EventHandler<ToolCallLifecycleChangedEventArgs>? ToolCallLifecycleChanged;
-
-        public event EventHandler<ToolCallOutputChangedEventArgs>? ToolCallOutputChanged;
-
-        public event EventHandler<TurnNoticeChangedEventArgs>? TurnNoticeChanged;
-
-        public event EventHandler<ApprovalRequestedChangedEventArgs>? ApprovalRequestedChanged;
-
-        public event EventHandler<UserQuestionRequestedChangedEventArgs>? UserQuestionRequestedChanged;
-
-        // The dispatcher is a SINGLETON in the app, so a handler left attached leaks for the process lifetime and
-        // keeps firing into a stream nobody reads. Tests assert this is false on every exit path.
-        public bool HasApprovalSubscribers => ApprovalRequestedChanged is not null;
-
-        private Guid? _slotHolderId;
-
-        public InvocationState? CurrentInvocation { get; private set; }
-
-        public InvocationState? SlotHolder => CurrentInvocation is { } current && current.InvocationId == _slotHolderId && !NodeChatInvocationPump.IsTerminal(current.Status) ? current : null;
-
-        // No background worker reads this fake's slot changes.
-        public Task SlotChanged { get; } = new TaskCompletionSource().Task;
-
-        public IReadOnlyList<InvocationState> GetLiveInvocations() =>
-            CurrentInvocation is { } current && !NodeChatInvocationPump.IsTerminal(current.Status) ? [current] : [];
-
-        public InvocationLiveSnapshot GetLiveSnapshot() =>
-            new()
-            {
-                Current = SlotHolder,
-                Live = GetLiveInvocations()
-            };
-
-        public bool ReleaseSlotForPark(Guid invocationId)
-        {
-            if (_slotHolderId != invocationId)
-            {
-                return false;
-            }
-
-            _slotHolderId = null;
-            return true;
-        }
-
-        public Task ReportPromptTimedOutAsync(Guid invocationId, string requestId) =>
-            Task.CompletedTask;
-
-        public Task ReacquireSlotAsync(Guid invocationId, CancellationToken cancellationToken)
-        {
-            _slotHolderId = invocationId;
-            return Task.CompletedTask;
-        }
-
-        /// <summary>Runs once the lease is granted, before the service marks the row streaming: the race window under test.</summary>
-        public Func<Task>? OnAssigned { get; init; }
-
-        public Task DispatchApprovalResolvedAsync(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
-        {
-            return Task.CompletedTask;
-        }
-
-        public async Task<IAsyncDisposable> ReportInvocationAssignedAsync(RuntimePackage package, CancellationToken cancellationToken = default)
-        {
-            _slotHolderId = package.InvocationId;
-            CurrentInvocation = new InvocationState
-            {
-                InvocationId = package.InvocationId,
-                ConversationId = package.ConversationId,
-                Status = InvocationStatus.Assigned,
-                StartedAt = DateTimeOffset.UtcNow,
-                LastUpdatedAt = DateTimeOffset.UtcNow
-            };
-            RaiseChanged();
-            if (OnAssigned is not null)
-            {
-                await OnAssigned();
-            }
-
-            return NoopLease.Instance;
-        }
-
-        public Task ReportInvocationStreamChunkAsync(Guid invocationId, string chunk)
-        {
-            if (CurrentInvocation is null)
-            {
-                return Task.CompletedTask;
-            }
-
-            CurrentInvocation.Status = InvocationStatus.Running;
-            CurrentInvocation.StreamedContent += chunk;
-            CurrentInvocation.StreamedChunkCount++;
-            CurrentInvocation.LastUpdatedAt = DateTimeOffset.UtcNow;
-            RaiseChanged();
-            return Task.CompletedTask;
-        }
-
-        public Task ReportInvocationTextReclassifiedAsync(Guid invocationId, string content, string reasoningSuffix)
-        {
-            if (CurrentInvocation is not null)
-            {
-                CurrentInvocation.StreamedContent = content;
-                CurrentInvocation.StreamedThinkingContent += reasoningSuffix;
-            }
-
-            return Task.CompletedTask;
-        }
-
-        public Task ReportInvocationThinkingChunkAsync(Guid invocationId, string chunk)
-        {
-            if (CurrentInvocation is null)
-            {
-                return Task.CompletedTask;
-            }
-
-            CurrentInvocation.Status = InvocationStatus.Running;
-            CurrentInvocation.StreamedThinkingContent += chunk;
-            CurrentInvocation.StreamedThinkingChunkCount++;
-            CurrentInvocation.LastUpdatedAt = DateTimeOffset.UtcNow;
-            RaiseChanged();
-            return Task.CompletedTask;
-        }
-
-        public Task ReportInvocationPhaseAsync(Guid invocationId, InvocationRuntimePhase phase, InvocationRuntimePhaseDetail? detail = null)
-        {
-            if (CurrentInvocation is not null)
-            {
-                CurrentInvocation.RuntimePhase = phase;
-            }
-
-            return Task.CompletedTask;
-        }
-
-        public Task ReportInvocationCompletedAsync(Guid invocationId, int? inputTokens = null, int? outputTokens = null, int? totalTokens = null, int? reasoningTokens = null,
-            long? generationDurationMs = null, string? finishReason = null, InvocationThroughput? throughput = null)
-        {
-            if (CurrentInvocation is not null)
-            {
-                CurrentInvocation.Status = InvocationStatus.Completed;
-                CurrentInvocation.CompletedAt = DateTimeOffset.UtcNow;
-                CurrentInvocation.InputTokens = inputTokens;
-                CurrentInvocation.OutputTokens = outputTokens;
-                CurrentInvocation.TotalTokens = totalTokens;
-                CurrentInvocation.ReasoningTokens = reasoningTokens;
-                CurrentInvocation.GenerationDurationMs = generationDurationMs;
-                RaiseChanged();
-            }
-
-            return Task.CompletedTask;
-        }
-
-        public Task ReportTurnContextSnapshotAsync(Guid invocationId, ProviderRoundContextSnapshot snapshot)
-        {
-            if (CurrentInvocation is not null)
-            {
-                CurrentInvocation.ContextSnapshot = snapshot;
-            }
-
-            return Task.CompletedTask;
-        }
-
-        public Task ReportToolSchemaTokensAsync(Guid invocationId, long? toolSchemaTokens, int? maxToolSchemaTokens)
-        {
-            if (CurrentInvocation is not null)
-            {
-                CurrentInvocation.ToolSchemaTokens = toolSchemaTokens;
-                CurrentInvocation.MaxToolSchemaTokens = maxToolSchemaTokens;
-            }
-
-            return Task.CompletedTask;
-        }
-
-        public Task ReportTurnTelemetryAsync(Guid invocationId, long? modelReadinessMs, TurnUsageTotals? usage)
-        {
-            if (CurrentInvocation is not null)
-            {
-                CurrentInvocation.ModelReadinessMs = modelReadinessMs;
-                CurrentInvocation.TurnInputTokens = usage?.InputTokens;
-                CurrentInvocation.TurnOutputTokens = usage?.OutputTokens;
-                CurrentInvocation.TurnTotalTokens = usage?.TotalTokens;
-                CurrentInvocation.TurnReasoningTokens = usage?.ReasoningTokens;
-            }
-
-            return Task.CompletedTask;
-        }
-
-        public Task ReportTurnContextWindowAsync(Guid invocationId, int contextCapacityTokens, int reservedOutputTokens)
-        {
-            if (CurrentInvocation is not null)
-            {
-                CurrentInvocation.ContextCapacityTokens = contextCapacityTokens;
-                CurrentInvocation.ReservedOutputTokens = reservedOutputTokens;
-            }
-
-            return Task.CompletedTask;
-        }
-
-        public Task ReportEffortDispatchAsync(Guid invocationId, string dispatchedTier, string authoredEffort)
-        {
-            if (CurrentInvocation is not null)
-            {
-                CurrentInvocation.DispatchedTier = dispatchedTier;
-                CurrentInvocation.AuthoredEffort = authoredEffort;
-            }
-
-            return Task.CompletedTask;
-        }
-
-        public Task ReportServedModelAsync(Guid invocationId, string modelUsed)
-        {
-            if (CurrentInvocation is not null)
-            {
-                CurrentInvocation.ModelUsed = modelUsed;
-            }
-
-            return Task.CompletedTask;
-        }
-
-        public Task ReportInvocationFailedAsync(Guid invocationId, string failureMessage, FailureCategory failureCategory, bool showCancelReason = false)
-        {
-            if (CurrentInvocation is not null)
-            {
-                CurrentInvocation.Status = failureCategory == FailureCategory.Cancelled ? InvocationStatus.Cancelled : InvocationStatus.Failed;
-                CurrentInvocation.Error = failureMessage;
-                CurrentInvocation.FailureCategory = failureCategory;
-                CurrentInvocation.CompletedAt = DateTimeOffset.UtcNow;
-                RaiseChanged();
-            }
-
-            return Task.CompletedTask;
-        }
-
-        public Task ReportToolCallRequestedAsync(ToolCallRequestPayload payload)
-        {
-            return Task.CompletedTask;
-        }
-
-        public Task ReportApprovalRequestedAsync(ApprovalRequestPayload payload)
-        {
-            return Task.CompletedTask;
-        }
-
-        public Task ReportToolCallLifecycleAsync(ToolCallLifecyclePayload payload)
-        {
-            ToolCallLifecycleChanged?.Invoke(this, new ToolCallLifecycleChangedEventArgs(payload));
-            return Task.CompletedTask;
-        }
-
-        public void ReportToolCallOutput(ToolCallOutputPayload payload)
-        {
-            ToolCallOutputChanged?.Invoke(this, new ToolCallOutputChangedEventArgs(payload));
-        }
-
-        public Task ReportTurnNoticeAsync(TurnNoticePayload payload)
-        {
-            TurnNoticeChanged?.Invoke(this, new TurnNoticeChangedEventArgs(payload));
-            return Task.CompletedTask;
-        }
-
-        public Task ReportApprovalLifecycleAsync(ApprovalLifecyclePayload payload)
-        {
-            ApprovalRequestedChanged?.Invoke(this, new ApprovalRequestedChangedEventArgs(payload));
-            return Task.CompletedTask;
-        }
-
-        public Task ReportUserQuestionAsync(UserQuestionLifecyclePayload payload)
-        {
-            UserQuestionRequestedChanged?.Invoke(this, new UserQuestionRequestedChangedEventArgs(payload));
-            return Task.CompletedTask;
-        }
-
-        public Task DispatchUserQuestionAnsweredAsync(UserQuestionAnsweredEvent evt)
-        {
-            return Task.CompletedTask;
-        }
-
-        private void RaiseChanged()
-        {
-            InvocationStateChanged?.Invoke(this, new InvocationStateChangedEventArgs(CurrentInvocation!));
-        }
-
-        private sealed class NoopLease : IAsyncDisposable
-        {
-            public static readonly NoopLease Instance = new();
-
-            public ValueTask DisposeAsync()
-            {
-                return ValueTask.CompletedTask;
-            }
         }
     }
 }

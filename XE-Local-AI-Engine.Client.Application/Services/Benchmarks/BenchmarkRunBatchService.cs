@@ -2,12 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-public interface IBenchmarkRunBatchService
-{
-    Task<BenchmarkRunBatchResult> StartAsync(BenchmarkRunBatchRequest request, CancellationToken cancellationToken = default);
-}
-
-public sealed class BenchmarkRunBatchService : IBenchmarkRunBatchService
+public sealed class BenchmarkRunBatchService
 {
     private static readonly TimeSpan RequestTimeBudget = TimeSpan.FromSeconds(45);
 

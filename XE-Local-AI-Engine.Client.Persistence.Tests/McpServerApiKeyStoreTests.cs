@@ -33,7 +33,7 @@ public sealed class McpServerApiKeyStoreTests : IDisposable
     {
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(_databasePath, _keyHolder);
         await context.Database.EnsureCreatedAsync();
-        var store = new McpServerApiKeyStore(context, new FixedTimeProvider());
+        var store = new McpServerApiKeyStore(context, new ManualTimeProvider(DateTimeOffset.UnixEpoch.AddDays(1)));
 
         _ = await store.SetAsync("xemcp_first", new byte[]
         {
@@ -65,7 +65,7 @@ public sealed class McpServerApiKeyStoreTests : IDisposable
     {
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(_databasePath, _keyHolder);
         await context.Database.EnsureCreatedAsync();
-        var store = new McpServerApiKeyStore(context, new FixedTimeProvider());
+        var store = new McpServerApiKeyStore(context, new ManualTimeProvider(DateTimeOffset.UnixEpoch.AddDays(1)));
 
         _ = await AssertEx.ThrowsAsync<ArgumentOutOfRangeException>(() =>
             store.SetAsync("xemcp_invalid", new byte[]
@@ -83,7 +83,7 @@ public sealed class McpServerApiKeyStoreTests : IDisposable
     {
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(_databasePath, _keyHolder);
         await context.Database.EnsureCreatedAsync();
-        var store = new McpServerApiKeyStore(context, new FixedTimeProvider());
+        var store = new McpServerApiKeyStore(context, new ManualTimeProvider(DateTimeOffset.UnixEpoch.AddDays(1)));
         var original = await store.SetAsync("xemcp_first", new byte[]
         {
             1,
@@ -103,11 +103,5 @@ public sealed class McpServerApiKeyStoreTests : IDisposable
         var current = AssertEx.NotNull(await store.GetAsync());
         AssertEx.Equal(replacement.GenerationId, current.GenerationId);
         AssertEx.Null(current.LastUsedAtUtc);
-    }
-
-    private sealed class FixedTimeProvider : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() =>
-            DateTimeOffset.UnixEpoch.AddDays(1);
     }
 }

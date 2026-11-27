@@ -12,10 +12,14 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 
 /// <summary>
-///     Default <see cref="IChatContextEstimateService" />: the send path's model head, turn resolution, tool offer and
-///     fallback prompt, measured with the same estimator and framing the outer context budgeter charges.
+///     Estimates, before anything is sent, the fixed parts of the next chat request for a model and agent: the resolved
+///     system prompt, the offered tools and their template preamble, the output reserve and the safety margin.
 /// </summary>
-internal sealed class ChatContextEstimateService : IChatContextEstimateService
+/// <remarks>
+///     It runs the send path's model head, turn resolution, tool offer and fallback prompt, measured with the same
+///     estimator and framing the outer context budgeter charges.
+/// </remarks>
+public sealed class ChatContextEstimateService
 {
     private readonly ConversationContextBudgetOptions _budgetOptions;
     private readonly IDefaultAgentProvider _defaultAgentProvider;
@@ -69,6 +73,15 @@ internal sealed class ChatContextEstimateService : IChatContextEstimateService
         _persistence = persistence;
     }
 
+    /// <summary>
+    ///     The pre-send estimate for the request's model and agent, or <see langword="null" /> when the node cannot
+    ///     resolve the model or does not know the named conversation.
+    /// </summary>
+    /// <remarks>
+    ///     Read-only: it runs the send path's model head, turn resolution and tool-offer gate, then estimates with the
+    ///     outer budgeter's heuristic and the send path's window and reserve rules. Nothing is persisted, staged or sent
+    ///     to a model.
+    /// </remarks>
     public async Task<NodeChatContextWindowDto?> EstimateAsync(ChatContextEstimateRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);

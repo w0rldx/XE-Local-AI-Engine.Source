@@ -30,7 +30,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     [Test]
     public async Task BinaryManager_LinuxCudaWithoutManagedRuntime_FailsBeforeHttpInsteadOfDownloadingCpuPin()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-sdcpp-source-tests");
         using var store = new StableDiffusionInstalledRuntimeStore(temp.Path);
         using var handler = new CountingHttpMessageHandler(() => new HttpResponseMessage(HttpStatusCode.OK));
         using var http = new HttpClient(handler);
@@ -50,7 +50,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     [Test]
     public async Task BinaryManager_InvalidManagedRuntime_FailsClosedWithoutPrebuiltDownload()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-sdcpp-source-tests");
         using var store = new StableDiffusionInstalledRuntimeStore(temp.Path);
         await store.WriteAsync(State(temp.Path) with
         {
@@ -75,7 +75,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     [Test]
     public async Task BinaryManager_ActiveManagedRuntimeShaMismatch_WritesTombstoneAndNeverFallsBack()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-sdcpp-source-tests");
         using var store = new StableDiffusionInstalledRuntimeStore(temp.Path);
         var state = State(temp.Path);
         Directory.CreateDirectory(state.SourceBuildPath!);
@@ -156,7 +156,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     [Test]
     public async Task StartAsync_ActiveJob_ReturnsRuntimeBusyWithoutStartingCommand()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-sdcpp-source-tests");
         using var store = new StableDiffusionInstalledRuntimeStore(temp.Path);
         var gate = new ImageRuntimeActivityGate();
         AssertEx.Succeeded(gate.TryAcquireJobLease(out var job));
@@ -178,7 +178,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     [Test]
     public async Task StartAsync_DetachedBuildIsSingleFlightAndCancellationCompletes()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-sdcpp-source-tests");
         using var store = new StableDiffusionInstalledRuntimeStore(temp.Path);
         var gate = new ImageRuntimeActivityGate();
         var runner = new BlockingRunner();
@@ -203,7 +203,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     [Test]
     public async Task SourceBuild_OfficialBuildChecksOutExactCommitBeforeInitializingSubmodulesAndAdoptsVerifiedState()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-sdcpp-source-tests");
         using var store = new StableDiffusionInstalledRuntimeStore(temp.Path);
         var gate = new ImageRuntimeActivityGate();
         var runner = new SuccessfulRunner();
@@ -262,7 +262,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     [Test]
     public async Task SourceBuild_CustomExactCommitUsesShallowFetchAndFetchHeadCheckout()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-sdcpp-source-tests");
         using var store = new StableDiffusionInstalledRuntimeStore(temp.Path);
         var customCommit = new string('c', 40);
         var runner = new SuccessfulRunner(customCommit);
@@ -293,7 +293,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     [Test]
     public async Task SourceBuild_AdoptionStoreFailure_RestoresPreviousRuntimeDirectoryAndRecord()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-sdcpp-source-tests");
         using var innerStore = new StableDiffusionInstalledRuntimeStore(temp.Path);
         var previous = State(temp.Path);
         var commitRoot = Path.Combine(temp.Path,
@@ -335,7 +335,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     [Test]
     public async Task SourceBuild_SuccessfulReplacementRemovesPreviousCommitRoot()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-sdcpp-source-tests");
         using var store = new StableDiffusionInstalledRuntimeStore(temp.Path);
         var previousCommit = new string('b', 40);
         var previousRoot = Path.Combine(temp.Path, "stable-diffusion.cpp", "managed", "cpu", previousCommit);
@@ -373,7 +373,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     [Test]
     public async Task RecoverAsync_InterruptedSameCommitAdoptionRestoresBackupAndPreviousRecord()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-sdcpp-source-tests");
         using var store = new StableDiffusionInstalledRuntimeStore(temp.Path);
         var previous = State(temp.Path);
         var destination = Path.Combine(temp.Path,
@@ -420,7 +420,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     [Test]
     public async Task RecoverAsync_PreSwapJournalValidatesPreviousBytesAndRetriesFailedTreeCleanup()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-sdcpp-source-tests");
         using var store = new StableDiffusionInstalledRuntimeStore(temp.Path);
         var previous = State(temp.Path);
         var destination = Path.Combine(temp.Path,
@@ -464,7 +464,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     [Test]
     public async Task RecoverAsync_ReplacementWithoutBackupRetainsJournalAndFailsClosed()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-sdcpp-source-tests");
         using var store = new StableDiffusionInstalledRuntimeStore(temp.Path);
         var previous = State(temp.Path);
         var destination = Path.Combine(temp.Path,
@@ -506,7 +506,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     [ExcludeOn(OS.Windows)]
     public async Task CommandRunner_StreamsOutputBeforeProcessCompletes()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-sdcpp-source-tests");
         var runner = new SourceCommandRunner();
         var firstLine = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var run = runner.RunAsync("/bin/sh",
@@ -535,7 +535,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     [ExcludeOn(OS.Windows)]
     public async Task CommandRunner_TimeoutTerminatesHungCommand()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-sdcpp-source-tests");
         var runner = new SourceCommandRunner();
 
         await AssertEx.ThrowsAsync<TimeoutException>(() => runner.RunAsync("/bin/sh",
@@ -560,7 +560,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
             Environment.SetEnvironmentVariable("CUDA_HOME", "/opt/test-cuda-home");
             Environment.SetEnvironmentVariable("CUDA_PATH", "/opt/test-cuda-path");
             Environment.SetEnvironmentVariable("XE_SOURCE_BUILD_POISON", "secret");
-            using var temp = new TempDirectory();
+            using var temp = new TempDirectory("xe-sdcpp-source-tests");
             var runner = new SourceCommandRunner();
 
             var result = await runner.RunAsync("/bin/sh",
@@ -600,7 +600,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
             Environment.SetEnvironmentVariable("CUDA_HOME", "/opt/test-cuda-home");
             Environment.SetEnvironmentVariable("CUDA_PATH", "/opt/test-cuda-path");
             Environment.SetEnvironmentVariable("XE_SOURCE_BUILD_POISON", "secret");
-            using var temp = new TempDirectory();
+            using var temp = new TempDirectory("xe-sdcpp-source-tests");
             var home = Path.Combine(temp.Path, ".process-home");
             var processTemp = Path.Combine(temp.Path, ".process-tmp");
 
@@ -648,7 +648,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     [Test]
     public void SourceProcessHardening_RemovesPoisonAndPreservesCudaAllowlist()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-sdcpp-source-tests");
         var startInfo = new ProcessStartInfo();
         startInfo.Environment.Clear();
         startInfo.Environment["PATH"] = "/toolchain/bin";
@@ -731,7 +731,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     [ExcludeOn(OS.Windows)]
     public async Task PrerequisiteProbe_CallerCancellationTerminatesSpawnedProcess()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-sdcpp-source-tests");
         var pidPath = Path.Combine(temp.Path, "probe.pid");
         using var cancellation = new CancellationTokenSource();
         var probe = SourceBuildPrerequisiteProbe.ProbeToolForTestsAsync("/bin/sh",
@@ -752,7 +752,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     [Test]
     public async Task RemoveAsync_DeletesExactCommitInstallRootAndPreservesSibling()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-sdcpp-source-tests");
         using var store = new StableDiffusionInstalledRuntimeStore(temp.Path);
         var state = State(temp.Path);
         var commitRoot = Path.Combine(temp.Path, "stable-diffusion.cpp", "managed", "cuda", state.SourceCommit);
@@ -778,7 +778,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     [Test]
     public async Task RemoveAsync_InvalidTombstoneWithoutRecordedPath_StillDeletesExactCommitRoot()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TempDirectory("xe-sdcpp-source-tests");
         using var store = new StableDiffusionInstalledRuntimeStore(temp.Path);
         var state = State(temp.Path);
         var commitRoot = Path.Combine(temp.Path, "stable-diffusion.cpp", "managed", "cuda", state.SourceCommit);
@@ -803,8 +803,8 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     [Test]
     public async Task RemoveAsync_InvalidTombstoneWithUntrustedRecordedPath_DeletesOnlyDerivedManagedRoot()
     {
-        using var temp = new TempDirectory();
-        using var outside = new TempDirectory();
+        using var temp = new TempDirectory("xe-sdcpp-source-tests");
+        using var outside = new TempDirectory("xe-sdcpp-source-tests");
         using var store = new StableDiffusionInstalledRuntimeStore(temp.Path);
         var state = State(temp.Path);
         var commitRoot = Path.Combine(temp.Path, "stable-diffusion.cpp", "managed", "cuda", state.SourceCommit);
@@ -1069,25 +1069,6 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         public Task DeleteAsync(CancellationToken ct)
         {
             return _inner.DeleteAsync(ct);
-        }
-    }
-
-    private sealed class TempDirectory : IDisposable
-    {
-        public TempDirectory()
-        {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "xe-sdcpp-source-tests-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path);
-        }
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            if (Directory.Exists(Path))
-            {
-                Directory.Delete(Path, recursive: true);
-            }
         }
     }
 }

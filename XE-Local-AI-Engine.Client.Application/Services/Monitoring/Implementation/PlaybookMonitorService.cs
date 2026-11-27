@@ -4,7 +4,8 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Default <see cref="IPlaybookMonitorService" /> (relevance retrieval and cohort monitoring, the cohort-monitor verdict rules).
+///     Computes the cohort-monitoring view for every Enabled action of an agent. Invoked off the hot path (the monitor GET endpoint / batch
+///     only), never during a send.
 /// </summary>
 /// <remarks>
 ///     For every Enabled action of the agent that carries an <c>EnabledAtUtc</c> clock, it reads the agent's before/after feedback cohort
@@ -13,7 +14,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     action for human review (never an auto-disable), and a cohort below the minimum sample size is InsufficientData and never flagged.
 ///     Computed on read, off the hot path, model-free and deterministic.
 /// </remarks>
-public sealed class PlaybookMonitorService : IPlaybookMonitorService
+public sealed class PlaybookMonitorService
 {
     private readonly IPlaybookMonitorStore _monitorStore;
     private readonly PlaybookMonitorOptions _options;
@@ -31,6 +32,10 @@ public sealed class PlaybookMonitorService : IPlaybookMonitorService
         _playbookActionStore = playbookActionStore;
     }
 
+    /// <summary>
+    ///     Returns one <see cref="PlaybookActionMonitorView" /> per Enabled action that carries an enable timestamp, for
+    ///     the agent identified by <paramref name="agentDefinitionId" />.
+    /// </summary>
     public async Task<IReadOnlyList<PlaybookActionMonitorView>> GetMonitorAsync(Guid agentDefinitionId, CancellationToken cancellationToken = default)
     {
         var enabled = await _playbookActionStore.ListEnabledByAgentAsync(agentDefinitionId, cancellationToken);

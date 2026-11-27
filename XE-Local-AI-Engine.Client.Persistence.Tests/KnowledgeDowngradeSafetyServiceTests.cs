@@ -86,7 +86,7 @@ public sealed class KnowledgeDowngradeSafetyServiceTests : IDisposable
     public async Task ExportAsync_ConflictDataset_WritesConsistentBackupWithoutResolvingConflict()
     {
         var databasePath = GetDatabasePath("export.sqlite");
-        var clock = new FixedTimeProvider(new DateTimeOffset(2026, 8, 13, 12, 34, 56, TimeSpan.Zero));
+        var clock = new ManualTimeProvider(new DateTimeOffset(2026, 8, 13, 12, 34, 56, TimeSpan.Zero));
         await using var serviceProvider = await BuildMigratedServiceProviderAsync(databasePath, clock);
         await SeedDocumentAsync(databasePath, Guid.NewGuid(), "COLLECTION-A", "duplicate");
         await SeedDocumentAsync(databasePath, Guid.NewGuid(), "COLLECTION-B", "duplicate");
@@ -226,18 +226,5 @@ public sealed class KnowledgeDowngradeSafetyServiceTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM knowledge_documents;";
         return Convert.ToInt64(await command.ExecuteScalarAsync());
-    }
-
-    private sealed class FixedTimeProvider : TimeProvider
-    {
-        private readonly DateTimeOffset _now;
-
-        public FixedTimeProvider(DateTimeOffset now)
-        {
-            _now = now;
-        }
-
-        public override DateTimeOffset GetUtcNow() =>
-            _now;
     }
 }

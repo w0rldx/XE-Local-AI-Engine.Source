@@ -17,11 +17,6 @@ export interface ChatUiCapabilities {
 	readonly showKnowledgeBaseControls: boolean;
 }
 
-const hiddenSurfaceLabels: ReadonlyArray<readonly [keyof ChatUiCapabilities, string]> = [
-	["showToolApprovalControls", "tool approval controls"],
-	["showConversationFeedbackControls", "conversation feedback controls"],
-];
-
 export const defaultChatUiCapabilities: ChatUiCapabilities = {
 	showLocalToolControls: false,
 	showToolApprovalControls: false,
@@ -52,15 +47,4 @@ export function buildChatUiCapabilities(capabilities: ChatCapabilities, manifest
 		// derives from nodeCapabilities.knowledgeBase, mirrored into the chat bag at the call site in Chat.tsx.
 		showKnowledgeBaseControls: capabilities.knowledgeBase ?? false,
 	};
-}
-
-export function hiddenChatSurfaceLabels(capabilities: ChatUiCapabilities): string[] {
-	const labels: string[] = [];
-	for (const [key, label] of hiddenSurfaceLabels) {
-		if (!capabilities[key]) {
-			labels.push(label);
-		}
-	}
-
-	return labels;
 }

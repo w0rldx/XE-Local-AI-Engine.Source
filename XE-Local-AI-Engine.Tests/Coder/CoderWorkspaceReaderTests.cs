@@ -144,7 +144,7 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
     {
         using var provider = CreateProvider();
         var handle = await CreateOrAttachAsync(provider);
-        using var escapeTarget = new TempDir(_tempPaths);
+        using var escapeTarget = new TempDirectory("xe-coder-outside");
         await File.WriteAllTextAsync(Path.Combine(escapeTarget.Path, "secret.txt"), "OUTSIDE-THE-JAIL");
 
         // Plant a jail-side symlink that escapes the workspace, then try to read through it.
@@ -324,7 +324,7 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
     {
         using var provider = CreateProvider();
         var handle = await CreateOrAttachAsync(provider);
-        using var escapeTarget = new TempDir(_tempPaths);
+        using var escapeTarget = new TempDirectory("xe-coder-outside");
         Directory.CreateDirectory(Path.Combine(escapeTarget.Path, "nested"));
         await File.WriteAllTextAsync(Path.Combine(escapeTarget.Path, "nested", "secret.txt"), "OUTSIDE-THE-JAIL");
         await RunShellInJailAsync(provider, handle,
@@ -349,7 +349,7 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
     {
         using var provider = CreateProvider();
         var handle = await CreateOrAttachAsync(provider);
-        using var escapeTarget = new TempDir(_tempPaths);
+        using var escapeTarget = new TempDirectory("xe-coder-outside");
         await File.WriteAllTextAsync(Path.Combine(escapeTarget.Path, "secret.txt"), "OUTSIDE-THE-JAIL");
         await RunShellInJailAsync(provider, handle,
             $"mkdir -p agent-home/workspace/selected && ln -s {ShellQuote(escapeTarget.Path)} agent-home/workspace/selected/link");
@@ -398,7 +398,7 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
     {
         using var provider = CreateProvider();
         var handle = await CreateOrAttachAsync(provider);
-        using var escapeTarget = new TempDir(_tempPaths);
+        using var escapeTarget = new TempDirectory("xe-coder-outside");
         var secret = Path.Combine(escapeTarget.Path, "secret.txt");
         await File.WriteAllTextAsync(secret, "OUTSIDE-THE-JAIL");
         await RunShellInJailAsync(provider, handle,
@@ -481,7 +481,7 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
         // before the process launches, so a host file outside the jail is never read.
         using var provider = CreateProvider();
         var handle = await CreateOrAttachAsync(provider);
-        using var escapeTarget = new TempDir(_tempPaths);
+        using var escapeTarget = new TempDirectory("xe-coder-outside");
         var outsideFile = Path.Combine(escapeTarget.Path, "outside-secret.txt");
         await File.WriteAllTextAsync(outsideFile, "OUTSIDE-THE-JAIL");
         await RunShellInJailAsync(provider, handle, "mkdir -p agent-home/workspace/selected/src && echo inside > agent-home/workspace/selected/src/a.txt");
@@ -739,7 +739,7 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
         int? maxSearchMatches = null)
     {
         return new CoderWorkspaceReader(provider,
-            new StubIdentityProvider(),
+            new FixedAgentHomeIdentityProvider(Owner, Node),
             leaseManager ?? new AgentHomeExecutionLeaseManager(),
             new SensitiveFileExclusionService(),
             Options.Create(new CoderOptions
@@ -817,47 +817,5 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
     private static string ShellQuote(string value)
     {
         return "'" + value.Replace("'", "'\\''", StringComparison.Ordinal) + "'";
-    }
-
-    private sealed class StubIdentityProvider : IAgentHomeIdentityProvider
-    {
-        public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(new AgentHomeOwnerIdentity
-            {
-                OwnerUserId = Owner,
-                NodeId = Node
-            });
-        }
-    }
-
-    private sealed class TempDir : IDisposable
-    {
-        private readonly List<string> _tracked;
-
-        public TempDir(List<string> tracked)
-        {
-            _tracked = tracked;
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "xe-coder-outside-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path);
-            _tracked.Add(Path);
-        }
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            try
-            {
-                if (Directory.Exists(Path))
-                {
-                    Directory.Delete(Path, recursive: true);
-                }
-            }
-            catch (IOException)
-            {
-                // Best-effort temp cleanup.
-            }
-        }
     }
 }

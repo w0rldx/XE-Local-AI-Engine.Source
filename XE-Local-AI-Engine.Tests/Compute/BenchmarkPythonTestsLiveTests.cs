@@ -5,7 +5,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using TUnit.Core.Exceptions;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
-using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.PythonTests;
 using XE_Local_AI_Engine.Client.Services.Compute;
@@ -317,7 +316,7 @@ public sealed class BenchmarkPythonTestsLiveTests : IDisposable
             TimeoutSeconds = computeTimeoutSeconds
         };
         var gateway = new ComputeToolGateway(provider,
-            new StubIdentityProvider(),
+            new FixedAgentHomeIdentityProvider("owner-live", "node-live"),
             _environment,
             Options.Create(options),
             Options.Create(new LocalContainerOptions()),
@@ -359,15 +358,5 @@ public sealed class BenchmarkPythonTestsLiveTests : IDisposable
             AssertEx.True(condition: false,
                 $"this host has a trusted bwrap, so the compute filesystem boundary must hold; the probe reported: {containment.FilesystemIsolationUnavailableReason}");
         }
-    }
-
-    private sealed class StubIdentityProvider : IAgentHomeIdentityProvider
-    {
-        public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(new AgentHomeOwnerIdentity
-            {
-                OwnerUserId = "owner-live",
-                NodeId = "node-live"
-            });
     }
 }

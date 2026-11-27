@@ -222,7 +222,7 @@ describe("ChatMarkdown math", () => {
 		try {
 			const container = renderMarkdown("Big $\\rule{5000em}{5000em}$ and $é$.");
 			await waitFor(() => expect(container.querySelectorAll(".katex")).toHaveLength(2));
-			const rule = container.querySelector<HTMLElement>(".katex .rule");
+			const rule = container.querySelector<HTMLElement>(".katex .katex-rule");
 			expect(rule?.style.borderRightWidth).toBe("50em");
 			expect(rule?.style.borderTopWidth).toBe("50em");
 			expect(warn).not.toHaveBeenCalled();

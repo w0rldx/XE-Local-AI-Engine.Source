@@ -1,6 +1,6 @@
 # Agent Mode reference: AI.Agent runtime
 
-> Reference page for [Agent Mode](../04-agent-mode.md) §1 · Reviewed: 2026-10-07 · Code-grounded.
+> Reference page for [Agent Mode](../04-agent-mode.md) §1.
 
 It lists the composition-root registrations, the per-hop pipeline rules, the tool-registry table, tool-relevance and provider-budget mechanics, outbound MCP and Custom Tools boundaries, the risk taxonomy, and the agent-building, sampling, reasoning-effort and orchestration details.
 
@@ -741,7 +741,7 @@ entirely so the model's chat-template-baked reasoning runs, and only `none` or u
 **The budget ladder** is a node setting (`ReasoningBudgets`, read per turn through
 `INodeRuntimeSettings.GetReasoningBudgetsAsync`; Node Settings → Chat → Thinking budgets). Shipped defaults:
 `minimal` 1024, `low` 2048, `medium` 8192, `high`/`xhigh` 24576 tokens. A blank (unspecified) effort gets the rung
-of the **default effort** setting, shipped `low` (model-matrix 2026-10-04, operator decision 3: the earlier flat
+of the **default effort** setting, shipped `low` (model-matrix 2026-10-04: a flat
 `medium` let a 0.8B spend minutes reasoning over a five-word greeting). Only the budget follows that setting: the
 turn still sends no effort, so `think` stays `true` and an external model keeps its registered default.
 Uncapped, a hard prompt reasoned until `finish_reason: length` with no answer. Anything else —

@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
+using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 
 /// <summary>
@@ -19,19 +20,19 @@ using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 ///     forms a path, computes the content hash for dedupe, and persists the encrypted bytes via the blob store. Text
 ///     extraction, chunking and embedding all run later in the background ingestion worker: this handler only stores,
 ///     then hands the admission decision — a fresh insert or a retryable dedupe hit — to
-///     <see cref="IKnowledgeIngestionAdmissionService" />.
+///     <see cref="KnowledgeIngestionAdmissionService" />.
 /// </remarks>
 public sealed class UploadKnowledgeDocumentEndpoint : Endpoint<UploadKnowledgeDocumentRequest, UploadKnowledgeDocumentResponse>
 {
     private const string DefaultMimeType = "application/octet-stream";
     private readonly IKnowledgeDocumentBlobStore _blobStore;
-    private readonly IKnowledgeIngestionAdmissionService _ingestionAdmission;
+    private readonly KnowledgeIngestionAdmissionService _ingestionAdmission;
     private readonly IDocumentTextExtractor _extractor;
     private readonly string _embeddingModel;
     private readonly long _maxUploadBytes;
 
     public UploadKnowledgeDocumentEndpoint(IKnowledgeDocumentBlobStore blobStore,
-        IKnowledgeIngestionAdmissionService ingestionAdmission,
+        KnowledgeIngestionAdmissionService ingestionAdmission,
         IDocumentTextExtractor extractor,
         IOptions<KnowledgeBaseOptions> knowledgeBaseOptions,
         IOptions<SecurityOptions> securityOptions)

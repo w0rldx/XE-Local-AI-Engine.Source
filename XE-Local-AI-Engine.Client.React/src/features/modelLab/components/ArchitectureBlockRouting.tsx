@@ -2,9 +2,8 @@ import { Group, Stack, Text } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
-import { getModelLabExperimentRoutingOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { BasisBadge } from "@/features/modelLab/components/ArchitectureExplanation";
-import { expertUsage } from "@/features/modelLab/models/ModelLabRouting";
+import { expertUsage, modelLabRoutingOptions } from "@/features/modelLab/models/ModelLabRouting";
 import {
 	routingProvenanceNote,
 	routingUsageCount,
@@ -21,11 +20,8 @@ interface ArchitectureBlockRoutingProps {
 // so the run's routing is already cached and names this block in a saved step.
 export function ArchitectureBlockRouting({ traceId, blockIndex }: ArchitectureBlockRoutingProps) {
 	const { t } = useTranslation();
-	// The stepper's query: one cache entry per run, whichever view asks first.
 	const routing = useQuery({
-		...getModelLabExperimentRoutingOptions({ path: { experimentId: traceId } }),
-		// A saved run's routing never changes.
-		staleTime: Number.POSITIVE_INFINITY,
+		...modelLabRoutingOptions(traceId),
 		// A dense or unrouted run answers 404; every block change remounts this panel and must not ask again. The
 		// stepper's panel keeps retrying, and it is where a real failure is shown.
 		retryOnMount: false,

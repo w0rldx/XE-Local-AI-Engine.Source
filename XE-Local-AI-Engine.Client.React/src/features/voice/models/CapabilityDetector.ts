@@ -60,6 +60,7 @@ export function detectVoiceCapabilities(voicesTimeoutMs?: number): Promise<Voice
 	return cachedCapabilities;
 }
 
+/** @internal Test seam: drops the memoized detection so each test starts undetected. */
 export function resetVoiceCapabilitiesCache(): void {
 	cachedCapabilities = undefined;
 }

@@ -1,0 +1,44 @@
+# Test classes used as another file's support host — the allowlist for TestClassHostConventionTests.
+#
+# Format: <host test class>|<repository-relative consumer file>, one line per edge, sorted.
+#
+# The list is SHRINK-ONLY: an unlisted edge fails, and a listed edge that is gone fails as stale, so the commit that
+# moves the shared member into a support type deletes its line.
+
+BaseCheckpointStoreTests|XE-Local-AI-Engine.Tests/ModelLab/ModelLabCheckpointPreflightServiceTests.cs
+BenchmarkPairwiseSuiteEndToEndTests|XE-Local-AI-Engine.Tests/Benchmarks/BenchmarkComparisonExecutorTests.cs
+DeferredLlamaServerResponseSchemaEntryPointTests|XE-Local-AI-Engine.Tests/Providers/LlamaServer/DeferredLlamaServerLogprobsTests.cs
+DeferredLlamaServerResponseSchemaEntryPointTests|XE-Local-AI-Engine.Tests/Providers/LlamaServer/DeferredLlamaServerReasoningControlTests.cs
+DeferredLlamaServerResponseSchemaEntryPointTests|XE-Local-AI-Engine.Tests/Providers/LlamaServer/DeferredLlamaServerSlotPinTests.cs
+DevelopmentEndpointTests|XE-Local-AI-Engine.Tests/Development/DevelopmentAttemptExecutionSupervisorTests.cs
+DevelopmentEndpointTests|XE-Local-AI-Engine.Tests/Endpoints/Development/DevelopmentAttemptHubTests.cs
+DevelopmentManagementServiceTests|XE-Local-AI-Engine.Tests/Development/DevelopmentProjectReadCommandCountTests.cs
+DockerSandboxHardeningTests|XE-Local-AI-Engine.Tests/ContainerSandbox/ContainerSandboxOptionsValidatorTests.cs
+DockerSandboxHardeningTests|XE-Local-AI-Engine.Tests/ContainerSandbox/DockerDaemonPreflightServiceTests.cs
+DockerSandboxHardeningTests|XE-Local-AI-Engine.Tests/ContainerSandbox/DockerSandboxMountBrokerTests.cs
+DockerSandboxHardeningTests|XE-Local-AI-Engine.Tests/ContainerSandbox/DockerSandboxOrphanSweepTests.cs
+DockerSandboxHardeningTests|XE-Local-AI-Engine.Tests/ContainerSandbox/DockerSandboxRealDaemonTests.cs
+DockerSandboxHardeningTests|XE-Local-AI-Engine.Tests/ContainerSandbox/DockerSandboxRuntimeProviderTests.cs
+DockerSandboxHardeningTests|XE-Local-AI-Engine.Tests/Containers/DockerDaemonProbeTests.cs
+DockerSandboxHardeningTests|XE-Local-AI-Engine.Tests/Endpoints/Development/V1/SandboxIsolationSummaryTests.cs
+ExceptionInnerExceptionContractTests|XE-Local-AI-Engine.Tests/Architecture/TryMethodConventionTests.cs
+ExternalProviderRegistryTests|XE-Local-AI-Engine.Tests/ExternalProviders/ExternalProviderReconcilerTests.cs
+ExternalProviderRegistryTests|XE-Local-AI-Engine.Tests/ExternalProviders/ModelTrustResolverTests.cs
+ExternalProviderStoreTests|XE-Local-AI-Engine.Tests/ExternalProviders/ExternalProviderAdministrationServiceTests.cs
+FrameworkApprovalGateTests|XE-Local-AI-Engine.AI.Agent.Tests/Invocation/InvocationAgentFactoryTests.cs
+GraphWorkflowDevTaskLaneTests|XE-Local-AI-Engine.Tests/GraphWorkflows/GraphWorkflowDevelopmentSampleTests.cs
+GraphWorkflowSampleContractTests|XE-Local-AI-Engine.Tests/GraphWorkflows/GraphWorkflowDevelopmentSampleTests.cs
+LinuxTrainingProcessGroupTests|XE-Local-AI-Engine.Tests/Providers/Training/FakePidFdCalls.cs
+MigrationChainTests|XE-Local-AI-Engine.Client.Persistence.Tests/NodeDbRestoreStagingTests.cs
+ModelLabPyTorchJoinerTests|XE-Local-AI-Engine.Tests/ModelLab/ModelLabPyTorchSourceServiceTests.cs
+ModelLabPyTorchSourceServiceTests|XE-Local-AI-Engine.Tests/ModelLab/ModelLabPlaygroundServiceTests.cs
+ModelLabStartupReaperTests|XE-Local-AI-Engine.Tests/ModelLab/ModelLabWarmSessionTests.cs
+NodeChatStreamServicePlainTests|XE-Local-AI-Engine.Tests/Chat/ConversationPlainTests.cs
+ProviderStatusHubWireTests|XE-Local-AI-Engine.Tests/Hubs/RuntimeResidencyChangePublisherTests.cs
+RetrievalEvalLiveTests|XE-Local-AI-Engine.Client.Persistence.Tests/Knowledge/RetrievalEval/Live/RetrievalEvalLiveIngestionTests.cs
+RetrievalEvalLiveTests|XE-Local-AI-Engine.Client.Persistence.Tests/Knowledge/RetrievalEval/Live/RetrievalEvalLiveProcessPiecesTests.cs
+SupervisorSpawnReceiptTests|XE-Local-AI-Engine.Tests/Providers/StableDiffusionCpp/ImageServerSpawnReceiptTests.cs
+SupervisorSpawnReceiptTests|XE-Local-AI-Engine.Tests/Providers/WhisperCpp/WhisperServerSpawnReceiptTests.cs
+TrainingRuntimeOrchestrationServiceTests|XE-Local-AI-Engine.Tests/ModelLab/ModelLabWarmSessionTests.cs
+TranscriptionUploadStreamingTests|XE-Local-AI-Engine.Tests/Endpoints/LocalChat/ConversationUploadEndpointTests.cs
+WebReviewToolHandlerTests|XE-Local-AI-Engine.Tests/Invocation/ToolApprovalCoordinatorTests.cs

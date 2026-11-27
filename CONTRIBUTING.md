@@ -18,7 +18,7 @@ through uv. Without mise, install the versions listed in `mise.toml` and the SDK
 
 - .NET SDK per [`global.json`](global.json).
 - .NET 8 runtime for the pinned SBOM and dependency-license tools.
-- Node 26, the major CI uses; `pnpm run acceptance` enforces it, and the React
+- Node 26, the major CI uses; the frontend gate enforces it, and the React
   [`package.json`](XE-Local-AI-Engine.Client.React/package.json) `engines` field is only the floor. pnpm through
   Corepack or a local install.
 - Python 3 for repository validation and lifecycle scripts.
@@ -44,12 +44,13 @@ Frontend, from `XE-Local-AI-Engine.Client.React/` after the tool restore above:
 pnpm install --frozen-lockfile
 pnpm run openapi:check
 pnpm run licenses:check
-pnpm run acceptance
+../scripts/run-gate-lane.sh frontend
 pnpm audit --prod --audit-level=high
 ```
 
-`pnpm run acceptance` first checks that you run the same Node major as CI (Node 26) and stops otherwise;
-`XE_ALLOW_NODE_DRIFT=1` continues with a warning that the run is not CI evidence. On frontend dependency-update
+The lane runs `pnpm run acceptance` under the build lock and records the run in the gate history. Acceptance first
+checks that you run the same Node major as CI (Node 26) and stops otherwise; only a bare `pnpm run acceptance`
+accepts `XE_ALLOW_NODE_DRIFT=1`, which continues with a warning that the run is not CI evidence. On frontend dependency-update
 branches, also run `pnpm run dependencies:refresh`.
 
 Release-script changes:

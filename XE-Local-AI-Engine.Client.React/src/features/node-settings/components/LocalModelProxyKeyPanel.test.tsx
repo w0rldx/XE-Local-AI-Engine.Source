@@ -6,7 +6,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LocalModelProxyKeyPanel } from "@/features/node-settings/components/LocalModelProxyKeyPanel";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 
 // The panel manages the INBOUND local-model-proxy credential — the key an external OpenAI-compatible tool presents
 // to this node's OpenAI-compatible proxy endpoint. What is worth pinning: the key is NEVER rendered on load (the
@@ -44,30 +44,6 @@ vi.mock("react-i18next", () => ({
 		},
 	}),
 }));
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-}
 
 // Rendered inline rather than as a named <Wrapper> component: biome's useComponentExportOnlyModules rule rejects an
 // unexported component declaration in a module that also exports non-components.

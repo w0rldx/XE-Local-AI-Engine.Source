@@ -11,16 +11,11 @@ is not installed, every test skips with the reason.
 import contextlib
 import json
 import os
-import sys
 import tempfile
 import types
-import unittest
 from unittest import mock
 
-try:
-    import torch
-except ImportError:
-    torch = None
+from test_stubs import load_modellab, require_torch, run_standalone
 
 HIDDEN = 16
 HEAD_DIM = 4
@@ -31,36 +26,9 @@ TOP_KEYS = 3
 PROMPT = [[1, 2, 3, 4, 5]]
 
 
-def _require_torch():
-    if torch is None:
-        raise unittest.SkipTest("torch is not installed: the root dev venv carries CPU torch on linux x86_64 only.")
-    return torch
-
-
-def _load_modellab():
-    """The real script on real torch, with transformers reduced to the names it imports. Leaves no stub behind."""
-    _require_torch()
-    transformers = types.SimpleNamespace(
-        __version__="stub",
-        AutoModelForCausalLM=None,
-        AutoTokenizer=None,
-        DynamicCache=None,
-        LogitsProcessor=object,
-        LogitsProcessorList=None,
-        StoppingCriteria=object,
-        StoppingCriteriaList=None,
-    )
-    with mock.patch.dict(sys.modules, {"transformers": transformers}):
-        sys.modules.pop("modellab", None)
-        import modellab
-
-        sys.modules.pop("modellab", None)
-    return modellab
-
-
 def _sdpa(module, query, key, value, attention_mask, scaling=None, **_kwargs):
     """transformers' sdpa entry in miniature: KV heads repeated, causal only over a multi-token query."""
-    torch = _require_torch()
+    torch = require_torch()
     groups = query.shape[1] // key.shape[1]
     output = torch.nn.functional.scaled_dot_product_attention(
         query,
@@ -77,7 +45,7 @@ def _model(registry, heads=4, kv_heads=4):
     """BLOCKS blocks under model.model.layers, each with a self_attn whose layer_idx is not its block index, and a
     vision stand-in of the same class carrying block 1's layer_idx, outside every block. Each attention module keeps
     its own key/value history, so a decode forward passes only the newest token."""
-    torch = _require_torch()
+    torch = require_torch()
     nn = torch.nn
     torch.manual_seed(0)
 
@@ -137,7 +105,7 @@ def _model(registry, heads=4, kv_heads=4):
 
 def _generate(model, steps):
     """Greedy decoding: the prompt in one forward, then one token a forward. Returns every step's logits."""
-    torch = _require_torch()
+    torch = require_torch()
     feed, logits = torch.tensor(PROMPT), []
     with torch.inference_mode():
         for _ in range(steps):
@@ -171,8 +139,8 @@ def _captured(modellab, heads, kv_heads, steps=3):
 
 
 def test_rows_are_an_independent_softmax_of_the_kernels_own_inputs_with_and_without_grouped_heads():
-    torch = _require_torch()
-    modellab = _load_modellab()
+    torch = require_torch()
+    modellab = load_modellab()
     for heads, kv_heads in ((4, 4), (4, 2)):
         attention, calls, model = _captured(modellab, heads, kv_heads)
         assert len(attention.rows) == 3 * len(CHOSEN)
@@ -189,7 +157,7 @@ def test_rows_are_an_independent_softmax_of_the_kernels_own_inputs_with_and_with
 
 
 def test_only_the_chosen_blocks_modules_are_captured_under_their_block_index():
-    modellab = _load_modellab()
+    modellab = load_modellab()
     attention, calls, model = _captured(modellab, 4, 2)
     vision = model.model.vision
     # The stand-in ran beside the selected module with that module's layer_idx, and gave no row.
@@ -200,8 +168,8 @@ def test_only_the_chosen_blocks_modules_are_captured_under_their_block_index():
 
 
 def test_the_kernels_output_is_unchanged():
-    torch = _require_torch()
-    modellab = _load_modellab()
+    torch = require_torch()
+    modellab = load_modellab()
     registry = {"sdpa": _sdpa}
     off = _generate(_model(registry), 4)
     model = _model(registry)
@@ -215,7 +183,7 @@ def test_the_kernels_output_is_unchanged():
 
 
 def test_a_failed_step_check_restores_the_kernel():
-    modellab = _load_modellab()
+    modellab = load_modellab()
     registry = {"sdpa": _sdpa}
     model = _model(registry)
     try:
@@ -270,7 +238,7 @@ def _trace_until_prompt(modellab, model, model_type, attention_layers, **text_fi
 
 
 def test_attention_outside_the_proven_families_or_on_a_contradictory_olmoe_config_is_refused_before_any_hook():
-    modellab = _load_modellab()
+    modellab = load_modellab()
     model = _model({})
     assert _trace_until_prompt(modellab, model, "olmoe", CHOSEN) == "admitted"
     for model_type in ("llama", "qwen3_5_moe", "olmo2"):
@@ -281,8 +249,8 @@ def test_attention_outside_the_proven_families_or_on_a_contradictory_olmoe_confi
 
 
 def test_a_trace_result_takes_its_head_dim_from_the_attention_module_when_the_config_states_none():
-    torch = _require_torch()
-    modellab = _load_modellab()
+    torch = require_torch()
+    modellab = load_modellab()
     registry = {"sdpa": _sdpa}
     model = _model(registry, heads=4, kv_heads=2)
     forward = type(model).forward
@@ -353,7 +321,7 @@ def test_a_trace_result_takes_its_head_dim_from_the_attention_module_when_the_co
 
 
 def test_qwen_attention_needs_a_block_that_names_itself_full_attention():
-    modellab = _load_modellab()
+    modellab = load_modellab()
     model = _model({})
     for index, block in enumerate(model.model.layers):
         block.block_type = "full_attention" if index == 3 else "linear_attention"
@@ -364,11 +332,4 @@ def test_qwen_attention_needs_a_block_that_names_itself_full_attention():
 
 
 if __name__ == "__main__":
-    for name, test in sorted(globals().items()):
-        if name.startswith("test_") and callable(test):
-            try:
-                test()
-            except unittest.SkipTest as reason:
-                print(f"skip {name}: {reason}")
-            else:
-                print(f"ok {name}")
+    run_standalone(globals())

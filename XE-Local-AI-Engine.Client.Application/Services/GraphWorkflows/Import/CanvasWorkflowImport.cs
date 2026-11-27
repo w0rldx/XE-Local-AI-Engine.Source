@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -868,7 +869,7 @@ public static class CanvasWorkflowImport
 
     /// <summary>A canvas name is a human label with no length rule of its own; the definition column has one.</summary>
     private static string DefinitionName(string name) =>
-        string.IsNullOrWhiteSpace(name) ? "Imported Open Canvas workflow" : Truncate(name, MaxNameLength);
+        string.IsNullOrWhiteSpace(name) ? "Imported Open Canvas workflow" : TextTruncation.TruncateAtRuneBoundary(name, MaxNameLength);
 
     /// <summary>
     ///     The prefix and the provenance are what an operator reads; the reason is what gets trimmed if the column
@@ -878,25 +879,8 @@ public static class CanvasWorkflowImport
     {
         var room = MaxDescriptionLength - NeedsAttentionPrefix.Length - provenance.Length - 2;
         return room <= 0
-            ? Truncate(NeedsAttentionPrefix + provenance, MaxDescriptionLength)
-            : $"{NeedsAttentionPrefix}{Truncate(reason, room)} {provenance}";
-    }
-
-    /// <summary>Cuts to a length the column accepts without leaving half a surrogate pair behind.</summary>
-    private static string Truncate(string value, int maxLength)
-    {
-        if (value.Length <= maxLength)
-        {
-            return value;
-        }
-
-        var cut = maxLength;
-        if (char.IsHighSurrogate(value[cut - 1]))
-        {
-            cut--;
-        }
-
-        return value[..cut];
+            ? TextTruncation.TruncateAtRuneBoundary(NeedsAttentionPrefix + provenance, MaxDescriptionLength)
+            : $"{NeedsAttentionPrefix}{TextTruncation.TruncateAtRuneBoundary(reason, room)} {provenance}";
     }
 
     private enum ImportOutcome

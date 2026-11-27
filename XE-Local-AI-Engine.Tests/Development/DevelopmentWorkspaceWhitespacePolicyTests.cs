@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
-using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
@@ -225,17 +224,17 @@ public sealed class DevelopmentWorkspaceWhitespacePolicyTests : IDisposable
     {
         var repository = Path.Combine(_root, name + "-" + Guid.NewGuid().ToString("N"));
         _ = Directory.CreateDirectory(repository);
-        await RunGitAsync(repository, "init", "--initial-branch=main", ".");
+        await TestGit.RunAsync(repository, "init", "--initial-branch=main", ".");
 
         // Pinned so the host's own autocrlf/eol settings cannot decide what this repository stores.
-        await RunGitAsync(repository, "config", "core.autocrlf", "false");
-        await RunGitAsync(repository, "config", "user.email", "whitespace-policy@example.invalid");
-        await RunGitAsync(repository, "config", "user.name", "Whitespace Policy Test");
+        await TestGit.RunAsync(repository, "config", "core.autocrlf", "false");
+        await TestGit.RunAsync(repository, "config", "user.email", "whitespace-policy@example.invalid");
+        await TestGit.RunAsync(repository, "config", "user.name", "Whitespace Policy Test");
 
         var file = Path.Combine(repository, "a.txt");
         await File.WriteAllTextAsync(file, content);
-        await RunGitAsync(repository, "add", "a.txt");
-        await RunGitAsync(repository, "commit", "-m", "base");
+        await TestGit.RunAsync(repository, "add", "a.txt");
+        await TestGit.RunAsync(repository, "commit", "-m", "base");
 
         await File.WriteAllTextAsync(file, content + addedLine);
         return repository;
@@ -246,31 +245,5 @@ public sealed class DevelopmentWorkspaceWhitespacePolicyTests : IDisposable
         return await NewGit().RunAsync(repository,
             AgentHomeGit.Arguments("diff", "--check", "HEAD", "--", "."),
             CancellationToken.None);
-    }
-
-    private static async Task RunGitAsync(string workingDirectory, params string[] arguments)
-    {
-        using var process = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = "git",
-                WorkingDirectory = workingDirectory,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            }
-        };
-        foreach (var argument in arguments)
-        {
-            process.StartInfo.ArgumentList.Add(argument);
-        }
-
-        _ = process.Start();
-        var standardError = await process.StandardError.ReadToEndAsync();
-        _ = await process.StandardOutput.ReadToEndAsync();
-        await process.WaitForExitAsync();
-        AssertEx.Equal(0, process.ExitCode, $"git {string.Join(' ', arguments)} failed: {standardError}");
     }
 }

@@ -90,7 +90,7 @@ vi.mock("@/core/tools/queries/useToolCatalog", () => ({
 vi.mock("@/core/api/signalr/useRuntimeResidencyHub", () => ({ useRuntimeResidencyHub: () => ({ isLive: false }) }));
 
 import { AgentsPage } from "@/features/agents/pages/AgentsPage";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 
 const sampleDefinition: AgentDefinition = {
 	id: "agent-1",
@@ -117,34 +117,6 @@ const sampleDefinition: AgentDefinition = {
 
 function makeMutation() {
 	return { mutate: vi.fn(), isPending: false, error: null };
-}
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-	Object.defineProperty(document, "fonts", {
-		writable: true,
-		value: { ready: Promise.resolve(), addEventListener: vi.fn(), removeEventListener: vi.fn() },
-	});
 }
 
 function renderPage() {

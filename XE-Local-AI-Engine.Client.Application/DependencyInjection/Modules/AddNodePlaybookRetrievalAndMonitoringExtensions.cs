@@ -57,7 +57,7 @@ internal static class AddNodePlaybookRetrievalAndMonitoringExtensions
         builder.Services.AddScoped<IPlaybookMonitorStore, PlaybookMonitorStore>();
         // Cohort-monitor service: classifies enabled actions against the epsilon/sample floor and flags flat/regressed
         // actions for human review. It never auto-disables actions and runs only from the monitor endpoint.
-        builder.Services.AddScoped<IPlaybookMonitorService, PlaybookMonitorService>();
+        builder.Services.AddScoped<PlaybookMonitorService>();
         builder.Services.AddOptions<PlaybookMonitorOptions>()
                .Bind(builder.Configuration.GetSection(PlaybookMonitorOptions.Section))
                .PostConfigure(static monitorOptions =>

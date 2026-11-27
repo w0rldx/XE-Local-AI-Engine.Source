@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.AgentHome;
 
+using System.Runtime.Versioning;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -10,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 [Category(TestCategories.Unit)]
 public sealed class AgentHomeManifestServiceTests : IDisposable
@@ -80,6 +82,25 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
         AssertEx.Equal("Ready", document.RootElement.GetProperty("status").GetString());
         AssertEx.Equal(expected: 1, document.RootElement.GetProperty("version").GetInt32());
         AssertEx.Equal("owner-a", document.RootElement.GetProperty("ownerUserId").GetString());
+    }
+
+    /// <summary>The manifest is written owner-only whatever the process umask, and its bytes read back as the manifest the layout returned.</summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    [SupportedOSPlatform("linux")]
+    public async Task InitializeAsync_WritesTheManifestOwnerOnly()
+    {
+        var clock = new ManualTimeProvider(FixedNow);
+        using var service = CreateService(NewTempRoot(), clock, new FakeSandboxRuntimeProvider(clock));
+
+        var layout = await service.InitializeAsync(Key());
+
+        var path = Path.Combine(layout.RootPath, "manifest.json");
+        var umask = (await File.ReadAllLinesAsync("/proc/self/status")).Single(static line => line.StartsWith("Umask:", StringComparison.Ordinal));
+        var mode = File.GetUnixFileMode(path);
+        AssertEx.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, mode, $"{umask}; written as {mode}");
+        AssertEx.Equal(layout.Manifest, JsonSerializer.Deserialize<AgentHomeManifest>(await File.ReadAllBytesAsync(path), ManifestSerializerOptions));
+        AssertEx.Empty(Directory.GetFiles(layout.RootPath, "*.tmp"), "the temp sibling is renamed over the manifest");
     }
 
     [Test]

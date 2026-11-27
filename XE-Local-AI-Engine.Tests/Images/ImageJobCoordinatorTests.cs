@@ -190,6 +190,22 @@ public sealed class ImageJobCoordinatorTests
         await AssertFailedWithAsync(harness, jobId, ImageJobFailureReason.LoadedModelCapReached, instruction);
     }
 
+    /// <summary>The runtime's "unloaded while starting" failure is its own reason with the runtime's retry text, not the generic one.</summary>
+    [Test]
+    public async Task RunJob_ModelUnloadedWhileStarting_FailsWithTheRuntimesRetryInstruction()
+    {
+        const string instruction = "The image runtime unloaded the model while the generation was starting. Try again.";
+        using var harness = Harness.Create(blockRuntime: false, runtimeFailure: new StableDiffusionRuntimeException(instruction)
+        {
+            ModelUnloadedWhileStarting = true
+        });
+
+        var jobId = await harness.Coordinator.EnqueueAsync(NewInput("unloaded"), CancellationToken.None);
+        await WaitForStatusAsync(harness, jobId, ImageJobStatus.Failed);
+
+        await AssertFailedWithAsync(harness, jobId, ImageJobFailureReason.ModelUnloadedWhileStarting, instruction);
+    }
+
     [Test]
     public async Task RunJob_UnclassifiedRuntimeFailure_FailsWithTheGenericReasonAndNeverTheRawMessage()
     {

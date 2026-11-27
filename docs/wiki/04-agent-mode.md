@@ -229,6 +229,24 @@ This covers the `OrchestrationResolution` outcomes that degrade an orchestrator 
 headless `IInvocationRunner` stack a scheduled saved-agent run uses, from `Client.Application`, and the
 `PreviewWorkflowRunner` that used to sit beside the eval runner went with Open Canvas.
 
+#### Open decision: Development Mode's second tool-invocation stack
+
+**Status: undecided, recorded, not ruled.** `DevelopmentCoderModel.RunAsync`
+(`Services/Development/Implementation/DevelopmentCoderModel.cs`) calls `IChatClient.GetStreamingResponseAsync`
+directly, with a hand-built `ChatOptions` tool set (its private `ToolGateway`, each tool wrapped in
+`AIFunctionFactory.Create`) and its own `ProviderCallBudget` scope. That is a second tool-invocation stack beside the
+shared `IInvocationRunner`, which chat (`NodeChatStreamService`), Work Sessions (their step loop drains the same chat
+stream service), Graph Workflows Agent nodes (`GraphWorkflowInvocationExecutor`), scheduler `run-agent`
+(`RunSavedAgentHandler`), External Integrations (`IntegrationExecutionCoordinator`) and Benchmarks
+(`BenchmarkRunExecutor`, `BenchmarkJudgeExecutor`, `BenchmarkComparisonExecutor`) all route through.
+
+The duplication is real, and migrating it is a re-architecture, not a rename: the gateway carries Development
+Mode-specific pieces, including the cloud-only `submit_cloud_implementation` submission and the hash-locked apply-gate
+machinery, which [ADR 0023](../adr/0023-dev-workflows-converge-into-graph-workflows.md) keeps in Development Mode and
+re-calls rather than ports. A 2026-09 feature audit recommended leaving it as is; that is a recommendation, not an owner
+ruling. Treat this as a fact about the code, not as sanctioned target architecture, and revisit it when a change would
+otherwise have to be made in both stacks.
+
 ---
 
 ## 2. Application services (`Client.Application/Services/*`)
@@ -320,7 +338,7 @@ This covers how `SelectedFolderResolver.ResolveAsync` accepts a folder GUID or a
    `Allow` / `QueueSameModel` / reject:
    - **Allow** consumes a local ledger reservation (released on child exit) or a **cloud-spawn budget**
      unit (a DoS-of-wallet cap);
-   - **QueueSameModel** serializes against the one resident process via `ISpawnSerializer` with a
+   - **QueueSameModel** serializes against the one resident process via `SpawnSerializer` with a
      bounded wait (no second model load).
 
 The child is built like an orchestration participant (`ChatClientAgent`) with the **curated**
@@ -495,7 +513,7 @@ The waiver itself and why `run_skill_script` is never waived are on the referenc
 
 ### 4.5 Import pipeline
 
-`ISkillImportService` (`Services/Agents/ISkillImportService.cs`) is a **two-phase, dry-run-first**
+`SkillImportService` (`Services/Agents/Implementation/SkillImportService.cs`) is a **two-phase, dry-run-first**
 pipeline — the entire reason it exists is that operators overwhelmingly *import* skills
 (`npx skills add owner/repo` is the ecosystem norm) rather than author them, and this engine had no
 import path at all:
@@ -695,6 +713,7 @@ The fields of `WorkSessionStepConsumptionDetail` and how to read them are on the
 - [React Client](10-react-client.md)
 - [Security & Privacy](12-security-and-privacy.md)
 - [Testing & Validation](13-testing-and-validation.md)
+- [Open product decisions: the agent harness](../roadmaps/open-product-decisions.md)
 
 ### Reference pages
 

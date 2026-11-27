@@ -441,7 +441,7 @@ refute_grep '^arch-' "$TMP/arch-off.log"
 grep -Fq 'BACKEND GATE GREEN' <<<"$output"
 
 # --- gate history: one tab-separated line per run, appended, on every exit path ---
-# Arguments: the line count expected now, then fields 0-9 and the exit field (always the last of seventeen);
+# Arguments: the line count expected now, then fields 0-9 and the exit field (always the last of eighteen);
 # "*" skips a field, "~re" is a regex. reason= and skips= are checked by assert_reason.
 # HISTORY_FILE overrides the log read (the real-git fixture keeps its own).
 assert_history() {
@@ -450,10 +450,10 @@ assert_history() {
     || { echo "history has $(wc -l <"$file") lines, wanted $want_lines" >&2; cat "$file" >&2; exit 1; }
   local -a f
   IFS=$'\t' read -r -a f < <(tail -1 "$file")
-  [[ "$(tail -1 "$file" | awk -F'\t' '{print NF}')" -eq 17 ]] || { echo "history line is not 17 fields: $(tail -1 "$file")" >&2; exit 1; }
+  [[ "$(tail -1 "$file" | awk -F'\t' '{print NF}')" -eq 18 ]] || { echo "history line is not 18 fields: $(tail -1 "$file")" >&2; exit 1; }
   for ((i = 0; i < 11; i++)); do
     want="${*:i+1:1}"; got="${f[i]:-}"
-    (( i == 10 )) && got="${f[16]:-}"
+    (( i == 10 )) && got="${f[17]:-}"
     [[ "$want" == "*" ]] && continue
     if [[ "$want" == ~* ]]; then [[ "$got" =~ ${want#\~} ]] && continue
     elif [[ "$got" == "$want" ]]; then continue; fi
@@ -474,6 +474,12 @@ assert_extra() {
   [[ "${f[12]:-} ${f[13]:-} ${f[14]:-} ${f[15]:-}" == "$*" ]] \
     || { echo "history has '${f[12]:-} ${f[13]:-} ${f[14]:-} ${f[15]:-}', wanted '$*'" >&2; exit 1; }
 }
+# The last line's lanes= field (17) against a regex.
+assert_lanes() {
+  local -a f
+  IFS=$'\t' read -r -a f < <(tail -1 "${HISTORY_FILE:-$HISTORY}")
+  [[ "${f[16]:-}" =~ $1 ]] || { echo "history has '${f[16]:-}', wanted /$1/" >&2; exit 1; }
+}
 history_lines() { if [[ -f "$HISTORY" ]]; then wc -l <"$HISTORY"; else echo 0; fi; }
 n="$(history_lines)"
 run_gate history-green env
@@ -484,17 +490,23 @@ assert_history $((n + 1)) '~^20[0-9]{2}-[0-9]{2}-[0-9]{2}T' "$FAKE_REAL" - Tests
   Agent=3/0/0 Cli= Contracts=skipped scope=no-build '~^wall=[0-9]+$' exit=0
 assert_reason ok ''
 assert_extra unreported=0 failed=- flakes=- "ratchets=$RATCHETS"
+# Every finished lane's wall, sorted by name, the pre-lane included.
+assert_lanes '^lanes=AI\.Agent\.Tests:[0-9]+,Client\.Persistence\.Tests:[0-9]+,Tests:[0-9]+,architecture:[0-9]+$'
 run_gate history-fail-fast env FAKE_ARCH_FAIL=1
 [[ "$status" -eq 1 ]]
 assert_history $((n + 2)) '*' "$FAKE_REAL" '*' Tests= Persistence= Agent= Cli= Contracts=skipped '*' '*' exit=1
 assert_reason fail-fast ''
 assert_extra unreported=0 failed=Layers_NeverReferenceUp flakes=- "ratchets=$RATCHETS"
+# The stopped lanes' results are discarded; the pre-lane's wall stays.
+assert_lanes '^lanes=architecture:[0-9]+$'
 run_gate history-lock env FAKE_LOCK_EXIT=69
 [[ "$status" -eq 69 ]] || { echo "history-lock exited $status" >&2; exit 1; }
 assert_history $((n + 3)) '*' "$FAKE_REAL" '*' Tests= Persistence= Agent= Cli= Contracts= scope=no-build '*' exit=69
 assert_reason lock-timeout ''
+assert_lanes '^lanes=$'
 run_gate history-contract env FAKE_GIT_DIFF=$'scripts/dev-start.sh\n'
 assert_history $((n + 4)) '*' '*' '*' Tests=7/0/0 '*' '*' '*' Contracts=5/0/0 '*' '*' exit=0
+assert_lanes '^lanes=AI\.Agent\.Tests:[0-9]+,Client\.Persistence\.Tests:[0-9]+,Tests:[0-9]+,architecture:[0-9]+,release-contract-tests:[0-9]+$'
 run_gate history-void env XE_GATE_FAIL_FAST=0 FAKE_GUARD_EXIT=75
 [[ "$status" -eq 75 ]]
 assert_history $((n + 5)) '*' '*' '*' Tests=7/0/0 Persistence=3/0/0 Agent=3/0/0 Cli= '*' '*' '*' exit=75
@@ -688,8 +700,8 @@ assert_reason tests ''
 # failed=, the two red siblings' identical name is listed once, and flakes= names the matched entry.
 want_row="$(printf '%s\t' T "$FAKE_REAL" - Tests=7/0/0 Persistence=2/1/0 Agent=2/1/0 Cli= \
   Contracts=skipped scope=no-build wall=W reason=tests skips= unreported=0 failed=Flaky_Method flakes=Flaky_Method \
-  "ratchets=$RATCHETS")exit=1"
-got_row="$(tail -1 "$HISTORY" | awk -F'\t' -v OFS='\t' '{ $1 = "T"; $10 = "wall=W"; print }')"
+  "ratchets=$RATCHETS" lanes=L)exit=1"
+got_row="$(tail -1 "$HISTORY" | awk -F'\t' -v OFS='\t' '{ $1 = "T"; $10 = "wall=W"; $17 = "lanes=L"; print }')"
 [[ "$got_row" == "$want_row" ]] \
   || { printf 'flake-known history row\n got: %s\nwant: %s\n' "$got_row" "$want_row" >&2; exit 1; }
 run_gate flake-unknown env FAKE_FAILED_TEST=Real_Failure

@@ -20,7 +20,7 @@ feeds are laid out, and the signing status. Everything else has one home elsewhe
 
 | Platform | User-facing artifact | What the release does not contain |
 |---|---|---|
-| Windows x64 | `XE-Local-AI-Engine-win-Portable.zip` | Framework-dependent: needs the x64 ASP.NET Core Runtime 10.0.12+ and the WebView2 Evergreen Runtime; no installer, no `Setup.exe` |
+| Windows x64 | `XE-Local-AI-Engine-win-Portable.zip` | Framework-dependent: needs the x64 ASP.NET Core Runtime 10.0.15+ and the WebView2 Evergreen Runtime; no installer, no `Setup.exe` |
 | Linux x64 | The `.AppImage` asset | No Linux portable ZIP, DEB, RPM, or install script |
 
 Every official release also publishes:

@@ -18,7 +18,7 @@ internal static class AddNodeDiagnosticsExtensions
         builder.Services.AddSingleton(static services => new SupportBundleScrubber([Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)],
             services.GetRequiredService<INodeDataDirectory>().Root,
             OperatingSystem.IsWindows()));
-        builder.Services.AddSingleton<ISupportBundleService>(static services => new SupportBundleService(services.GetRequiredService<INodeInfoService>(),
+        builder.Services.AddSingleton(static services => new SupportBundleService(services.GetRequiredService<INodeInfoService>(),
             services.GetRequiredService<IChildProcessOutputTails>(),
             services.GetRequiredService<SupportBundleScrubber>(),
             ResolveLogDirectories(services.GetRequiredService<INodeDataDirectory>().Root),

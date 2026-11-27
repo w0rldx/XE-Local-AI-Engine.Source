@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Services.ModelLab;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
-using static ModelLabExperimentServiceTests;
+using static ModelLabTestSupport;
 
 /// <summary>One <c>modellab.py --config</c> spawn over a scripted process: only frames carrying this spawn's token count.</summary>
 [Category(TestCategories.Unit)]
@@ -17,13 +17,13 @@ public sealed class ModelLabScriptRunnerTests
 {
     private const string ForeignToken = "not-this-spawn";
 
-    private static readonly ModelLabScriptRunner.ScriptCommand Script = new()
+    private static readonly ModelLabScriptCommand Script = new()
     {
         Interpreter = "python",
         ScriptPath = "modellab.py"
     };
 
-    private static readonly ModelLabScriptRunner.ScriptCommand PlaygroundScript = new()
+    private static readonly ModelLabScriptCommand PlaygroundScript = new()
     {
         Interpreter = "python",
         ScriptPath = "nnplayground.py",

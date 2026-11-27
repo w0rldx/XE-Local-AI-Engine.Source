@@ -12,9 +12,9 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders.Auth;
 /// </summary>
 public sealed class EntraDeviceCodeStatusEndpoint : EndpointWithoutRequest<EntraDeviceCodeSignInStatusResponse>
 {
-    private readonly IEntraDeviceCodeSignInCoordinator _signInCoordinator;
+    private readonly EntraDeviceCodeSignInCoordinator _signInCoordinator;
 
-    public EntraDeviceCodeStatusEndpoint(IEntraDeviceCodeSignInCoordinator signInCoordinator)
+    public EntraDeviceCodeStatusEndpoint(EntraDeviceCodeSignInCoordinator signInCoordinator)
     {
         ArgumentNullException.ThrowIfNull(signInCoordinator);
         _signInCoordinator = signInCoordinator;
@@ -28,7 +28,7 @@ public sealed class EntraDeviceCodeStatusEndpoint : EndpointWithoutRequest<Entra
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var status = _signInCoordinator.GetStatus();
+        var status = _signInCoordinator.Status;
         await Send.OkAsync(new EntraDeviceCodeSignInStatusResponse
         {
             State = status.State.ToString(),

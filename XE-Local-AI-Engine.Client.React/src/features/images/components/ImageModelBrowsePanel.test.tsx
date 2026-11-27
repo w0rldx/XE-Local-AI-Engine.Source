@@ -1,13 +1,11 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ImageModelBrowsePanel } from "@/features/images/components/ImageModelBrowsePanel";
 import type { ImageRepositoryFileView, ImageRepositoryView } from "@/features/images/models/ImageModelInstallModels";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { installJsdomEnvironmentMocks, renderWithMantine } from "@/test/MantineTestRender";
 
 let repositories: ImageRepositoryView[] = [];
 let files: ImageRepositoryFileView[] = [];
@@ -37,14 +35,6 @@ vi.mock("react-i18next", () => ({
 	}),
 }));
 
-function renderWithProviders(ui: ReactElement) {
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			{ui}
-		</MantineProvider>,
-	);
-}
-
 function repository(overrides: Partial<ImageRepositoryView> = {}): ImageRepositoryView {
 	return {
 		repoId: "second-state/FLUX.1-schnell-GGUF",
@@ -69,27 +59,7 @@ describe("ImageModelBrowsePanel", () => {
 	beforeEach(() => {
 		repositories = [];
 		files = [];
-		Object.defineProperty(window, "matchMedia", {
-			writable: true,
-			value: vi.fn().mockImplementation((query: string) => ({
-				matches: false,
-				media: query,
-				onchange: null,
-				addEventListener: vi.fn(),
-				removeEventListener: vi.fn(),
-				dispatchEvent: vi.fn(),
-			})),
-		});
-		Object.defineProperty(window, "ResizeObserver", {
-			writable: true,
-			value: class ResizeObserverMock {
-				observe = vi.fn();
-
-				unobserve = vi.fn();
-
-				disconnect = vi.fn();
-			},
-		});
+		installJsdomEnvironmentMocks();
 	});
 
 	afterEach(() => {
@@ -108,7 +78,7 @@ describe("ImageModelBrowsePanel", () => {
 		// Both are warnings, not filters. A gated repo that silently vanished would look like a search bug; one that
 		// installed with no warning would 401 on a first run, which is worse.
 		repositories = [repository({ isGated: true }), repository({ repoId: "unsloth/other", isTrustedPublisher: true })];
-		renderWithProviders(<ImageModelBrowsePanel installedModelNames={[]} isInstalling={false} onInstall={vi.fn()} />);
+		renderWithMantine(<ImageModelBrowsePanel installedModelNames={[]} isInstalling={false} onInstall={vi.fn()} />);
 		search();
 
 		expect(screen.getByTestId("image-model-browse-gated-second-state/FLUX.1-schnell-GGUF")).toBeTruthy();
@@ -123,7 +93,7 @@ describe("ImageModelBrowsePanel", () => {
 		repositories = [repository()];
 		files = fluxFiles;
 		const onInstall = vi.fn();
-		renderWithProviders(<ImageModelBrowsePanel installedModelNames={[]} isInstalling={false} onInstall={onInstall} />);
+		renderWithMantine(<ImageModelBrowsePanel installedModelNames={[]} isInstalling={false} onInstall={onInstall} />);
 		search();
 		fireEvent.click(screen.getByTestId("image-model-browse-open-second-state/FLUX.1-schnell-GGUF"));
 
@@ -145,10 +115,32 @@ describe("ImageModelBrowsePanel", () => {
 		]);
 	});
 
+	it("drops a family picked for one repository when another repository is opened", () => {
+		// A family carried over from the previous repo would silently override the new repo's suggestion.
+		repositories = [repository({ repoId: "someone/other-model" }), repository()];
+		files = fluxFiles;
+		const onInstall = vi.fn();
+		renderWithMantine(<ImageModelBrowsePanel installedModelNames={[]} isInstalling={false} onInstall={onInstall} />);
+		search();
+		fireEvent.click(screen.getByTestId("image-model-browse-open-someone/other-model"));
+		fireEvent.click(screen.getByTestId("image-model-browse-family"));
+		fireEvent.click(
+			within(screen.getByRole("listbox", { name: "Family", hidden: true })).getByRole("option", { name: "Sd3", hidden: true }),
+		);
+		expect((screen.getByTestId("image-model-browse-family") as HTMLInputElement).value).toBe("Sd3");
+
+		fireEvent.click(screen.getByTestId("image-model-browse-back"));
+		fireEvent.click(screen.getByTestId("image-model-browse-open-second-state/FLUX.1-schnell-GGUF"));
+		fireEvent.click(screen.getByTestId("image-model-browse-file-check-flux1-schnell-Q4_0.gguf"));
+		fireEvent.click(screen.getByTestId("image-model-browse-install"));
+
+		expect(onInstall.mock.calls[0]?.[0].family).toBe("Flux");
+	});
+
 	it("refuses to install a selection with no diffusion file", () => {
 		repositories = [repository()];
 		files = fluxFiles;
-		renderWithProviders(<ImageModelBrowsePanel installedModelNames={[]} isInstalling={false} onInstall={vi.fn()} />);
+		renderWithMantine(<ImageModelBrowsePanel installedModelNames={[]} isInstalling={false} onInstall={vi.fn()} />);
 		search();
 		fireEvent.click(screen.getByTestId("image-model-browse-open-second-state/FLUX.1-schnell-GGUF"));
 
@@ -166,7 +158,7 @@ describe("ImageModelBrowsePanel", () => {
 			...fluxFiles,
 			{ fileName: "flux1-schnell-Q8_0.gguf", format: "Gguf", sizeBytes: 12_634_000_000, suggestedRole: "Diffusion" },
 		];
-		renderWithProviders(<ImageModelBrowsePanel installedModelNames={[]} isInstalling={false} onInstall={vi.fn()} />);
+		renderWithMantine(<ImageModelBrowsePanel installedModelNames={[]} isInstalling={false} onInstall={vi.fn()} />);
 		search();
 		fireEvent.click(screen.getByTestId("image-model-browse-open-second-state/FLUX.1-schnell-GGUF"));
 
@@ -180,7 +172,7 @@ describe("ImageModelBrowsePanel", () => {
 	it("blocks an install whose name collides with an already-installed model", () => {
 		repositories = [repository()];
 		files = fluxFiles;
-		renderWithProviders(
+		renderWithMantine(
 			<ImageModelBrowsePanel installedModelNames={["flux.1-schnell-gguf"]} isInstalling={false} onInstall={vi.fn()} />,
 		);
 		search();
@@ -195,7 +187,7 @@ describe("ImageModelBrowsePanel", () => {
 	it("names each role picker after its file", () => {
 		repositories = [repository()];
 		files = fluxFiles;
-		renderWithProviders(<ImageModelBrowsePanel installedModelNames={[]} isInstalling={false} onInstall={vi.fn()} />);
+		renderWithMantine(<ImageModelBrowsePanel installedModelNames={[]} isInstalling={false} onInstall={vi.fn()} />);
 		search();
 		fireEvent.click(screen.getByTestId("image-model-browse-open-second-state/FLUX.1-schnell-GGUF"));
 
@@ -218,7 +210,7 @@ describe("ImageModelBrowsePanel", () => {
 				unsupportedReason: "diffusers_layout_unsupported",
 			},
 		];
-		renderWithProviders(<ImageModelBrowsePanel installedModelNames={[]} isInstalling={false} onInstall={vi.fn()} />);
+		renderWithMantine(<ImageModelBrowsePanel installedModelNames={[]} isInstalling={false} onInstall={vi.fn()} />);
 		search();
 		fireEvent.click(screen.getByTestId("image-model-browse-open-second-state/FLUX.1-schnell-GGUF"));
 
@@ -236,7 +228,7 @@ describe("ImageModelBrowsePanel", () => {
 	it("explains once for the repo and disables install when every file is flagged", () => {
 		repositories = [repository()];
 		files = fluxFiles.map((file) => ({ ...file, unsupportedReason: "diffusers_layout_unsupported" }));
-		renderWithProviders(<ImageModelBrowsePanel installedModelNames={[]} isInstalling={false} onInstall={vi.fn()} />);
+		renderWithMantine(<ImageModelBrowsePanel installedModelNames={[]} isInstalling={false} onInstall={vi.fn()} />);
 		search();
 		fireEvent.click(screen.getByTestId("image-model-browse-open-second-state/FLUX.1-schnell-GGUF"));
 

@@ -16,8 +16,10 @@ using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 /// <remarks>
 ///     What makes a half-done send safe is the replay lookup plus the deterministic user-message id, not a lock: a retry
 ///     re-inserts nothing and completes whichever half is missing. One live run per conversation is the database's rule.
+///     Refusals: 404 for an unknown definition or conversation, 400 for a request that is wrong, 409 for a conversation
+///     whose state forbids it.
 /// </remarks>
-internal sealed class GraphWorkflowChatService : IGraphWorkflowChatService
+public sealed class GraphWorkflowChatService
 {
     internal const string PlainConversationRefusal = "This conversation is plain, so it cannot run a workflow. Turn plain mode off to use one.";
 
@@ -65,6 +67,7 @@ internal sealed class GraphWorkflowChatService : IGraphWorkflowChatService
         _timeProvider = timeProvider;
     }
 
+    /// <param name="decidedBySubject">Who answers a parked input — the same audit a decide records.</param>
     public async Task<GraphWorkflowChatSendResult> SendAsync(Guid conversationId,
         GraphWorkflowChatSendRequest request,
         string? decidedBySubject,
@@ -197,6 +200,7 @@ internal sealed class GraphWorkflowChatService : IGraphWorkflowChatService
         };
     }
 
+    /// <summary>The conversation's bound runs, newest first.</summary>
     public async Task<IReadOnlyList<GraphWorkflowChatBoundRun>> ListBoundRunsAsync(Guid conversationId, int limit, CancellationToken cancellationToken = default)
     {
         await EnsureChatConversationAsync(conversationId, cancellationToken);
@@ -243,6 +247,10 @@ internal sealed class GraphWorkflowChatService : IGraphWorkflowChatService
         return bound;
     }
 
+    /// <summary>
+    ///     Steers the running node of a chat-bound run: the text becomes a user message of the run's conversation (id
+    ///     deterministic in the operation id), then the run service commits the steer. A refused steer leaves no message.
+    /// </summary>
     public async Task<GraphWorkflowRunDetail> SteerAsync(Guid runId,
         string nodeKey,
         GraphWorkflowChatSteerRequest request,
@@ -280,6 +288,7 @@ internal sealed class GraphWorkflowChatService : IGraphWorkflowChatService
             cancellationToken);
     }
 
+    /// <summary>Cancels the conversation's live bound run, if it has one — what a conversation delete does first.</summary>
     public async Task CancelBoundRunAsync(Guid conversationId, CancellationToken cancellationToken = default)
     {
         // Bounded: a version bump between the run service's read and write (a tick moving the run) loses the cancel, so the run

@@ -11,7 +11,7 @@ import type {
 import { logprobTextLabel } from "@/core/directInference/DirectInferenceModels";
 import { BasisBadge } from "@/features/modelLab/components/ArchitectureExplanation";
 import classes from "@/features/modelLab/components/NextTokenPromptTokens.module.css";
-import { moveFocusAmongButtons } from "@/features/modelLab/models/ModelLabFocus";
+import { moveFocusAmongButtons, useRovingTabStop } from "@/features/modelLab/models/ModelLabFocus";
 
 const visibleWhitespace: Record<string, string> = { " ": "·", "\n": "↵", "\t": "⇥", "\r": "␍" };
 
@@ -38,8 +38,9 @@ interface TokenChipsProps {
 // Memoized: pointing at a chip changes the readout, not the up to several thousand chips.
 const TokenChips = memo(function TokenChips({ tokens, label, onActivate }: TokenChipsProps) {
 	const { t } = useTranslation();
+	// One Tab stop, on the first chip until focus moves; the arrow keys move between the others.
+	const stop = useRovingTabStop(-1, tokens.length);
 	return (
-		// Only the first chip is a Tab stop; the arrow keys move between the others.
 		<Group gap={2} role="group" aria-label={label} onKeyDown={moveFocusAmongButtons}>
 			{tokens.map((token, index) => {
 				const values = { piece: logprobTextLabel(token.piece), id: token.id };
@@ -48,7 +49,7 @@ const TokenChips = memo(function TokenChips({ tokens, label, onActivate }: Token
 						// biome-ignore lint/suspicious/noArrayIndexKey: tokens repeat, and a run's list never reorders.
 						key={index}
 						type="button"
-						tabIndex={index === 0 ? 0 : -1}
+						tabIndex={stop.tabIndexFor(index)}
 						className={classes["chip"]}
 						data-special={token.special}
 						aria-label={
@@ -56,7 +57,10 @@ const TokenChips = memo(function TokenChips({ tokens, label, onActivate }: Token
 								? t("pages.modelLab.nextToken.ui.promptTokens.chipSpecial", "{{piece}}, id {{id}}, control token", values)
 								: t("pages.modelLab.nextToken.ui.promptTokens.chip", "{{piece}}, id {{id}}", values)
 						}
-						onFocus={() => onActivate(index)}
+						onFocus={() => {
+							stop.onFocusAt(index);
+							onActivate(index);
+						}}
 						onMouseEnter={() => onActivate(index)}
 						onClick={() => onActivate(index)}
 						data-testid="model-lab-prompt-token"

@@ -4,7 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration;
-using XE_Local_AI_Engine.Client.Services.Persistence;
+using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 
 /// <summary>
 ///     Derives and holds the Data Protection key-ring KEK.
@@ -23,7 +23,7 @@ public sealed class NodeDataProtectionKeyProvider : INodeDataProtectionKeyProvid
 
     private byte[]? _key;
 
-    public NodeDataProtectionKeyProvider(IOptions<WorkerNodeOptions> workerNodeOptions, INodeOperatorSecretProvider operatorSecretProvider)
+    public NodeDataProtectionKeyProvider(IOptions<WorkerNodeOptions> workerNodeOptions, NodeOperatorSecretProvider operatorSecretProvider)
     {
         ArgumentNullException.ThrowIfNull(workerNodeOptions);
         ArgumentNullException.ThrowIfNull(operatorSecretProvider);

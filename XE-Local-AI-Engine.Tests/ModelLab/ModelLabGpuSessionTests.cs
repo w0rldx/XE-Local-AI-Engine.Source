@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Training.Runs;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
-using static ModelLabExperimentServiceTests;
+using static ModelLabTestSupport;
 
 /// <summary>The session's hand-overs, observed from inside them: one session over a scripted worker, with no host.</summary>
 [Category(TestCategories.Unit)]
@@ -46,7 +46,7 @@ public sealed class ModelLabGpuSessionTests
         }, (path, _, kept) => handedOver.Add($"{path}:{ReferenceEquals(kept, reservation)}:{session!.State}"));
         session.Register();
         session.Admitted(gate, Substitute.For<ILlamaServerRuntimeMutationLease>(), reservation);
-        session.AttachWorker(ModelLabServeWorker.Spawn(process, new ModelLabScriptRunner.ScriptCommand
+        session.AttachWorker(ModelLabServeWorker.Spawn(process, new ModelLabScriptCommand
         {
             Interpreter = "python",
             ScriptPath = "modellab.py"

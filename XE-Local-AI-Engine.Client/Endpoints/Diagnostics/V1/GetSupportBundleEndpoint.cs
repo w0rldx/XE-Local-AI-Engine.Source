@@ -12,10 +12,10 @@ using XE_Local_AI_Engine.Client.Services.Diagnostics;
 /// </summary>
 public sealed class GetSupportBundleEndpoint : EndpointWithoutRequest
 {
-    private readonly ISupportBundleService _bundles;
+    private readonly SupportBundleService _bundles;
     private readonly AppUpdateHostContext _hostContext;
 
-    public GetSupportBundleEndpoint(ISupportBundleService bundles, AppUpdateHostContext hostContext)
+    public GetSupportBundleEndpoint(SupportBundleService bundles, AppUpdateHostContext hostContext)
     {
         ArgumentNullException.ThrowIfNull(bundles);
         ArgumentNullException.ThrowIfNull(hostContext);

@@ -12,13 +12,14 @@ import {
 	listModelLabPlaygroundRunsQueryKey,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import type { XeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundRunResponse as PlaygroundRun } from "@/core/api/generated/types.gen";
+import { formatNumber } from "@/core/formatting/NumberFormatting";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { BasisBadge } from "@/features/modelLab/components/ArchitectureExplanation";
 import { PlaygroundRunForm } from "@/features/modelLab/components/PlaygroundRunForm";
 import { PlaygroundStepper } from "@/features/modelLab/components/PlaygroundStepper";
 import { sameExperimentId } from "@/features/modelLab/models/ModelLabNavigation";
-import { playgroundTraceSchema } from "@/features/modelLab/models/ModelLabPlayground";
+import { playgroundTraceSchema, playgroundValue } from "@/features/modelLab/models/ModelLabPlayground";
 
 interface PlaygroundPanelProps {
 	// The tab has been shown: the list is read only from then on.
@@ -111,7 +112,7 @@ interface RunRowProps {
 }
 
 function RunRow({ run, open, onOpen, onDelete }: RunRowProps) {
-	const { t, i18n } = useTranslation();
+	const { t } = useTranslation();
 	const { confirm } = useConfirm();
 	const confirmDelete = async (): Promise<void> => {
 		const confirmed = await confirm({
@@ -141,7 +142,7 @@ function RunRow({ run, open, onOpen, onDelete }: RunRowProps) {
 			depth: config.depth,
 			hidden: config.hidden,
 			steps: config.steps,
-			learningRate: new Intl.NumberFormat(i18n.language, { maximumSignificantDigits: 4 }).format(config.learningRate),
+			learningRate: formatNumber(config.learningRate, { maximumSignificantDigits: 4 }),
 			seed: config.seed,
 		},
 	);
@@ -194,23 +195,20 @@ function RunRow({ run, open, onOpen, onDelete }: RunRowProps) {
 
 // One saved run: its summary and its recorded steps.
 function PlaygroundRunView({ run }: { run: PlaygroundRun }) {
-	const { t, i18n } = useTranslation();
+	const { t } = useTranslation();
 	const detail = useQuery({
 		...getModelLabPlaygroundRunOptions({ path: { runId: run.id } }),
 		// A saved run never changes.
 		staleTime: Number.POSITIVE_INFINITY,
 	});
 	const trace = useMemo(() => detail.data && playgroundTraceSchema.safeParse(detail.data.trace), [detail.data]);
-	const format = new Intl.NumberFormat(i18n.language, { maximumSignificantDigits: 4 });
-	const value = (number: number | null): string =>
-		number === null ? t("pages.modelLab.playground.notFinite", "not finite") : format.format(number);
 	return (
 		<Stack gap="sm" data-testid="model-lab-playground-run-view">
 			<Group gap="xs">
 				<Text size="sm" data-testid="model-lab-playground-final">
 					{t("pages.modelLab.playground.final", "After the last update: loss {{loss}}, accuracy {{accuracy}}.", {
-						loss: value(run.finalLoss),
-						accuracy: value(run.finalAccuracy),
+						loss: playgroundValue(run.finalLoss, t),
+						accuracy: playgroundValue(run.finalAccuracy, t),
 					})}
 				</Text>
 				<BasisBadge basis="measuredTrace" />

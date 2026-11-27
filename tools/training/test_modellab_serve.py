@@ -17,15 +17,10 @@ import sys
 import tempfile
 import threading
 import types
-import unittest
 from unittest import mock
 
 from modellablib import CONTRACT_VERSION, ROUTING_WEIGHT_ENCODING, TRACE_KIND
-
-try:
-    import torch
-except ImportError:
-    torch = None
+from test_stubs import load_modellab, require_torch, run_standalone
 
 RUN_ID = "run-1"
 FRAME_SECONDS = 60
@@ -37,33 +32,6 @@ ROUTED_TOKENS = 3
 PROMPT = [[1, 2, 3]]
 
 
-def _require_torch():
-    if torch is None:
-        raise unittest.SkipTest("torch is not installed: the root dev venv carries CPU torch on linux x86_64 only.")
-    return torch
-
-
-def _load_modellab():
-    """The real script on real torch, with transformers reduced to the names it imports. Leaves no stub behind."""
-    _require_torch()
-    transformers = types.SimpleNamespace(
-        __version__="stub",
-        AutoModelForCausalLM=None,
-        AutoTokenizer=None,
-        DynamicCache=None,
-        LogitsProcessor=object,
-        LogitsProcessorList=list,
-        StoppingCriteria=object,
-        StoppingCriteriaList=list,
-    )
-    with mock.patch.dict(sys.modules, {"transformers": transformers}):
-        sys.modules.pop("modellab", None)
-        import modellab
-
-        sys.modules.pop("modellab", None)
-    return modellab
-
-
 def _kernel(*_args, **_kwargs):
     raise AssertionError("The stub sdpa kernel never runs.")
 
@@ -71,7 +39,7 @@ def _kernel(*_args, **_kwargs):
 def _model(routed=False):
     """Two linear blocks under model.layers and a head: what blocks_of, the hooks and the hook check read. Routed, each
     block also runs a router shaped like a transformers top-k MoE gate: (logits, bfloat16 weights, expert ids)."""
-    torch = _require_torch()
+    torch = require_torch()
     nn = torch.nn
     torch.manual_seed(0)
 
@@ -142,7 +110,7 @@ def _greedy(model, on_token=None):
     """model.generate as trace calls it, on the CPU: the whole sequence each forward, the processors after it, then
     ``on_token`` and the stopping criterion per token. A routed trace pins the unchunked prefill and nothing else; one
     without routing pins nothing."""
-    torch = _require_torch()
+    torch = require_torch()
 
     def generate(ids, logits_processor, stopping_criteria, max_new_tokens, **kwargs):
         routed = any(type(processor).__name__ == "_Routing" for processor in logits_processor)
@@ -165,7 +133,7 @@ def _greedy(model, on_token=None):
 @contextlib.contextmanager
 def _on_the_cpu(modellab):
     """The real trace on the CPU: the prompt, the hook records' CUDA statistics and the device facts are stand-ins."""
-    torch = _require_torch()
+    torch = require_torch()
 
     def tracer(stack, blocks, chosen, _writer, _kinds):
         stack.enter_context(blocks[chosen[0]].register_forward_hook(lambda *_: None))
@@ -229,7 +197,7 @@ def _hooks(model):
 
 def _register_failing_on(call):
     """register_forward_hook that registers for real, then raises on its ``call``-th use, as a constructor would."""
-    original = _require_torch().nn.Module.register_forward_hook
+    original = require_torch().nn.Module.register_forward_hook
     count = [0]
 
     def register(module, *args, **kwargs):
@@ -251,8 +219,8 @@ class _SwapThenFail(dict):
 
 
 def test_progress_stops_generation_once_the_job_is_cancelled():
-    torch = _require_torch()
-    modellab = _load_modellab()
+    torch = require_torch()
+    modellab = load_modellab()
     run = modellab._Run("j")
     progress = modellab._Progress(run, 3, 8)
     ids = torch.zeros((1, 5), dtype=torch.long)
@@ -263,8 +231,8 @@ def test_progress_stops_generation_once_the_job_is_cancelled():
 
 
 def test_a_constructor_failing_after_its_first_hook_leaves_no_hook():
-    torch = _require_torch()
-    modellab = _load_modellab()
+    torch = require_torch()
+    modellab = load_modellab()
     model = _model()
     blocks = model.model.layers
     try:
@@ -283,7 +251,7 @@ def test_a_constructor_failing_after_its_first_hook_leaves_no_hook():
 
 
 def test_a_constructor_failing_right_after_the_sdpa_swap_restores_the_kernel_and_every_hook():
-    modellab = _load_modellab()
+    modellab = load_modellab()
     model = _model()
     registry = _SwapThenFail(sdpa=_kernel)
     attention_blocks = [types.SimpleNamespace(self_attn=type("Attention", (), {"head_dim": 2})()) for _ in range(2)]
@@ -304,7 +272,7 @@ def test_a_constructor_failing_right_after_the_sdpa_swap_restores_the_kernel_and
 
 
 def test_a_job_that_leaves_a_hook_or_the_swap_behind_is_caught():
-    modellab = _load_modellab()
+    modellab = load_modellab()
     model = _model()
     registry: dict[str, object] = {"sdpa": _kernel}
     with mock.patch.object(modellab, "_attention_functions", return_value=registry):
@@ -318,7 +286,7 @@ def test_a_job_that_leaves_a_hook_or_the_swap_behind_is_caught():
 
 
 def test_the_slot_loads_once_and_refuses_another_model_key():
-    modellab = _load_modellab()
+    modellab = load_modellab()
     model = _model()
     loads = []
 
@@ -342,8 +310,8 @@ def test_the_slot_loads_once_and_refuses_another_model_key():
 
 
 def test_a_cancel_during_generate_stops_it_and_the_trace_ends_before_its_checks_with_no_hook_left():
-    torch = _require_torch()
-    modellab = _load_modellab()
+    torch = require_torch()
+    modellab = load_modellab()
     model = _model()
     run = modellab._Run("j")
     seen = {}
@@ -390,7 +358,7 @@ def test_a_cancel_during_generate_stops_it_and_the_trace_ends_before_its_checks_
 
 
 def test_a_routed_trace_writes_one_routing_line_per_token_in_its_own_section_and_its_summary():
-    modellab = _load_modellab()
+    modellab = load_modellab()
     model = _routed_slot(modellab)
     with tempfile.TemporaryDirectory() as directory, _on_the_cpu(modellab), mock.patch.object(modellab, "emit"):
         job = _routed_job(directory)
@@ -421,7 +389,7 @@ def test_a_routed_trace_writes_one_routing_line_per_token_in_its_own_section_and
 
 
 def test_a_dense_model_given_a_routing_cap_records_no_routing_and_pins_nothing():
-    modellab = _load_modellab()
+    modellab = load_modellab()
     model = _model()
     model.generate = _greedy(model)
     modellab._SLOT.loaded, modellab._SLOT.key = (_tokenizer(), model), "k"
@@ -434,8 +402,8 @@ def test_a_dense_model_given_a_routing_cap_records_no_routing_and_pins_nothing()
 
 
 def test_a_routed_trace_whose_router_registration_fails_midway_leaves_no_hook():
-    torch = _require_torch()
-    modellab = _load_modellab()
+    torch = require_torch()
+    modellab = load_modellab()
     model = _routed_slot(modellab)
     with (
         tempfile.TemporaryDirectory() as directory,
@@ -456,7 +424,7 @@ def test_a_routed_trace_whose_router_registration_fails_midway_leaves_no_hook():
 
 
 def test_a_cancel_during_a_routed_generation_ends_it_cancelled_before_the_routing_check_with_no_hook_left():
-    modellab = _load_modellab()
+    modellab = load_modellab()
     run = modellab._Run("j")
     model = _routed_slot(modellab, on_token=run.cancel.set)
     with (
@@ -478,7 +446,7 @@ def test_a_cancel_during_a_routed_generation_ends_it_cancelled_before_the_routin
 
 
 def test_a_cancel_while_a_routed_trace_saves_lets_it_finish_whole():
-    modellab = _load_modellab()
+    modellab = load_modellab()
     run = modellab._Run("j")
     model = _routed_slot(modellab)
     recorded = modellab._Routing.recorded
@@ -502,9 +470,9 @@ def test_a_cancel_while_a_routed_trace_saves_lets_it_finish_whole():
 
 
 def test_derive_on_a_config_that_collects_router_logits_turns_them_off_and_leaves_no_hook():
-    torch = _require_torch()
+    torch = require_torch()
     for flag in (True, None):
-        modellab = _load_modellab()
+        modellab = load_modellab()
         model = _model()
         if flag is not None:
             model.config.get_text_config().output_router_logits = flag
@@ -548,8 +516,8 @@ def _serve_child():
     """The worker with fakes for load_model and trace; each job's prompt says how its trace behaves. A job with a
     routing cap runs the real trace on a routed model, waiting after its first token for a cancel when its prompt says
     so."""
-    torch = _require_torch()
-    modellab = _load_modellab()
+    torch = require_torch()
+    modellab = load_modellab()
     registry: dict[str, object] = {"sdpa": _kernel}
     modellab._attention_functions = lambda: registry
     real_trace = modellab.trace
@@ -602,7 +570,7 @@ class _Worker:
     """A serve-child process: commands in, frames out, each frame awaited with a bound."""
 
     def __init__(self, directory):
-        _require_torch()
+        require_torch()
         self.directory = directory
         self.process = subprocess.Popen(  # noqa: S603 - this interpreter running this file
             [sys.executable, os.path.abspath(__file__), "serve-child"],
@@ -866,11 +834,4 @@ def test_sigterm_exits_3_at_once():
 if __name__ == "__main__":
     if sys.argv[1:] == ["serve-child"]:
         sys.exit(_serve_child())
-    for name, test in sorted(globals().items()):
-        if name.startswith("test_") and callable(test):
-            try:
-                test()
-            except unittest.SkipTest as reason:
-                print(f"skip {name}: {reason}")
-            else:
-                print(f"ok {name}")
+    run_standalone(globals())

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The Model Lab training stepper's C#<->Python contract fixture: tools/training/nnplayground.py run fresh on the
 fixture's job, checked against the committed trace and summary the C# checks read (``ModelLabPlaygroundContractTests``)
-and against the React tree's copy of that trace and summary once it exists.
+and against the React tree's copy of that trace and summary, which must exist.
 
 It sits in tools/training because it needs CPU torch, which Python validation provides and the torch-free release
 contract lane over scripts/tests does not; it reads repository files and is not meant to run in a packaged runtime.
@@ -36,7 +36,7 @@ REACT_COPY = (
     / "src"
     / "features"
     / "modelLab"
-    / "models"
+    / "test"
     / "playgroundTrace.fixture.json"
 )
 SCRIPT = REPO_ROOT / "tools" / "training" / "nnplayground.py"
@@ -111,6 +111,14 @@ def differences(expected: Any, actual: Any, path: str = "$", skip: frozenset[str
     return [] if expected == actual else [f"{path}: {expected!r} != {actual!r}"]
 
 
+def react_copy_differences(committed: dict[str, Any], react_copy: Path) -> list[str]:
+    """Where the React copy departs from the committed trace and summary; a missing copy is a difference."""
+    if not react_copy.is_file():
+        return [f"react: {react_copy} is missing; the React stepper tests read it, so move it back or fix REACT_COPY."]
+    react = json.loads(react_copy.read_text(encoding="utf-8"))
+    return differences({"trace": committed["trace"], "summary": committed["summary"]}, react, "react")
+
+
 def _report(found: list[str]) -> str:
     shown = "\n".join(found[:20])
     more = f"\n... and {len(found) - 20} more" if len(found) > 20 else ""
@@ -124,11 +132,15 @@ class PlaygroundContractFixtureTests(unittest.TestCase):
         trace, summary = run_fixture_job()
         found = differences(committed["trace"], trace, "trace", UNCOMPARED)
         found += differences(committed["summary"], summary, "summary")
-        # The React copy holds the committed trace and summary; once it exists it must equal them.
-        if REACT_COPY.exists():
-            react = json.loads(REACT_COPY.read_text(encoding="utf-8"))
-            found += differences({"trace": committed["trace"], "summary": committed["summary"]}, react, "react")
+        found += react_copy_differences(committed, REACT_COPY)
         assert not found, _report(found)
+
+    def test_the_react_copy_is_present_and_a_missing_one_fails(self) -> None:
+        committed = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        found = react_copy_differences(committed, REACT_COPY)
+        assert not found, _report(found)
+        with tempfile.TemporaryDirectory() as directory:
+            assert react_copy_differences(committed, Path(directory) / "moved.fixture.json")
 
     def test_the_comparison_catches_drift(self) -> None:
         base = {"a": [1.0, None, True], "b": {"c": "x", "n": 3}}
@@ -148,8 +160,7 @@ if __name__ == "__main__":
         fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
         fixture["trace"], fixture["summary"] = run_fixture_job()
         FIXTURE.write_text(json.dumps(fixture, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-        if REACT_COPY.exists():
-            react = {"trace": fixture["trace"], "summary": fixture["summary"]}
-            REACT_COPY.write_text(json.dumps(react, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        react = {"trace": fixture["trace"], "summary": fixture["summary"]}
+        REACT_COPY.write_text(json.dumps(react, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     else:
         unittest.main()

@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { act, cleanup, render, screen } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { act, cleanup, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { NodeChatConnectionStatus } from "@/features/chat/api/NodeChatConnection";
@@ -43,15 +41,7 @@ const { chatConnectionMock } = vi.hoisted(() => {
 vi.mock("@/features/chat/api/NodeChatConnection", () => ({ nodeChatConnection: chatConnectionMock }));
 
 import { ChatConnectionStatusChip } from "@/features/chat/components/ChatConnectionStatusChip";
-import { testMantineTheme } from "@/test/MantineTestRender";
-
-function renderWithProviders(ui: ReactElement) {
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			{ui}
-		</MantineProvider>,
-	);
-}
+import { renderWithMantine } from "@/test/MantineTestRender";
 
 describe("ChatConnectionStatusChip", () => {
 	beforeEach(() => {
@@ -82,14 +72,14 @@ describe("ChatConnectionStatusChip", () => {
 
 	it("is hidden while connected", () => {
 		chatConnectionMock.setStatus("connected");
-		renderWithProviders(<ChatConnectionStatusChip />);
+		renderWithMantine(<ChatConnectionStatusChip />);
 
 		expect(screen.queryByTestId("chat-connection-status-chip")).toBeNull();
 	});
 
 	it("shows the reconnecting chip on a reconnecting status and hides it once reconnected", () => {
 		chatConnectionMock.setStatus("connected");
-		renderWithProviders(<ChatConnectionStatusChip />);
+		renderWithMantine(<ChatConnectionStatusChip />);
 		expect(screen.queryByTestId("chat-connection-status-chip")).toBeNull();
 
 		act(() => chatConnectionMock.emit("reconnecting"));
@@ -103,7 +93,7 @@ describe("ChatConnectionStatusChip", () => {
 	it("shows Offline only after the hub has connected at least once", () => {
 		// Never connected yet: a disconnected state on initial load must not flash the chip.
 		chatConnectionMock.setStatus("disconnected");
-		renderWithProviders(<ChatConnectionStatusChip />);
+		renderWithMantine(<ChatConnectionStatusChip />);
 		expect(screen.queryByTestId("chat-connection-status-chip")).toBeNull();
 
 		// Once connected then dropped mid-session, the Offline chip appears.
@@ -115,7 +105,7 @@ describe("ChatConnectionStatusChip", () => {
 
 	it("unsubscribes from the connection on unmount", () => {
 		chatConnectionMock.setStatus("connected");
-		const view = renderWithProviders(<ChatConnectionStatusChip />);
+		const view = renderWithMantine(<ChatConnectionStatusChip />);
 		expect(chatConnectionMock.subscribe).toHaveBeenCalledTimes(1);
 
 		view.unmount();

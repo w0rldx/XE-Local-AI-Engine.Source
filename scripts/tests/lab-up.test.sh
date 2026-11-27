@@ -178,7 +178,7 @@ while (($#)); do
     -X) method="$2"; shift 2 ;;
     --connect-timeout) ct="$2"; shift 2 ;;
     --max-time) mt="$2"; shift 2 ;;
-    -w|--data-binary) shift 2 ;;
+    -w|--data-raw) shift 2 ;;
     -H) [[ "$2" == @* ]] && hdr="${2#@}"; shift 2 ;;
     -*) shift ;;
     *) url="$1"; shift ;;
@@ -844,7 +844,8 @@ check_contains "settle: HTTP 500 reports TIMEOUT" "TIMEOUT last=http 500" "${out
 
 : >"${LAB}/evidence/http.log"
 ctl curl-queue "200\t{\"accessToken\":\"resp-secret-1\",\"nested\":{\"refreshToken\":\"resp-secret-2\"},\"title\":\"kept\"}\n"
-"${API_ENV[@]}" "${REPO}/scripts/lab-api.sh" --profile test POST auth/login \
+# The field scrub guards every route outside the credential families (defence in depth).
+"${API_ENV[@]}" "${REPO}/scripts/lab-api.sh" --profile test POST agents \
   '{"password":"prefix\"SECRET_REMAINDER","email":"a"}' >/dev/null 2>&1
 HTTP_LOG="$(cat "${LAB}/evidence/http.log")"
 check_absent "escaped quote in a password leaks nothing" "SECRET_REMAINDER" "${HTTP_LOG}"
@@ -852,6 +853,177 @@ check_contains "the request's other fields are kept" '"email"' "${HTTP_LOG}"
 check_absent "response accessToken scrubbed" "resp-secret-1" "${HTTP_LOG}"
 check_absent "nested response refreshToken scrubbed" "resp-secret-2" "${HTTP_LOG}"
 check_contains "the response's other fields are kept" '"title": "kept"' "${HTTP_LOG}"
+ctl curl-queue "200\t{}\n200\t{}\n"
+"${API_ENV[@]}" "${REPO}/scripts/lab-api.sh" --profile test PUT cloud-settings \
+  '{"headers":[{"name":"X-Gateway-Key","value":"HEADER_SECRET","isSecret":true}]}' >/dev/null 2>&1
+check_contains "a cloud settings save logs a marker, not its body" \
+  '>> [body omitted: credential-bearing route,' "$(cat "${LAB}/evidence/http.log")"
+"${API_ENV[@]}" "${REPO}/scripts/lab-api.sh" --profile test PUT agents/a1 \
+  '{"headers":[{"name":"X-Gateway-Key","value":"HEADER_SECRET","isSecret":true}]}' >/dev/null 2>&1
+HTTP_LOG="$(cat "${LAB}/evidence/http.log")"
+check_absent "a secret cloud header value leaks nothing" "HEADER_SECRET" "${HTTP_LOG}"
+check_contains "a secret cloud header keeps its flag" '"isSecret": true' "${HTTP_LOG}"
+# The node binds JSON names case-insensitively.
+ctl curl-queue "200\t{}\n"
+"${API_ENV[@]}" "${REPO}/scripts/lab-api.sh" --profile test PUT agents/a1 \
+  '{"Headers":[{"Name":"X-Gateway-Key","Value":"PASCAL_SECRET","IsSecret":true},{"name":"X-Other","vALUE":"MIXED_SECRET","ISSECRET":true}]}' >/dev/null 2>&1
+HTTP_LOG="$(cat "${LAB}/evidence/http.log")"
+check_absent "a PascalCase secret cloud header value leaks nothing" "PASCAL_SECRET" "${HTTP_LOG}"
+check_absent "a mixed-case secret cloud header value leaks nothing" "MIXED_SECRET" "${HTTP_LOG}"
+check_contains "a PascalCase secret cloud header keeps its spelling" '"Value": "(redacted)"' "${HTTP_LOG}"
+# The vault answers its one-time recovery code on confirm, and the recovery unlock takes one and answers the next.
+ctl curl-queue "200\t{\"recoveryCode\":\"VAULT_CONFIRM_CODE\"}\n200\t{\"recoveryCode\":\"VAULT_NEXT_CODE\"}\n200\t{\"userCode\":\"DEVICE_USER_CODE\",\"previewToken\":\"PREVIEW_TOKEN\"}\n"
+"${API_ENV[@]}" "${REPO}/scripts/lab-api.sh" --profile test POST auth/vault/confirm '{"password":"VAULT_PASSWORD"}' >/dev/null 2>&1
+"${API_ENV[@]}" "${REPO}/scripts/lab-api.sh" --profile test POST auth/vault/unlock-recovery \
+  '{"recoveryCode":"VAULT_REQUEST_CODE","newPassword":"VAULT_NEW_PASSWORD"}' >/dev/null 2>&1
+"${API_ENV[@]}" "${REPO}/scripts/lab-api.sh" --profile test POST cloud-settings/entra/device-code/start '{}' >/dev/null 2>&1
+HTTP_LOG="$(cat "${LAB}/evidence/http.log")"
+for sentinel in VAULT_CONFIRM_CODE VAULT_NEXT_CODE VAULT_REQUEST_CODE VAULT_PASSWORD VAULT_NEW_PASSWORD DEVICE_USER_CODE PREVIEW_TOKEN; do
+  check_absent "a one-time credential leaks nothing (${sentinel})" "${sentinel}" "${HTTP_LOG}"
+done
+check_contains "a vault confirm logs a marker for its response" \
+  "$(printf '[body omitted: credential-bearing route, 37 bytes]\n[HTTP 200]')" "${HTTP_LOG}"
+# An MCP registration carries credentials under arbitrary header and environment names and in its URL.
+: >"${LAB}/evidence/http.log"
+ctl curl-queue "201\t{\"mcpServerId\":\"m1\",\"headers\":{\"Authorization\":\"Bearer MCP_RESPONSE_HEADER\"}}\n200\t{}\n"
+for verb in "POST mcp/servers" "PUT mcp/servers/m1"; do
+  # shellcheck disable=SC2086  # the verb and the path are two words
+  "${API_ENV[@]}" "${REPO}/scripts/lab-api.sh" --profile test ${verb} \
+    '{"name":"docs","transportKind":"Http","url":"https://user:MCP_URL_PASSWORD@mcp.example/sse?token=MCP_URL_TOKEN","headers":{"Authorization":"Bearer MCP_HEADER_SECRET"},"env":{"MY_SERVICE":"MCP_ENV_SECRET"}}' >/dev/null 2>&1
+done
+HTTP_LOG="$(cat "${LAB}/evidence/http.log")"
+for sentinel in MCP_URL_PASSWORD MCP_URL_TOKEN MCP_HEADER_SECRET MCP_ENV_SECRET MCP_RESPONSE_HEADER; do
+  check_absent "an MCP registration leaks nothing (${sentinel})" "${sentinel}" "${HTTP_LOG}"
+done
+check_contains "an MCP create keeps method and path" " POST mcp/servers" "${HTTP_LOG}"
+check_contains "an MCP update keeps method and path" " PUT mcp/servers/m1" "${HTTP_LOG}"
+check_contains "an MCP create keeps its status" "[HTTP 201]" "${HTTP_LOG}"
+check "an MCP create and update log two request markers" "2" "$(grep -c '^>> \[body omitted: credential-bearing route, [0-9]* bytes\]$' "${LAB}/evidence/http.log")"
+# The node routes a path decoded, dot segments resolved, empty segments dropped and case ignored; an ambiguous spelling
+# (an encoded slash, `..` above the API root) counts as a credential route.
+for spelling in ./mcp/servers MCP/Servers mcp//servers %6dcp/servers 'mcp%2Fservers' ../v1/mcp/servers; do
+  : >"${LAB}/evidence/http.log"
+  ctl curl-queue "201\t{\"headers\":{\"Authorization\":\"Bearer SPELLING_RESPONSE_HEADER\"}}\n"
+  "${API_ENV[@]}" "${REPO}/scripts/lab-api.sh" --profile test POST "${spelling}" \
+    '{"headers":{"Authorization":"Bearer SPELLING_HEADER_SECRET"}}' >/dev/null 2>&1
+  HTTP_LOG="$(cat "${LAB}/evidence/http.log")"
+  check_absent "an MCP registration as ${spelling} logs no request header value" "SPELLING_HEADER_SECRET" "${HTTP_LOG}"
+  check_absent "an MCP registration as ${spelling} logs no response header value" "SPELLING_RESPONSE_HEADER" "${HTTP_LOG}"
+  check_contains "an MCP registration as ${spelling} keeps method and path" " POST ${spelling}" "${HTTP_LOG}"
+done
+# A spelling that is not a plain path (scheme-relative, another scheme, a backslash, a full URL) has no route the
+# recorder can classify: a node that rejects it still never gets the submitted credential into the log.
+for spelling in //mcp/servers '\\mcp\servers' http:mcp/servers mcp:servers http://127.0.0.1:1/api/local/v1/mcp/servers; do
+  : >"${LAB}/evidence/http.log"
+  ctl curl-queue "404\t{\"title\":\"Not Found\"}\n"
+  "${API_ENV[@]}" "${REPO}/scripts/lab-api.sh" --profile test POST "${spelling}" \
+    '{"headers":{"Authorization":"Bearer AMBIGUOUS_HEADER_SECRET"}}' >/dev/null 2>&1
+  HTTP_LOG="$(cat "${LAB}/evidence/http.log")"
+  check_absent "a rejected MCP registration as ${spelling} logs no header value" "AMBIGUOUS_HEADER_SECRET" "${HTTP_LOG}"
+  check_contains "a rejected MCP registration as ${spelling} logs a request marker" \
+    ">> [body omitted: credential-bearing route," "${HTTP_LOG}"
+  check_contains "a rejected MCP registration as ${spelling} keeps its status" "[HTTP 404]" "${HTTP_LOG}"
+done
+# A route outside the credential families stays readable; its URLs lose their userinfo and query values.
+ctl curl-queue "200\t{\"items\":[{\"name\":\"docs\",\"url\":\"https://user:CATALOG_PASSWORD@mcp.example/sse?token=CATALOG_TOKEN&mode=sse\"},{\"name\":\"mail\",\"url\":\"https://ops.lab@mail.example:EMAIL_PASSWORD@mcp.example/sse\"}]}\n"
+"${API_ENV[@]}" "${REPO}/scripts/lab-api.sh" --profile test GET 'tool-catalog?source=https://u:PATH_PASSWORD@mcp.example/x' >/dev/null 2>&1
+HTTP_LOG="$(cat "${LAB}/evidence/http.log")"
+for sentinel in CATALOG_PASSWORD CATALOG_TOKEN PATH_PASSWORD EMAIL_PASSWORD; do
+  check_absent "a URL's credentials leak nothing (${sentinel})" "${sentinel}" "${HTTP_LOG}"
+done
+check_contains "a non-sensitive route stays readable" '"name": "docs"' "${HTTP_LOG}"
+check_contains "a URL keeps its host, path and query names" \
+  '"url": "https://(redacted)@mcp.example/sse?token=(redacted)&mode=(redacted)"' "${HTTP_LOG}"
+check_contains "a path's query value is masked whole" "GET tool-catalog?source=(redacted)" "${HTTP_LOG}"
+check_contains "an email-style username is masked through the last @" '"url": "https://(redacted)@mcp.example/sse"' "${HTTP_LOG}"
+# A long poll on the hub carries the connection token in its path; a 404 body may echo the polled URL.
+ctl curl-queue "200\t{\"type\":6}\n404\tMissing chat/hub?id=HUB_TOKEN_SECRET\n"
+"${API_ENV[@]}" "${REPO}/scripts/lab-api.sh" --profile test GET 'chat/hub?id=HUB_TOKEN_SECRET' >/dev/null 2>&1
+"${API_ENV[@]}" "${REPO}/scripts/lab-api.sh" --profile test GET 'chat/hub?x=1&id=HUB_TOKEN_SECRET' >/dev/null 2>&1
+HTTP_LOG="$(cat "${LAB}/evidence/http.log")"
+check_absent "a hub call's connection token leaks nothing" "HUB_TOKEN_SECRET" "${HTTP_LOG}"
+check_contains "a hub call logs its redacted path" "GET chat/hub?id=(redacted)" "${HTTP_LOG}"
+check_contains "a hub call logs its response" '"type": 6' "${HTTP_LOG}"
+# Every query value is masked whatever its name, case or encoding; a 404 body echoing the path is masked too.
+for spelling in 'chat/hub?ID=SPELLED_HUB_TOKEN' 'chat/hub?%69d=SPELLED_HUB_TOKEN' 'chat/hub?Id=SPELLED_HUB_TOKEN&foo=SPELLED_FOO'; do
+  : >"${LAB}/evidence/http.log"
+  ctl curl-queue "404\tMissing ${spelling}\n"
+  "${API_ENV[@]}" "${REPO}/scripts/lab-api.sh" --profile test GET "${spelling}" >/dev/null 2>&1
+  HTTP_LOG="$(cat "${LAB}/evidence/http.log")"
+  check_absent "a hub call as ${spelling} logs no query value" "SPELLED_" "${HTTP_LOG}"
+  check_contains "a hub call as ${spelling} keeps method and route" " GET chat/hub?" "${HTTP_LOG}"
+done
+# A skill preview resource path carries its import token as a segment; a 404 body may echo the path.
+: >"${LAB}/evidence/http.log"
+ctl curl-queue "200\tnotes\n404\tMissing skills/import/preview/PREVIEW_PATH_TOKEN/skills/s1/resources/x\n404\tMissing\n"
+for spelling in skills/import/preview/PREVIEW_PATH_TOKEN/skills/s1/resources/notes.md \
+  Skills/Import/Preview/PREVIEW_PATH_TOKEN/skills/s1/resources/x '%73kills/import/preview/PREVIEW_PATH_TOKEN/x'; do
+  "${API_ENV[@]}" "${REPO}/scripts/lab-api.sh" --profile test GET "${spelling}" >/dev/null 2>&1
+done
+HTTP_LOG="$(cat "${LAB}/evidence/http.log")"
+check_absent "a skill preview read logs no import token" "PREVIEW_PATH_TOKEN" "${HTTP_LOG}"
+check_contains "a skill preview read keeps the rest of its path" \
+  " GET skills/import/preview/(redacted)/skills/s1/resources/notes.md" "${HTTP_LOG}"
+check_contains "a skill preview read that a spelling hides is masked whole" " GET (redacted)" "${HTTP_LOG}"
+check "a skill preview read's bodies are markers" "3" "$(grep -c '^\[body omitted: credential-bearing route, [0-9]* bytes\]$' "${LAB}/evidence/http.log")"
+# A conversation's tool result can link a preview resource in any spelling; a 404 body can echo one.
+: >"${LAB}/evidence/http.log"
+ctl curl-queue "200\t{\"messages\":[{\"role\":\"tool\",\"content\":\"see /api/local/v1/%73kills/import/preview/LINK_PATH_TOKEN/x\"},{\"role\":\"tool\",\"content\":\"skills/import/preview/LINK_PATH_TOKEN/y\"}]}\n404\tMissing skills%2Fimport%2Fpreview%2FLINK_PATH_TOKEN\n"
+for path in chat/conversations/c1 chat/conversations/c2; do
+  "${API_ENV[@]}" "${REPO}/scripts/lab-api.sh" --profile test GET "${path}" >/dev/null 2>&1
+done
+HTTP_LOG="$(cat "${LAB}/evidence/http.log")"
+check_absent "a preview link inside a conversation logs no import token" "LINK_PATH_TOKEN" "${HTTP_LOG}"
+check_contains "a canonical preview link inside a conversation is masked in place" \
+  '"content": "skills/import/preview/(redacted)/y"' "${HTTP_LOG}"
+check "a preview link a spelling hides is a marker" "2" "$(grep -o 'body omitted: unmaskable secret path, [0-9]* bytes' "${LAB}/evidence/http.log" | wc -l)"
+# A valid frame whose serialized tool arguments were cut after a complete password records a marker in their place.
+: >"${LAB}/evidence/http.log"
+ctl curl-queue "200\t\n"
+"${API_ENV[@]}" "${REPO}/scripts/lab-api.sh" --profile test POST 'chat/hub?id=FRAME_HUB_TOKEN' \
+  "$(printf '{"type":2,"invocationId":"1","item":{"toolCall":{"arguments":"{\\"password\\":\\"CUT_ARGS_PASSWORD\\",\\"q"}}}\036')" \
+  >/dev/null 2>&1
+HTTP_LOG="$(cat "${LAB}/evidence/http.log")"
+check_absent "cut tool arguments in a valid frame leak no password" "CUT_ARGS_PASSWORD" "${HTTP_LOG}"
+check_absent "a frame POST leaks no connection token" "FRAME_HUB_TOKEN" "${HTTP_LOG}"
+check_contains "cut tool arguments are replaced by a marker" '"arguments": "[body omitted: unparseable JSON,' "${HTTP_LOG}"
+# A byte-order mark or zero-width character before JSON makes it unparseable as it stands; it is still judged as JSON:
+# complete and cut bodies, frames and serialized tool arguments, sent and answered.
+for prefix in '\xef\xbb\xbf' '\xe2\x80\x8b'; do
+  : >"${LAB}/evidence/http.log"
+  ctl curl-queue "200\t${prefix}{\"accessToken\":\"BOM_ANSWER_TOKEN\"}\n200\t${prefix}{\"accessToken\":\"BOM_CUT_ANSWER\",\"re\n200\t\n"
+  "${API_ENV[@]}" "${REPO}/scripts/lab-api.sh" --profile test POST agents \
+    "$(printf "${prefix}"'{"password":"BOM_BODY_PASSWORD"}')" >/dev/null 2>&1
+  "${API_ENV[@]}" "${REPO}/scripts/lab-api.sh" --profile test POST agents \
+    "$(printf "${prefix}"'{"password":"BOM_CUT_PASSWORD","q')" >/dev/null 2>&1
+  "${API_ENV[@]}" "${REPO}/scripts/lab-api.sh" --profile test POST 'chat/hub?id=x' \
+    "$(printf "${prefix}"'{"type":2,"item":{"toolCall":{"arguments":"'"${prefix}"'{\\"password\\":\\"BOM_ARGS_PASSWORD\\"}"}}}\036{"type":2,"item":{"toolCall":{"arguments":"'"${prefix}"'{\\"password\\":\\"BOM_CUT_ARGS\\",\\"q"}}}\036')" \
+    >/dev/null 2>&1
+  HTTP_LOG="$(cat "${LAB}/evidence/http.log")"
+  for sentinel in BOM_ANSWER_TOKEN BOM_CUT_ANSWER BOM_BODY_PASSWORD BOM_CUT_PASSWORD BOM_ARGS_PASSWORD BOM_CUT_ARGS; do
+    check_absent "JSON behind ${prefix} leaks nothing (${sentinel})" "${sentinel}" "${HTTP_LOG}"
+  done
+  check_contains "JSON behind ${prefix}: a body keeps its fields" '>> {"password": "(redacted)"}' "${HTTP_LOG}"
+  check_contains "JSON behind ${prefix}: an answer keeps its fields" '{"accessToken": "(redacted)"}' "${HTTP_LOG}"
+  check_contains "JSON behind ${prefix}: tool arguments keep their fields" '"arguments": "{\"password\": \"(redacted)\"}"' "${HTTP_LOG}"
+  check "JSON behind ${prefix}: cut request, answer and arguments are markers" "3" "$(grep -o 'body omitted: unparseable JSON' "${LAB}/evidence/http.log" | wc -l | tr -d ' ')"
+done
+# A transfer cut after a complete credential leaves JSON no field rule can parse; curl fails, so the call is HTTP 000.
+: >"${LAB}/evidence/http.log"
+echo 56 >"${CTL}/curl-exit"
+ctl curl-queue "200\t{\"accessToken\":\"CUT_LOGIN_TOKEN\",\"refreshTok\n200\t{\"items\":[{\"apiKey\":\"CUT_LIST_KEY\"},{\"na\n"
+out="$("${API_ENV[@]}" "${REPO}/scripts/lab-api.sh" --profile test POST auth/login '{"email":"a","password":"CUT_PASSWORD"}' 2>&1)"; status=$?
+check "a truncated login exits 1" "1" "${status}"
+check_contains "a truncated login reports HTTP 000" "[HTTP 000]" "${out}"
+"${API_ENV[@]}" "${REPO}/scripts/lab-api.sh" --profile test GET agents >/dev/null 2>&1
+rm -f "${CTL}/curl-exit"
+HTTP_LOG="$(cat "${LAB}/evidence/http.log")"
+for sentinel in CUT_LOGIN_TOKEN CUT_LIST_KEY CUT_PASSWORD; do
+  check_absent "a truncated body leaks nothing (${sentinel})" "${sentinel}" "${HTTP_LOG}"
+done
+check "both truncated calls are logged as HTTP 000" "2" "$(grep -c '^\[HTTP 000\]$' "${LAB}/evidence/http.log")"
+check_contains "a truncated body outside the credential routes logs a marker" \
+  "$(printf '[body omitted: unparseable JSON, 40 bytes]\n[HTTP 000]')" "${HTTP_LOG}"
 ctl curl-queue "200\tplain text body\n"
 "${API_ENV[@]}" "${REPO}/scripts/lab-api.sh" --profile test GET health >/dev/null 2>&1
 check_contains "a non-JSON body passes through unchanged" "plain text body" "$(cat "${LAB}/evidence/http.log")"
@@ -914,6 +1086,16 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
     def do_GET(self):
+        raw = sys.argv[1] + ".raw"
+        if os.path.exists(raw):
+            # An artifact download: the bytes of <port file>.raw, served as the content type in <port file>.raw-type.
+            data = open(raw, "rb").read()
+            self.send_response(200)
+            self.send_header("Content-Type", open(raw + "-type").read())
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
         if self.path.endswith("/model-fit/llamacpp/runtime"):
             # The llama.cpp runtime status: the JSON in <port file>.runtime.
             self.answer(json.load(open(sys.argv[1] + ".runtime")))
@@ -990,7 +1172,7 @@ driver.append_jsonl(Path(sys.argv[2]), {"event": "x", "payload": {"accessToken":
 driver.append_jsonl(Path(sys.argv[2]), {"event": "ToolCall", "payload": {
     "arguments": json.dumps({"path": "kept-path", "password": "sink-secret-6"}),
     "result": json.dumps([{"apiKey": "sink-secret-7"}]),
-    "text": "{not json sink-kept-8"}})
+    "text": "{not json sink-cut-8"}})
 ' "${REAL}/lab-driver.py" "${EV}/sink.jsonl" >/dev/null 2>&1
 SINK="$(cat "${EV}/sink.jsonl" 2>/dev/null)"
 check_contains "append_jsonl wrote the record" '"accessToken": "(redacted)"' "${SINK}"
@@ -998,7 +1180,8 @@ check_absent "append_jsonl never writes sink-secret-5" "sink-secret-5" "${SINK}"
 check_absent "a password inside a JSON-string arguments field is scrubbed" "sink-secret-6" "${SINK}"
 check_absent "an apiKey inside a JSON-string result array is scrubbed" "sink-secret-7" "${SINK}"
 check_contains "the JSON-string arguments keep their other fields" "kept-path" "${SINK}"
-check_contains "a string that only looks like JSON passes through unchanged" "sink-kept-8" "${SINK}"
+check_absent "a string that only looks like JSON is omitted whole" "sink-cut-8" "${SINK}"
+check_contains "a string that only looks like JSON leaves a marker" "[body omitted: unparseable JSON, 20 bytes]" "${SINK}"
 # runtime-ensure against the fake node: a recorded runtime is left alone; none installs the node-selected variant.
 NODE_URL="http://127.0.0.1:$(cat "${CTL}/node-port" 2>/dev/null)"
 POSTS="${CTL}/node-port.posts"
@@ -1030,6 +1213,117 @@ rm -f "${CTL}/node-port.expire-once"
 echo '{"installed":null}' >"${CTL}/node-port.runtime"
 runtime_ensure >/dev/null
 check "runtime status without selectedVariant => exit 1" "1" "$?"
+# lab-api.sh through the REAL curl against the fake node: what the node receives is what http.log classified.
+CURL_BIN="${TEMP_ROOT}/curl-bin"
+mkdir -p "${CURL_BIN}" "${REPO}/.tmp/lab/real/evidence"
+ln -s "$(python3 -c 'import sys; print(sys.executable)')" "${CURL_BIN}/python3"
+ln -s "$(command -v curl)" "${CURL_BIN}/curl"
+printf '{"baseUrl":"%s"}\n' "${NODE_URL}" >"${REPO}/.tmp/lab/real/manifest.json"
+echo "tok-real-opaque" >"${REPO}/.tmp/lab/real/token"
+REAL_LOG="${REPO}/.tmp/lab/real/evidence/http.log"
+# A .curlrc that adds a URL: the request must never reach it.
+printf 'url = "%s/api/local/v1/from-curlrc"\n' "${NODE_URL}" >"${FAKE_HOME}/.curlrc"
+real_api() { "${TEST_ENV[@]}" PATH="${CURL_BIN}:${PATH}" CURL_HOME="${FAKE_HOME}" "${REPO}/scripts/lab-api.sh" --profile real "$@"; }
+rm -f "${POSTS}"
+out="$(real_api POST mcp/servers '{"name":"docs","headers":{"Authorization":"Bearer REAL_MCP_SECRET"}}' 2>&1)"
+check "a real-curl MCP registration exits 0" "0" "$?"
+check "a real-curl MCP registration reaches the node once, at the route it names" \
+  "/api/local/v1/mcp/servers" "$(cut -f1 "${POSTS}" 2>/dev/null | paste -sd'|' -)"
+check_contains "a real-curl MCP registration sends its body" "REAL_MCP_SECRET" "$(cat "${POSTS}" 2>/dev/null)"
+check_absent "a real-curl MCP registration logs no header value" "REAL_MCP_SECRET" "$(cat "${REAL_LOG}")"
+check_contains "a real-curl MCP registration logs a request marker" \
+  ">> [body omitted: credential-bearing route," "$(cat "${REAL_LOG}")"
+# curl would expand a brace or bracket list into several URLs after log_call classified the literal path.
+for spelling in '{chat/conversations,mcp/servers}' 'mcp/{servers}' 'mcp/servers[1-2]' 'chat/[a]' 'mcp/servers}' '[x'; do
+  rm -f "${POSTS}"
+  : >"${REAL_LOG}"
+  out="$(real_api POST "${spelling}" '{"headers":{"Authorization":"Bearer GLOB_HEADER_SECRET"}}' 2>&1)"
+  check "a path with glob syntax ${spelling} => exit 2" "2" "$?"
+  check_contains "a path with glob syntax ${spelling} is refused by name" "curl glob syntax" "${out}"
+  check "a path with glob syntax ${spelling} sends nothing" "0" "$(count_lines "${POSTS}")"
+  check "a path with glob syntax ${spelling} logs nothing" "0" "$(count_lines "${REAL_LOG}")"
+  check_absent "a path with glob syntax ${spelling} never logs the header value" "GLOB_HEADER_SECRET" "$(cat "${REAL_LOG}")"
+done
+out="$(real_api settle '{a,b}' 1 2>&1)"
+check "settle with glob syntax in the conversation id => exit 2" "2" "$?"
+check_contains "settle with glob syntax is refused by name" "curl glob syntax" "${out}"
+out="$(real_api $'POST\nX-Forged: 1' chat/conversations '{}' 2>&1)"
+check "a method holding a line break => exit 2" "2" "$?"
+# A body starting with @ is sent as written, never as the content of the file it names.
+printf 'FILE_BODY_SECRET' >"${CTL}/body-file"
+rm -f "${POSTS}"
+real_api POST chat/conversations "@${CTL}/body-file" >/dev/null 2>&1
+check "a body starting with @ is sent literally" "@${CTL}/body-file" "$(cut -f2 "${POSTS}" 2>/dev/null)"
+# An artifact download is no JSON: a credential value anywhere in it, or a body that is not text, leaves a marker.
+artifact() {
+  printf '%b' "$2" >"${CTL}/node-port.raw"
+  printf '%s' "$1" >"${CTL}/node-port.raw-type"
+  : >"${REAL_LOG}"
+  real_api GET benchmarks/runs/r1/artifacts/a >"${CTL}/artifact.out" 2>&1; status=$?
+  out="$(tr -d '\0' <"${CTL}/artifact.out")"  # a binary body prints its NUL bytes
+  rm -f "${CTL}/node-port.raw" "${CTL}/node-port.raw-type"
+}
+for body in 'run finished\nkey: xeint_ART_SECRET_1 (rotate)\n' \
+  'notes\n-----BEGIN OPENSSH PRIVATE KEY-----\nART_SECRET_2\n-----END OPENSSH PRIVATE KEY-----\ntrailer\n' \
+  'proxy XEPRX_ART_SECRET_3'; do
+  artifact "text/plain; charset=utf-8" "${body}"
+  check "a text artifact holding a credential value is printed (${body:0:12})" "0" "${status}"
+  check_contains "a text artifact holding a credential value is fetched (${body:0:12})" "ART_SECRET_" "${out}"
+  check_absent "a text artifact never logs its credential value (${body:0:12})" "ART_SECRET_" "$(cat "${REAL_LOG}")"
+  check_contains "a text artifact holding a credential value logs a marker (${body:0:12})" \
+    "[body omitted: credential value," "$(cat "${REAL_LOG}")"
+done
+artifact "application/json" '{"name":"run","note":"key xemcp_ART_SECRET_4 here","n":1}'
+check_absent "a JSON string holding a credential value is never logged" "ART_SECRET_4" "$(cat "${REAL_LOG}")"
+check_contains "a JSON string holding a credential value is redacted, the rest kept" \
+  '{"name": "run", "note": "(redacted)", "n": 1}' "$(cat "${REAL_LOG}")"
+artifact "image/png" '\x89PNG\r\n\x1a\n\x00\x00ART_SECRET_5\xff\xfe'
+check "a binary artifact download exits 0" "0" "${status}"
+check_absent "a binary artifact never logs its bytes" "ART_SECRET_5" "$(cat "${REAL_LOG}")"
+check_contains "a binary artifact logs a marker" "[body omitted: not text," "$(cat "${REAL_LOG}")"
+artifact "text/plain" 'run finished in 4 s\n'
+check_contains "a text artifact without a credential value is logged as is" "run finished in 4 s" "$(cat "${REAL_LOG}")"
+# Proxy variables pointing at a listener: lab traffic and its credentials go to the loopback node, never to it.
+cat >"${TEMP_ROOT}/fake-proxy.py" <<'PROXY'
+import os, socket, sys
+server = socket.create_server(("127.0.0.1", 0))
+with open(sys.argv[1] + ".tmp", "w") as handle:
+    handle.write(str(server.getsockname()[1]))
+os.replace(sys.argv[1] + ".tmp", sys.argv[1])
+while True:
+    connection, _ = server.accept()
+    connection.settimeout(2)
+    try:
+        data = connection.recv(4096)
+    except OSError:
+        data = b""
+    with open(sys.argv[1] + ".log", "ab") as log:
+        log.write(b"CONNECTION " + data + b"\n")
+    connection.close()
+PROXY
+python3 "${TEMP_ROOT}/fake-proxy.py" "${CTL}/proxy-port" </dev/null >/dev/null 2>&1 &
+HELPER_PIDS+=("$!")
+for _ in $(seq 100); do [[ -s "${CTL}/proxy-port" ]] && break; "${SLEEP_BIN}" 0.05; done  # real-timer: server startup
+PROXY_URL="http://127.0.0.1:$(cat "${CTL}/proxy-port" 2>/dev/null)"
+PROXY_ENV=(-u no_proxy -u NO_PROXY http_proxy="${PROXY_URL}" HTTP_PROXY="${PROXY_URL}" https_proxy="${PROXY_URL}"
+  HTTPS_PROXY="${PROXY_URL}" all_proxy="${PROXY_URL}" ALL_PROXY="${PROXY_URL}")
+check "the fake proxy listens" "yes" "$([[ -s "${CTL}/proxy-port" ]] && echo yes || echo no)"
+rm -f "${POSTS}"
+out="$("${TEST_ENV[@]}" PATH="${CURL_BIN}:${PATH}" CURL_HOME="${FAKE_HOME}" env "${PROXY_ENV[@]}" \
+  "${REPO}/scripts/lab-api.sh" --profile real POST chat/conversations '{"title":"PROXY_BODY_SECRET"}' 2>&1)"
+check "a call under proxy variables exits 0" "0" "$?"
+check_contains "a call under proxy variables reaches the node" "PROXY_BODY_SECRET" "$(cat "${POSTS}" 2>/dev/null)"
+check_contains "a call under proxy variables sends the bearer token to the node" "Bearer tok-real-opaque" \
+  "$(cat "${POSTS}" 2>/dev/null)"
+rm -f "${POSTS}"
+records="$(env "${PROXY_ENV[@]}" python3 "${REAL}/gpu-smoke-driver.py" --base-url "${NODE_URL}" auth \
+  --email a@b.test --password PROXY_PASSWORD_SECRET 2>&1)"
+check "a driver login under proxy variables exits 0" "0" "$?"
+check_contains "a driver login under proxy variables reaches the node" "PROXY_PASSWORD_SECRET" \
+  "$(cat "${POSTS}" 2>/dev/null)"
+check_contains "a driver login under proxy variables gets the node's token" $'token\ttok-renewed-runtime' "${records}"
+check "the proxy receives no connection" "0" "$(count_lines "${CTL}/proxy-port.log")"
+rm -f "${FAKE_HOME}/.curlrc"
 # model-ensure: cloud rows do not count as a GGUF, another llama.cpp row does.
 model_ensure_listing() {
   python3 -c '

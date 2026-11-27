@@ -91,7 +91,7 @@ public sealed class AgentHomeRunCommandStopTests : IDisposable
             MaxRunSeconds = 900
         };
         var reader = new CoderWorkspaceReader(provider,
-            new StubIdentityProvider(),
+            new FixedAgentHomeIdentityProvider(Owner, Node),
             new AgentHomeExecutionLeaseManager(),
             new SensitiveFileExclusionService(),
             Options.Create(new CoderOptions()),
@@ -193,15 +193,5 @@ public sealed class AgentHomeRunCommandStopTests : IDisposable
         public void Dispose()
         {
         }
-    }
-
-    private sealed class StubIdentityProvider : IAgentHomeIdentityProvider
-    {
-        public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(new AgentHomeOwnerIdentity
-            {
-                OwnerUserId = Owner,
-                NodeId = Node
-            });
     }
 }

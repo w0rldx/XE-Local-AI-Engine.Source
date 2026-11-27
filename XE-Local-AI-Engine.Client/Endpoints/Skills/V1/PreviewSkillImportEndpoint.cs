@@ -4,6 +4,7 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Skills.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Agents;
+using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
 /// <summary>
@@ -16,10 +17,10 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 /// </remarks>
 public sealed class PreviewSkillImportEndpoint : Endpoint<SkillImportPreviewRequest, SkillImportPreviewResponse>
 {
-    private readonly ISkillImportService _importService;
+    private readonly SkillImportService _importService;
     private readonly int _maxArchiveBytes;
 
-    public PreviewSkillImportEndpoint(ISkillImportService importService, SkillImportOptions options)
+    public PreviewSkillImportEndpoint(SkillImportService importService, SkillImportOptions options)
     {
         ArgumentNullException.ThrowIfNull(importService);
         _importService = importService;

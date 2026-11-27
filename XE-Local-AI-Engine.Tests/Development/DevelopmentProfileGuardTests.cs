@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
-using System.Diagnostics;
 using System.Text;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -341,32 +340,11 @@ public sealed class DevelopmentProfileGuardTests : IDisposable
         var repository = Path.Combine(_root, "repo");
         Directory.CreateDirectory(repository);
         await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "guard fixture\n");
-        await RunGitAsync(repository, "init", "--initial-branch=main");
-        await RunGitAsync(repository, "config", "user.email", "development-guard@example.invalid");
-        await RunGitAsync(repository, "config", "user.name", "Development Guard Test");
-        await RunGitAsync(repository, "add", "-A", "--", ".");
-        await RunGitAsync(repository, "commit", "-m", "guard fixture");
+        await TestGit.RunAsync(repository, "init", "--initial-branch=main");
+        await TestGit.RunAsync(repository, "config", "user.email", "development-guard@example.invalid");
+        await TestGit.RunAsync(repository, "config", "user.name", "Development Guard Test");
+        await TestGit.RunAsync(repository, "add", "-A", "--", ".");
+        await TestGit.RunAsync(repository, "commit", "-m", "guard fixture");
         return repository;
-    }
-
-    private static async Task RunGitAsync(string workingDirectory, params string[] arguments)
-    {
-        var start = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = workingDirectory,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        };
-        foreach (var argument in arguments)
-        {
-            start.ArgumentList.Add(argument);
-        }
-
-        using var process = Process.Start(start) ?? throw new InvalidOperationException("git could not be started.");
-        await process.WaitForExitAsync();
-        if (process.ExitCode != 0)
-        {
-            throw new InvalidOperationException($"git {string.Join(' ', arguments)} failed: {await process.StandardError.ReadToEndAsync()}");
-        }
     }
 }

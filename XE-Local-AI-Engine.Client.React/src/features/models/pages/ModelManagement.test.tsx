@@ -1,9 +1,7 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the SignalR client the live download-progress hook (useActiveGgufDownloads) opens on mount. The page renders the
@@ -140,7 +138,7 @@ import "@/i18n";
 
 import { useGgufBrowseStore } from "@/core/model-downloads/stores/GgufBrowseStore";
 import { ModelManagement } from "@/features/models/pages/ModelManagement";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { renderWithProviders } from "@/test/RenderWithProviders";
 
 const hardwareProfile = {
 	totalRamBytes: 34_359_738_368,
@@ -152,15 +150,6 @@ const hardwareProfile = {
 	cpuCores: 16,
 	freeDiskBytes: 500_000_000_000,
 };
-
-function renderWithProviders(ui: ReactElement) {
-	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
-		</MantineProvider>,
-	);
-}
 
 // Opens the per-model details dialog by clicking the model-name button in the table, then returns the dialog element.
 async function openDetailsDialog(modelName: string): Promise<HTMLElement> {

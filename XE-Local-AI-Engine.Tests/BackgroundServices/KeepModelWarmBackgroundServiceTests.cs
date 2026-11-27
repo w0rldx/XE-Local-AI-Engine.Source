@@ -455,21 +455,4 @@ public sealed class KeepModelWarmBackgroundServiceTests
 
         public RecordingLogger<KeepModelWarmBackgroundService> Logger { get; }
     }
-
-    private sealed class ManualTimeProvider : TimeProvider
-    {
-        private long _timestamp;
-
-        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
-
-        public override long GetTimestamp()
-        {
-            return _timestamp;
-        }
-
-        public void Advance(TimeSpan interval)
-        {
-            _timestamp += interval.Ticks;
-        }
-    }
 }

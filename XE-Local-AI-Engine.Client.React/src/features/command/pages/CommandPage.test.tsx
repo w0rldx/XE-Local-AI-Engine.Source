@@ -21,7 +21,7 @@ import {
 	graphWorkflowTestIds,
 	makeNodeRun,
 } from "@/features/graphWorkflows/test/GraphWorkflowFixtures";
-import type { FakeCaptureSource } from "@/features/transcription/capture/FakeCaptureSource";
+import type { FakeCaptureSource } from "@/test/FakeCaptureSource";
 import de from "@/locales/de.json";
 import { localApiPath, problemDetailsRoute } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
@@ -82,7 +82,7 @@ const microphones = vi.hoisted(() => ({ created: [] as FakeCaptureSource[] }));
 
 // jsdom has no AudioContext or getUserMedia; the repo's capture fake stands in for the microphone.
 vi.mock("@/core/audio/capture/MicrophoneCaptureSource", async () => {
-	const { FakeCaptureSource } = await import("@/features/transcription/capture/FakeCaptureSource");
+	const { FakeCaptureSource } = await import("@/test/FakeCaptureSource");
 	return {
 		MicrophoneCaptureSource: class extends FakeCaptureSource {
 			constructor(channel: "mono") {

@@ -14,19 +14,9 @@ import type { ChangeEvent, KeyboardEvent, MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 
 import { conversationDisplayTitle } from "@/core/chat/models/ConversationDisplayTitle";
-import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { formatTimestamp, relativeTimeFormat } from "@/core/formatting/TimeFormatting";
 import type { ChatExportFormat } from "@/features/chat/models/ChatExportFile";
 import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
-
-// Narrow style keeps the label as short as the list row needs ("5m ago", "vor 5 m"); `auto` turns zero seconds into
-// "now"/"jetzt". A malformed stored language tag throws a RangeError, so it falls back to the environment's default.
-function relativeTimeFormat(language: string | undefined): Intl.RelativeTimeFormat {
-	try {
-		return new Intl.RelativeTimeFormat(language, { numeric: "auto", style: "narrow" });
-	} catch {
-		return new Intl.RelativeTimeFormat(undefined, { numeric: "auto", style: "narrow" });
-	}
-}
 
 function formatRelative(iso: string | undefined, language: string | undefined): string {
 	if (!iso) {

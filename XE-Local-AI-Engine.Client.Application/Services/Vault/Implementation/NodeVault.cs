@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Vault.Implementation;
 
 using System.Security.Cryptography;
-using XE_Local_AI_Engine.Client.Services.Persistence;
+using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
@@ -26,13 +26,13 @@ public sealed class NodeVault : INodeVault, IDisposable
     private readonly SemaphoreSlim _gate = new(initialCount: 1, maxCount: 1);
     private readonly ILogger<NodeVault> _logger;
     private readonly string _path;
-    private readonly INodeOperatorSecretProvider _secretProvider;
+    private readonly NodeOperatorSecretProvider _secretProvider;
     private readonly TimeProvider _timeProvider;
     private volatile VaultState _state;
 
     public NodeVault(IConfiguration configuration,
         INodeDataDirectory dataDirectory,
-        INodeOperatorSecretProvider secretProvider,
+        NodeOperatorSecretProvider secretProvider,
         TimeProvider timeProvider,
         ILogger<NodeVault> logger)
     {

@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Cli.Tests.Discovery;
 using System.Globalization;
 using System.Text.Json;
 using XE_Local_AI_Engine.Cli.Discovery;
+using XE_Local_AI_Engine.Client.Testing.Fakes;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Unit)]
@@ -55,8 +56,8 @@ public sealed class NodeLocatorTests
     [Test]
     public async Task LocateAsync_WhenReadyJsonIsValidAndItsProcessLives_ReturnsItsOrigin()
     {
-        using var directory = new TemporaryDirectory();
-        await directory.WriteReadyAsync(ValidReady);
+        using var directory = new TempDirectory("xe-cli-ready");
+        await WriteReadyAsync(directory, ValidReady);
 
         var node = await NodeLocator.LocateAsync(explicitUrl: null, environmentUrl: null, () => directory.Path, static pid => pid == LivePid, CancellationToken.None);
 
@@ -80,10 +81,10 @@ public sealed class NodeLocatorTests
     [Arguments("dead pid", "pid=777", NodeDiscoveryFailure.StaleReadyFile)]
     public async Task LocateAsync_WhenReadyJsonIsNotTrustworthy_FailsWithItsReason(string row, string? edit, NodeDiscoveryFailure expected)
     {
-        using var directory = new TemporaryDirectory();
+        using var directory = new TempDirectory("xe-cli-ready");
         if (edit is not null)
         {
-            await directory.WriteReadyAsync(edit.StartsWith('{') || edit == "null" ? edit : Edited(edit));
+            await WriteReadyAsync(directory, edit.StartsWith('{') || edit == "null" ? edit : Edited(edit));
         }
 
         var failure = await AssertEx.ThrowsAsync<NodeDiscoveryException>(() =>
@@ -162,21 +163,7 @@ public sealed class NodeLocatorTests
         });
     }
 
-    private sealed class TemporaryDirectory : IDisposable
-    {
-        public TemporaryDirectory()
-        {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"xe-cli-ready-{Guid.NewGuid():N}");
-            Directory.CreateDirectory(Path);
-        }
-
-        public string Path { get; }
-
-        public Task WriteReadyAsync(string content) =>
-            File.WriteAllTextAsync(System.IO.Path.Combine(Path, NodeLocator.ReadyFileName),
-                content.Replace("{dir}", JsonEncodedText.Encode(Path).ToString(), StringComparison.Ordinal));
-
-        public void Dispose() =>
-            Directory.Delete(Path, recursive: true);
-    }
+    private static Task WriteReadyAsync(TempDirectory directory, string content) =>
+        File.WriteAllTextAsync(directory.FilePath(NodeLocator.ReadyFileName),
+            content.Replace("{dir}", JsonEncodedText.Encode(directory.Path).ToString(), StringComparison.Ordinal));
 }

@@ -4,9 +4,9 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Agents;
 
-public sealed class BenchmarkEligibilityPolicy : IBenchmarkEligibilityPolicy
+public static class BenchmarkEligibilityPolicy
 {
-    public ResolvedAgentRuntime Apply(ResolvedAgentRuntime runtime)
+    public static ResolvedAgentRuntime Apply(ResolvedAgentRuntime runtime)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         if (runtime.Kind != AgentDefinitionKind.Single)

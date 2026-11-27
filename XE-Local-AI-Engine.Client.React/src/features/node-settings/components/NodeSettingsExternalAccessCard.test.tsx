@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NodeSettingsExternalAccessCard } from "@/features/node-settings/components/NodeSettingsExternalAccessCard";
 import { type NodeSettingsFieldsForm, toNodeSettingsFieldsForm } from "@/features/node-settings/models/NodeSettingsFieldsModel";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 
 // Deterministic i18n: t returns the supplied default so the human copy is asserted, not the raw key. This file asserts
 // CONTROL STATE and CALLBACKS, never prose — the copy itself is asserted against the real bundles in
@@ -16,33 +16,6 @@ vi.mock("react-i18next", () => ({
 		t: (key: string, fallback?: string) => fallback ?? key,
 	}),
 }));
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-	// jsdom does not implement scrollIntoView; Mantine's Combobox calls it on a timer when a dropdown opens, which
-	// surfaces as an unhandled error AFTER the test that opened it.
-	Element.prototype.scrollIntoView = vi.fn();
-}
 
 function renderCard(formOverrides: Partial<NodeSettingsFieldsForm> = {}): {
 	onChange: ReturnType<typeof vi.fn>;

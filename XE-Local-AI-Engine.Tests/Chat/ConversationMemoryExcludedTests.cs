@@ -136,22 +136,8 @@ public sealed class ConversationMemoryExcludedTests : IDisposable
             conversationId);
     }
 
-    private async Task<ServiceProvider> BuildProviderAsync(string fileName)
-    {
-        var databasePath = GetDatabasePath(fileName);
-        var services = new ServiceCollection();
-        services.AddScoped<INodeSqliteKeyHolder, NullNodeSqliteKeyHolder>();
-        services.AddDbContext<NodeChatDbContext>(options => options.UseSqlite($"Data Source={databasePath}"));
-        services.AddSingleton<NodeChatPersistenceWriter>();
-
-        var provider = services.BuildServiceProvider(true);
-        await using var scope = provider.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        await dbContext.Database.EnsureDeletedAsync();
-        await dbContext.Database.EnsureCreatedAsync();
-
-        return provider;
-    }
+    private Task<ServiceProvider> BuildProviderAsync(string fileName) =>
+        NodeChatTestProvider.BuildAsync(GetDatabasePath(fileName), pooled: true);
 
     private static NodeChatPersistenceService CreateService(ServiceProvider provider)
     {

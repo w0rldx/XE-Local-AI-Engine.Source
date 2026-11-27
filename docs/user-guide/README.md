@@ -79,7 +79,7 @@ you to guess.*
 
 A graphics card is **optional**. Without one the app still works; answers just arrive more slowly.
 
-> **Windows prerequisite:** install the x64 ASP.NET Core Runtime 10.0.12 or a newer .NET 10 servicing patch. The
+> **Windows prerequisite:** install the x64 ASP.NET Core Runtime 10.0.15 or a newer .NET 10 servicing patch. The
 > Windows Portable ZIP does not bundle .NET. Linux remains self-contained and needs no system .NET installation.
 
 > **Windows prerequisite:** install the Microsoft Edge **WebView2 Evergreen Runtime** as well. The app's own window

@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.AgentHome;
 
-using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.DependencyInjection;
@@ -699,7 +698,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             options,
             runtimeSettings,
             new FakeNodeDataDirectory(agentHomeStateRoot),
-            new StubIdentityProvider(),
+            new FixedAgentHomeIdentityProvider("owner-a", "node-1"),
             new AgentHomeRunApplyGuard(),
             scopeFactory.GetRequiredService<IServiceScopeFactory>(),
             NullLogger<NodePatchApplyService>.Instance);
@@ -1552,7 +1551,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
 
         await SeedHostAsync(hostRoot, ("src/App.cs", before.Replace("l19\n", "l19-local\n", StringComparison.Ordinal)));
         await SeedHostAsync(hostRoot, ("staged.txt", "staged locally\n"));
-        await GitOkAsync(hostRoot, "add", "staged.txt");
+        await TestGit.RunAsync(hostRoot, "add", "staged.txt");
 
         // Back to the committed bytes in the WORK TREE, so the index alone differs and the patch still applies.
         await SeedHostAsync(hostRoot, ("staged.txt", "s\n"), ("unrelated.txt", "locally edited\n"));
@@ -1698,8 +1697,8 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         Directory.CreateDirectory(hostRoot);
         harness.Resolver.Add(Guid.NewGuid(), "repo-01", hostRoot);
         var patch = await GenerateGPatchAsync("repo-01", hostRoot, ("src/App.cs", "alpha\n", "alpha\nbravo\n"));
-        await GitOkAsync(parentRoot, "init");
-        await GitOkAsync(parentRoot, "config", "core.worktree", parentRoot);
+        await TestGit.RunAsync(parentRoot, "init");
+        await TestGit.RunAsync(parentRoot, "config", "core.worktree", parentRoot);
         await File.WriteAllTextAsync(Path.Combine(hostRoot, ".git"), $"gitdir: {Path.Combine(parentRoot, ".git")}\n");
         await WritePatchAsync(harness, "run-skipped", patch);
         var request = new NodePatchApplyRequest
@@ -2206,12 +2205,12 @@ public sealed class NodePatchApplyServiceTests : IDisposable
 
         File.Delete(Path.Combine(hostRoot, "sub"));
         await InitHostRepositoryAsync(hostRoot);
-        await GitOkAsync(hostRoot,
+        await TestGit.RunAsync(hostRoot,
             "-c", "protocol.file.allow=always",
             "-c", "user.email=agent-home@localhost",
             "-c", "user.name=AgentHome",
             "submodule", "add", "--quiet", inner, "sub");
-        await GitOkAsync(hostRoot, "-c", "user.email=agent-home@localhost", "-c", "user.name=AgentHome", "commit", "-m", "add submodule");
+        await TestGit.RunAsync(hostRoot, "-c", "user.email=agent-home@localhost", "-c", "user.name=AgentHome", "commit", "-m", "add submodule");
 
         // Dirty the submodule's own work tree, which is what makes the parent report `sub` as modified.
         await WriteTextAsync(Path.Combine(hostRoot, "sub", "i.txt"), "inner changed\n");
@@ -2295,11 +2294,11 @@ public sealed class NodePatchApplyServiceTests : IDisposable
     /// <summary>Turns a seeded host folder into a committed git work tree, so its later drift is measurable.</summary>
     private static async Task InitHostRepositoryAsync(string hostRoot)
     {
-        await GitOkAsync(hostRoot, "init");
-        await GitOkAsync(hostRoot, "config", "core.autocrlf", "false");
-        await GitOkAsync(hostRoot, "config", "core.filemode", "false");
-        await GitOkAsync(hostRoot, "add", "-A");
-        await GitOkAsync(hostRoot, "-c", "user.email=agent-home@localhost", "-c", "user.name=AgentHome", "commit", "-m", "host baseline", "--allow-empty");
+        await TestGit.RunAsync(hostRoot, "init");
+        await TestGit.RunAsync(hostRoot, "config", "core.autocrlf", "false");
+        await TestGit.RunAsync(hostRoot, "config", "core.filemode", "false");
+        await TestGit.RunAsync(hostRoot, "add", "-A");
+        await TestGit.RunAsync(hostRoot, "-c", "user.email=agent-home@localhost", "-c", "user.name=AgentHome", "commit", "-m", "host baseline", "--allow-empty");
     }
 
     /// <summary>
@@ -2319,7 +2318,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
 
         // Staged before the diff, the way the export stages before it diffs: `git diff HEAD` cannot see a file
         // git has never been told about, so an unstaged add produces an EMPTY patch.
-        await GitOkAsync(selected, "add", "-A");
+        await TestGit.RunAsync(selected, "add", "-A");
         return await DiffAsync(selected);
     }
 
@@ -2353,7 +2352,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
                 options,
                 runtimeSettings,
                 new FakeNodeDataDirectory(agentHomeStateRoot),
-                new StubIdentityProvider(),
+                new FixedAgentHomeIdentityProvider("owner-a", "node-1"),
                 applyGuard,
                 scopeFactory.GetRequiredService<IServiceScopeFactory>(),
                 NullLogger<NodePatchApplyService>.Instance);
@@ -2429,24 +2428,20 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         return await DiffAsync(selected);
     }
 
-    private static async Task<string> DiffAsync(string repoRoot)
-    {
-        var (exitCode, standardOutput, standardError) = await GitAsync(repoRoot, PatchDiffArgs);
-        AssertEx.Equal(expected: 0, exitCode, $"git diff failed: {standardError}");
-        return standardOutput;
-    }
+    private static Task<string> DiffAsync(string repoRoot) =>
+        TestGit.RunAsync(repoRoot, PatchDiffArgs);
 
     private static async Task InitBaselineAsync(string repoRoot)
     {
-        await GitOkAsync(repoRoot, "init");
-        await GitOkAsync(repoRoot, "config", "core.autocrlf", "false");
-        await GitOkAsync(repoRoot, "config", "core.filemode", "false");
+        await TestGit.RunAsync(repoRoot, "init");
+        await TestGit.RunAsync(repoRoot, "config", "core.autocrlf", "false");
+        await TestGit.RunAsync(repoRoot, "config", "core.filemode", "false");
 
         // The export runs every git call with core.quotePath=false, so a non-ASCII name reaches the patch as its
         // own bytes. A fixture that let git C-quote it would generate a patch shape the export never produces.
-        await GitOkAsync(repoRoot, "config", "core.quotePath", "false");
-        await GitOkAsync(repoRoot, "add", "-A");
-        await GitOkAsync(repoRoot,
+        await TestGit.RunAsync(repoRoot, "config", "core.quotePath", "false");
+        await TestGit.RunAsync(repoRoot, "add", "-A");
+        await TestGit.RunAsync(repoRoot,
             "-c", "user.email=agent-home@localhost",
             "-c", "user.name=AgentHome",
             "commit", "-m", "baseline", "--allow-empty");
@@ -2505,40 +2500,6 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             new AgentHomeRunExecutionRegistry(),
             harness.ApplyGuard,
             NullLogger<AgentHomeRunDeleteService>.Instance);
-
-    private static async Task GitOkAsync(string repoRoot, params string[] args)
-    {
-        var (exitCode, _, standardError) = await GitAsync(repoRoot, args);
-        AssertEx.Equal(expected: 0, exitCode, $"git {string.Join(separator: ' ', args)} failed: {standardError}");
-    }
-
-    private static async Task<(int ExitCode, string StandardOutput, string StandardError)> GitAsync(string repoRoot, IReadOnlyList<string> args)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "git",
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            WorkingDirectory = repoRoot,
-            StandardOutputEncoding = Encoding.UTF8
-        };
-        foreach (var arg in args)
-        {
-            startInfo.ArgumentList.Add(arg);
-        }
-
-        using var process = new Process
-        {
-            StartInfo = startInfo
-        };
-        process.Start();
-        var stdoutTask = process.StandardOutput.ReadToEndAsync();
-        var stderrTask = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
-        return (process.ExitCode, await stdoutTask, await stderrTask);
-    }
 
     private string NewTempDir()
     {
@@ -2711,18 +2672,6 @@ public sealed class NodePatchApplyServiceTests : IDisposable
                 HostPath = hostPath,
                 Mode = SelectedFolderMode.Copy
             };
-        }
-    }
-
-    private sealed class StubIdentityProvider : IAgentHomeIdentityProvider
-    {
-        public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(new AgentHomeOwnerIdentity
-            {
-                OwnerUserId = "owner-a",
-                NodeId = "node-1"
-            });
         }
     }
 }

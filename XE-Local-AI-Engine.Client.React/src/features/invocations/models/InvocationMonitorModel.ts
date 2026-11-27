@@ -1,5 +1,6 @@
 import type { TFunction } from "i18next";
 
+import { formatNumber } from "@/core/formatting/NumberFormatting";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 
 // Domain view-models for the invocation monitor. The generated OpenAPI responses are the single source of truth
@@ -75,17 +76,20 @@ export function formatInvocationTimestamp(value: string | null | undefined): str
 	return formatTimestamp(date.getTime());
 }
 
+// Exactly one decimal in the UI language ("1,5 s" in German), ungrouped: a duration reads as one figure.
+const oneDecimal: Intl.NumberFormatOptions = { minimumFractionDigits: 1, maximumFractionDigits: 1, useGrouping: false };
+
 export function formatInvocationDuration(durationMs: number | null | undefined): string {
 	if (durationMs === null || durationMs === undefined || !Number.isFinite(durationMs) || durationMs < 0) {
 		return invocationEmptyValue;
 	}
 
 	if (durationMs >= 60_000) {
-		return `${(durationMs / 60_000).toFixed(1)} min`;
+		return `${formatNumber(durationMs / 60_000, oneDecimal)} min`;
 	}
 
 	if (durationMs >= 1000) {
-		return `${(durationMs / 1000).toFixed(1)} s`;
+		return `${formatNumber(durationMs / 1000, oneDecimal)} s`;
 	}
 
 	return `${Math.round(durationMs)} ms`;

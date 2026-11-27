@@ -256,7 +256,7 @@ public sealed class AgentHomeToolResultContainmentTests : IDisposable
         var patchService = new AgentHomePatchService(provider, runtimeSettings, clock, NullLogger<AgentHomePatchService>.Instance);
 
         var reader = new CoderWorkspaceReader(provider,
-            new StaticIdentityProvider(),
+            new FixedAgentHomeIdentityProvider("owner-containment", "node-containment"),
             leases,
             new SensitiveFileExclusionService(),
             Options.Create(new CoderOptions()),
@@ -275,7 +275,7 @@ public sealed class AgentHomeToolResultContainmentTests : IDisposable
 
         var service = new AgentHomeService(manifestService,
             provider,
-            new StaticIdentityProvider(),
+            new FixedAgentHomeIdentityProvider("owner-containment", "node-containment"),
             leases,
             new AgentHomeRunExecutionRegistry(),
             isolation,
@@ -407,18 +407,6 @@ public sealed class AgentHomeToolResultContainmentTests : IDisposable
 
         public void Dispose()
         {
-        }
-    }
-
-    private sealed class StaticIdentityProvider : IAgentHomeIdentityProvider
-    {
-        public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(new AgentHomeOwnerIdentity
-            {
-                OwnerUserId = "owner-containment",
-                NodeId = "node-containment"
-            });
         }
     }
 

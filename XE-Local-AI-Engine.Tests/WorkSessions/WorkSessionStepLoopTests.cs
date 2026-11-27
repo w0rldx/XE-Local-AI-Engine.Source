@@ -871,7 +871,7 @@ public sealed class WorkSessionStepLoopTests
                 publisher)
         };
 
-        var agentId = await WorkSessionServiceTests.SeedAgentAsync(factory, "tool-capable-model");
+        var agentId = await WorkSessionTestSupport.SeedAgentAsync(factory, "tool-capable-model");
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId, agentDefinitionId: agentId);
         await SetAllowListAsync(factory.Services, "some-other-model");
         var fake = ResolveStream(factory, ref stream);

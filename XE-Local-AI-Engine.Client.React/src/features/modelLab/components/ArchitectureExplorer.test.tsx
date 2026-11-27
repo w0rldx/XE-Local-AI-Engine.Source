@@ -18,7 +18,6 @@ import {
 	getModelLabExperimentTraceQueryKey,
 	listModelLabExperimentsQueryKey,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { zGetModelLabArchitectureResponse } from "@/core/api/generated/zod.gen";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { ArchitectureExplorer } from "@/features/modelLab/components/ArchitectureExplorer";
 import modelLabEn from "@/features/modelLab/locales/model-lab-en.json";
@@ -29,6 +28,7 @@ import {
 	type ModelLabPatch,
 } from "@/features/modelLab/models/ModelLabNavigation";
 import { loadModelLabStrings } from "@/features/modelLab/models/ModelLabStrings";
+import { openOptions } from "@/test/ChooseOption";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
@@ -288,19 +288,6 @@ function nextTabStop(from: HTMLElement): HTMLElement | undefined {
 		(element) => element.tabIndex >= 0 && !element.hasAttribute("disabled"),
 	);
 	return stops[stops.indexOf(from) + 1];
-}
-
-// Opens a select's dropdown and returns its listbox.
-async function openOptions(label: RegExp): Promise<HTMLElement> {
-	const select = await screen.findByRole("combobox", { name: label });
-	fireEvent.click(select);
-	return waitFor(() => {
-		const element = document.getElementById(select.getAttribute("aria-controls") ?? "");
-		if (element === null) {
-			throw new Error("the dropdown is not open yet");
-		}
-		return element;
-	});
 }
 
 // Picks an option and returns every option the dropdown offered.
@@ -2366,35 +2353,5 @@ describe("ArchitectureExplorer routed markers", () => {
 		expect(await screen.findByRole("button", { name: "Block 1: Full attention" })).toBeTruthy();
 		expect(routing.requests).toBe(0);
 		expect(screen.queryByTestId("model-lab-architecture-routing-missing")).toBeNull();
-	});
-});
-
-// The node passes a header value only within 0..2^53-1 (larger ones as null); the generated validator agrees at the edge.
-describe("architecture response validator", () => {
-	const values = {
-		fileType: "Q4_K_M",
-		declaredParamCount: Number.MAX_SAFE_INTEGER,
-		blockCount: 25,
-		nextnPredictLayers: 1,
-		splitCount: null,
-		attentionHeadCount: 8,
-		attentionHeadCountKv: 2,
-		attentionKeyLength: 256,
-		attentionValueLength: 256,
-		embeddingLength: 1024,
-		contextLength: 262144,
-		expertCount: 0,
-		expertUsedCount: null,
-		fullAttentionInterval: 4,
-	};
-
-	it("accepts the largest safe integer, zero and null values", () => {
-		expect(zGetModelLabArchitectureResponse.safeParse({ ...detailed, hyperparameters: values }).success).toBe(true);
-		expect(zGetModelLabArchitectureResponse.safeParse({ ...detailed, hyperparameters: null }).success).toBe(true);
-	});
-
-	it("rejects a value past the safe integer range", () => {
-		const unsafe = { ...values, declaredParamCount: Number.MAX_SAFE_INTEGER + 1 };
-		expect(zGetModelLabArchitectureResponse.safeParse({ ...detailed, hyperparameters: unsafe }).success).toBe(false);
 	});
 });

@@ -10,20 +10,9 @@ superseded or overtaken. Nothing here is maintained as current.
 
 | Date | Document | Subject | Status |
 |---|---|---|---|
-| 2026-07-26 | [2026-07-26-evidence-summary.md](2026-07-26-evidence-summary.md) | Local-inference performance evidence summary for the framework upgrade baseline | Historical snapshot |
-| 2026-07-26 | [2026-07-26-lane4-no-change.md](2026-07-26-lane4-no-change.md) | Lane 4 embedding/reranker scheduling experiment — corrected no-change decision | Historical snapshot |
-| 2026-07-26 | [2026-07-26-model-role-audit.md](2026-07-26-model-role-audit.md) | `ModelRole` enumeration and scope audit | Historical snapshot |
 | 2026-07-28 | [technical-security-architecture/](technical-security-architecture/README.md) | Technical and Security Architecture Dossier — six chapters covering trust boundaries, sensitive assets, threat scenarios, operations, supply chain and claim traceability | Historical snapshot |
-| 2026-07-31 | [2026-07-31-live-evaluation-lane-merge.md](2026-07-31-live-evaluation-lane-merge.md) | Live evaluation lane merge | Historical snapshot |
-| 2026-08-07 | [2026-08-07-ai-inference-stack-performance-audit.md](2026-08-07-ai-inference-stack-performance-audit.md) | AI/inference stack performance and efficiency audit | Historical snapshot |
-| 2026-08-07 | [2026-08-07-ai-inference-stack-performance-audit-v2.md](2026-08-07-ai-inference-stack-performance-audit-v2.md) | AI/inference stack performance audit v2 — verification and extension | Historical snapshot |
 | 2026-08-07 | [2026-08-07-open-source-readiness-review.md](2026-08-07-open-source-readiness-review.md) | Open-source release readiness and compatibility review | Historical snapshot |
-| 2026-08-07 | [2026-08-07-streaming-budget-redesign.md](2026-08-07-streaming-budget-redesign.md) | Streaming budget redesign — delta-only protocol, O(delta) persistence, bounded streams, disconnect grace | Historical snapshot; the design it records shipped |
-| 2026-08-08 | [2026-08-08-documentation-disposition.md](2026-08-08-documentation-disposition.md) | Documentation disposition audit — per-file classification and disposition | Historical snapshot |
-| 2026-08-12 | [2026-08-12-final-inference-optimization-audit.md](2026-08-12-final-inference-optimization-audit.md) | Final local-inference optimization audit | Historical snapshot |
-| 2026-08-13 | [2026-08-13-agent-harness-architecture-audit.md](2026-08-13-agent-harness-architecture-audit.md) | Agent-harness architecture audit | Historical snapshot |
 | 2026-08-22 | [2026-08-22-llama-server-process-supervisor-decomposition.md](2026-08-22-llama-server-process-supervisor-decomposition.md) | `LlamaServerProcessSupervisor` decomposition report | Historical snapshot |
-| 2026-09-15 | [2026-09-15-agent-framework-completion-evidence.md](2026-09-15-agent-framework-completion-evidence.md) | Microsoft Agent Framework 1.15 upgrade completion evidence | Historical snapshot |
 | 2026-10-02 | [2026-10-02-native-desktop-1.0-delivery-record.md](2026-10-02-native-desktop-1.0-delivery-record.md) | Native desktop 1.0 delivery and evidence | Historical snapshot |
 
 The dossier chapters are numbered and meant to be read in order; its own

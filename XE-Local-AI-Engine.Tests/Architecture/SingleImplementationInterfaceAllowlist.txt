@@ -1,0 +1,40 @@
+# Single-implementation interfaces kept in Client.Application — the allowlist for SingleImplementationInterfaceTests.
+#
+# Format: <interface name>|<why it stays>, one line per interface, sorted.
+#
+# An interface declared in Client.Application passes by rule with two or more production implementations, an
+# IEnumerable<T> consumer, a production implementation outside Client.Application, or a test that substitutes or fakes
+# it. One that passes by rule is never listed. Anything else is listed here with its reason.
+#
+# The list is SHRINK-ONLY: an unlisted offender fails, and a listed interface that is gone or now passes by rule fails
+# as stale, so the commit that removes the interface deletes its line.
+
+IAgentTemplateCatalog|a test names the interface, so the zero-test-mention removal batch left it; remove it together with those test edits
+IAgentTemplateImportService|a test names the interface, so the zero-test-mention removal batch left it; remove it together with those test edits
+IAppUpdateState|a test names the interface, so the zero-test-mention removal batch left it; remove it together with those test edits
+IBenchmarkCancellationRegistry|a test names the interface, so the zero-test-mention removal batch left it; remove it together with those test edits
+IBenchmarkReviewService|a test names the interface, so the zero-test-mention removal batch left it; remove it together with those test edits
+ICustomToolService|a test names the interface, so the zero-test-mention removal batch left it; remove it together with those test edits
+IDevelopmentEvidenceService|a test names the interface, so the zero-test-mention removal batch left it; remove it together with those test edits
+IDevelopmentReviewerAttemptRunner|a test names the interface, so the zero-test-mention removal batch left it; remove it together with those test edits
+IEntraLiveCredentialCache|a test names the interface, so the zero-test-mention removal batch left it; remove it together with those test edits
+IEvaluationRunExecutor|a test names the interface, so the zero-test-mention removal batch left it; remove it together with those test edits
+IEvaluationRunService|a test names the interface, so the zero-test-mention removal batch left it; remove it together with those test edits
+IGgufAcquisitionOperationRegistry|a test names the interface, so the zero-test-mention removal batch left it; remove it together with those test edits
+IImageModelCatalog|public port over the internal ImageModelCatalog: without it ImageModelCatalogService's public constructor exposes an internal type (CS0051), and a public class turns GetDocument into a CA1024 property rename that reaches its tests
+IInstalledModelSnapshotCoordinator|a test names the interface, so the zero-test-mention removal batch left it; remove it together with those test edits
+IIntegrationTriggerService|a test names the interface, so the zero-test-mention removal batch left it; remove it together with those test edits
+IKnowledgeDowngradeSafetyService|a test names the interface, so the zero-test-mention removal batch left it; remove it together with those test edits
+IKnowledgeEmbeddingPrefixer|stateless: without the interface CA1822 and S2325 make it a static class, which changes the KnowledgeChunkEmbedder and KnowledgeSearchService constructors and the Client.Persistence.Tests knowledge fixtures
+ILocalModelDeletionJournalReconciler|a test names the interface, so the zero-test-mention removal batch left it; remove it together with those test edits
+IModelProviderMapLeaseCoordinator|a test names the interface, so the zero-test-mention removal batch left it; remove it together with those test edits
+INodeAuthService|a test names the interface, so the zero-test-mention removal batch left it; remove it together with those test edits
+INodeChatStreamCancellationRegistry|a test names the interface, so the zero-test-mention removal batch left it; remove it together with those test edits
+INodeDbBackupService|a test names the interface, so the zero-test-mention removal batch left it; remove it together with those test edits
+INodeTokenService|a test names the interface, so the zero-test-mention removal batch left it; remove it together with those test edits
+IPendingFootprintLedger|a test names the interface, so the zero-test-mention removal batch left it; remove it together with those test edits
+IProviderStreamResilience|a test names the interface, so the zero-test-mention removal batch left it; remove it together with those test edits
+IRankingFusionService|a test names the interface, so the zero-test-mention removal batch left it; remove it together with those test edits
+ISandboxLauncher|its file belongs to the windows-sandbox branch; remove it after that branch lands
+IScheduledJobTemplateRegistry|a test names the interface, so the zero-test-mention removal batch left it; remove it together with those test edits
+IUsageRateResolver|a test names the interface, so the zero-test-mention removal batch left it; remove it together with those test edits

@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
+using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -1151,35 +1152,323 @@ public sealed class SupervisorEvictionTests
         AssertEx.Equal(expected: 1, processes.Count);
     }
 
+    [Test]
+    public async Task Admission_AClaimLostToALease_EvictsTheNextIdleVictim_AndKeepsTheLeasedOne()
+    {
+        var scene = new LostClaimScene(cap: 2);
+        var first = scene.Register("chat-a", idleFor: TimeSpan.FromHours(3));
+        var second = scene.Register("chat-b", idleFor: TimeSpan.FromHours(2));
+
+        // Read 1 is the prune, read 2 the scan that picks the LRU victim, read 3 its claim: a request leases it right there.
+        first.Handle.OnRead = read => LeaseAt(read, claimRead: 3, first.Process);
+        using var reaper = scene.CreateReaper();
+
+        await reaper.AdmitAndAllocatePortAsync(ModelRole.Chat, ModelResidencyIntent.Interactive, CancellationToken.None);
+
+        AssertEx.False(first.Handle.WasTreeKilled, "a victim a request leased after the scan is never torn down under it");
+        AssertEx.True(scene.Processes.ContainsKey(first.Key), "the leased victim stays loaded");
+        AssertEx.True(second.Handle.WasTreeKilled, "the next idle victim makes room instead of refusing the admission");
+        AssertEx.False(scene.Processes.ContainsKey(second.Key));
+    }
+
+    [Test]
+    public async Task Admission_ACapRaisedWhileAClaimIsLostToALease_AdmitsWithoutEvictingTheNextVictim()
+    {
+        var scene = new LostClaimScene(cap: 2);
+        var first = scene.Register("chat-a", idleFor: TimeSpan.FromHours(3));
+        var second = scene.Register("chat-b", idleFor: TimeSpan.FromHours(2));
+
+        // At the claim read a request leases the victim and the operator raises the cap, so the new request fits beside both.
+        first.Handle.OnRead = read =>
+        {
+            LeaseAt(read, claimRead: 3, first.Process);
+            if (read == 3)
+            {
+                scene.Options.MaxLoadedProcesses = 3;
+            }
+        };
+        using var reaper = scene.CreateReaper();
+
+        await reaper.AdmitAndAllocatePortAsync(ModelRole.Chat, ModelResidencyIntent.Interactive, CancellationToken.None);
+
+        AssertEx.Equal(expected: 3, scene.Ports.ReservedCountOf(companion: false), "the admission took the slot the raised cap added");
+        AssertEx.False(first.Handle.WasTreeKilled, "the leased victim stays loaded");
+        AssertEx.False(second.Handle.WasTreeKilled, "the raised cap admits without unloading the next idle chat");
+        AssertEx.True(scene.Processes.ContainsKey(first.Key) && scene.Processes.ContainsKey(second.Key), "both resident chats stay registered");
+    }
+
+    [Test]
+    public async Task Admission_AVictimWhoseTeardownFreedItsSlot_CostsNoSecondEviction()
+    {
+        var scene = new LostClaimScene(cap: 2);
+        var first = scene.Register("chat-a", idleFor: TimeSpan.FromHours(3));
+        var second = scene.Register("chat-b", idleFor: TimeSpan.FromHours(2));
+
+        // At the claim read, another teardown owns the victim and has already given its slot back.
+        first.Handle.OnRead = read =>
+        {
+            if (read == 3)
+            {
+                first.Process.MarkEvicting();
+                scene.Ports.Release(first.Process.Port);
+            }
+        };
+        using var reaper = scene.CreateReaper();
+
+        await reaper.AdmitAndAllocatePortAsync(ModelRole.Chat, ModelResidencyIntent.Interactive, CancellationToken.None);
+
+        AssertEx.False(second.Handle.WasTreeKilled, "the cap is re-read, and the freed slot admits without unloading another model");
+        AssertEx.False(first.Handle.WasTreeKilled, "the victim belongs to the teardown that owns its claim");
+    }
+
+    [Test]
+    public async Task Admission_AVictimAnotherTeardownHoldsWithItsPortReserved_IsSelectedOnce_AndTheNextIsEvicted()
+    {
+        var scene = new LostClaimScene(cap: 2);
+        var held = scene.Register("chat-a", idleFor: TimeSpan.FromHours(3));
+        var next = scene.Register("chat-b", idleFor: TimeSpan.FromHours(2));
+        var owner = held.Process.MarkEvicting();
+
+        // The prune, the one scan that picks it and its claim; a fourth read means the admission picked it again.
+        held.Handle.OnRead = static read => FailAfter(read, reads: 3);
+        using var reaper = scene.CreateReaper();
+
+        await reaper.AdmitAndAllocatePortAsync(ModelRole.Chat, ModelResidencyIntent.Interactive, CancellationToken.None);
+
+        AssertEx.Equal(expected: 3, held.Handle.Reads, "the held victim is claimed exactly once");
+        AssertEx.Equal(owner, held.Process.EvictionOwner, "the other teardown keeps its claim");
+        AssertEx.False(held.Handle.WasTreeKilled);
+        AssertEx.True(next.Handle.WasTreeKilled, "the next idle victim makes room");
+    }
+
+    [Test]
+    public async Task Admission_TheOnlyVictimHeldByAnotherTeardown_IsRefusedAsCapReached_AfterOneClaim()
+    {
+        var scene = new LostClaimScene(cap: 1);
+        var held = scene.Register("chat-a", idleFor: TimeSpan.FromHours(3));
+        held.Process.MarkEvicting();
+        held.Handle.OnRead = static read => FailAfter(read, reads: 3);
+        using var reaper = scene.CreateReaper();
+
+        var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() =>
+            reaper.AdmitAndAllocatePortAsync(ModelRole.Chat, ModelResidencyIntent.Interactive, CancellationToken.None));
+
+        AssertEx.Contains(exception.Message, "maximum number of local models", StringComparison.OrdinalIgnoreCase);
+        AssertEx.Equal(expected: 3, held.Handle.Reads, "the held victim is claimed exactly once");
+        AssertEx.False(held.Handle.WasTreeKilled);
+    }
+
+    [Test]
+    public async Task Admission_EveryVictimsClaimLost_IsRefusedAsCapReached_AndEvictsNothing()
+    {
+        var scene = new LostClaimScene(cap: 2);
+        var leased = scene.Register("chat-a", idleFor: TimeSpan.FromHours(3));
+        var held = scene.Register("chat-b", idleFor: TimeSpan.FromHours(2));
+        leased.Handle.OnRead = read => LeaseAt(read, claimRead: 3, leased.Process);
+        held.Process.MarkEvicting();
+        using var reaper = scene.CreateReaper();
+
+        await AssertEx.ThrowsAsync<LlamaRuntimeException>(() =>
+            reaper.AdmitAndAllocatePortAsync(ModelRole.Chat, ModelResidencyIntent.Interactive, CancellationToken.None));
+
+        AssertEx.False(leased.Handle.WasTreeKilled || held.Handle.WasTreeKilled, "a refused admission unloads nothing");
+        AssertEx.Equal(expected: 2, scene.Processes.Count);
+    }
+
+    [Test]
+    public async Task LoweredChatCap_AClaimLostToALease_TheSamePassUnloadsTheNextChat_AndKeepsTheLeasedOne()
+    {
+        var scene = new LostClaimScene(cap: 3);
+        var first = scene.Register("chat-a", idleFor: TimeSpan.FromMinutes(3));
+        var second = scene.Register("chat-b", idleFor: TimeSpan.FromMinutes(2));
+        var third = scene.Register("chat-c", idleFor: TimeSpan.FromMinutes(1));
+
+        // Read 1 is the TTL scan, read 2 the prune, read 3 the above-cap scan that picks it, read 4 its claim.
+        first.Handle.OnRead = read => LeaseAt(read, claimRead: 4, first.Process);
+        using var reaper = scene.CreateReaper();
+        scene.Options.MaxLoadedProcesses = 2;
+
+        await reaper.ReapIdleOnceAsync();
+
+        AssertEx.False(first.Handle.WasTreeKilled, "a chat a request leased after the scan is never unloaded under it");
+        AssertEx.True(second.Handle.WasTreeKilled, "the same pass unloads the next eligible chat");
+        AssertEx.False(third.Handle.WasTreeKilled);
+        AssertEx.Equal(expected: 2, scene.Processes.Count);
+    }
+
+    [Test]
+    public async Task LoweredChatCap_AChatAnotherTeardownOwns_CostsNoSecondInWindowChat()
+    {
+        var scene = new LostClaimScene(cap: 3);
+        var owned = scene.Register("chat-a", idleFor: TimeSpan.FromMinutes(3));
+        var second = scene.Register("chat-b", idleFor: TimeSpan.FromMinutes(2));
+        var third = scene.Register("chat-c", idleFor: TimeSpan.FromMinutes(1));
+        owned.Process.MarkEvicting();
+        using var reaper = scene.CreateReaper();
+        scene.Options.MaxLoadedProcesses = 2;
+
+        await reaper.ReapIdleOnceAsync();
+
+        AssertEx.False(second.Handle.WasTreeKilled || third.Handle.WasTreeKilled, "the owned chat frees its slot itself; no in-window chat pays for it");
+        AssertEx.False(owned.Handle.WasTreeKilled);
+        AssertEx.Equal(expected: 3, scene.Processes.Count);
+    }
+
+    [Test]
+    public async Task MemoryEviction_AClaimLostToALease_ReportsTheVictimBusy_AndEvictsNothing()
+    {
+        var scene = new LostClaimScene(cap: 3);
+        var victim = scene.Register("chat-a", idleFor: TimeSpan.FromMinutes(3));
+        var other = scene.Register("chat-b", idleFor: TimeSpan.FromMinutes(2));
+
+        // Read 1 is the scan, read 2 the claim.
+        victim.Handle.OnRead = read => LeaseAt(read, claimRead: 2, victim.Process);
+        using var reaper = scene.CreateReaper();
+
+        var outcome = await reaper.TryEvictIdleChatForMemoryAsync(new LlamaServerProcessSupervisor.ProcessKey("chat-new", ModelRole.Chat), [], CancellationToken.None);
+
+        AssertEx.Null(outcome.Evicted);
+        AssertEx.Equal<LlamaServerProcessSupervisor.ProcessKey?>(victim.Key, outcome.Busy);
+        AssertEx.False(victim.Handle.WasTreeKilled || other.Handle.WasTreeKilled, "a lost claim unloads no other chat");
+    }
+
+    private static void LeaseAt(int read, int claimRead, LlamaServerProcessSupervisor.RunningProcess process)
+    {
+        if (read == claimRead)
+        {
+            process.AcquireLease();
+        }
+    }
+
+    private static void FailAfter(int read, int reads)
+    {
+        if (read > reads)
+        {
+            throw new InvalidOperationException("The admission selected a victim it already failed to claim.");
+        }
+    }
+
     private static ConcurrentDictionary<LlamaServerProcessSupervisor.ProcessKey, LlamaServerProcessSupervisor.RunningProcess> NewProcessTable() =>
         new();
 
     private static LlamaServerIdleReaper NewReaper(ConcurrentDictionary<LlamaServerProcessSupervisor.ProcessKey, LlamaServerProcessSupervisor.RunningProcess> processes,
         LlamaServerSupervisorOptions options,
         TimeProvider timeProvider,
-        CallbackResidencyChangeNotifier? notifier = null) =>
-        new(processes, new LlamaServerPortAllocator(options), new LlamaLayerPlacementReport(), options, timeProvider, NullLogger.Instance, notifier);
+        CallbackResidencyChangeNotifier? notifier = null,
+        LlamaServerPortAllocator? ports = null) =>
+        new(processes, ports ?? new LlamaServerPortAllocator(options), new LlamaLayerPlacementReport(), options, timeProvider, NullLogger.Instance, notifier);
 
     /// <summary>Puts a ready, unleased chat process last used at <paramref name="lastUsed" /> straight into the reaper's table.</summary>
     private static KeyValuePair<LlamaServerProcessSupervisor.ProcessKey, LlamaServerProcessSupervisor.RunningProcess> RegisterProcess(
         ConcurrentDictionary<LlamaServerProcessSupervisor.ProcessKey, LlamaServerProcessSupervisor.RunningProcess> processes,
         string modelName,
-        DateTimeOffset lastUsed)
+        DateTimeOffset lastUsed,
+        IProcessTreeHandle? handle = null,
+        int port = 0)
     {
         var key = new LlamaServerProcessSupervisor.ProcessKey(modelName, ModelRole.Chat);
 #pragma warning disable CA2000 // The reaper owns the handle: a teardown disposes it.
-        var process = new LlamaServerProcessSupervisor.RunningProcess(new FakeProcessTreeHandle(4000 + processes.Count),
+        var process = new LlamaServerProcessSupervisor.RunningProcess(handle ?? new FakeProcessTreeHandle(4000 + processes.Count),
             new LlamaServerEndpoint
             {
                 ModelName = modelName,
                 Role = ModelRole.Chat,
                 BaseAddress = new Uri("http://127.0.0.1:1/")
             },
-            port: 0,
+            port,
             lastUsed);
 #pragma warning restore CA2000
         processes[key] = process;
         return new KeyValuePair<LlamaServerProcessSupervisor.ProcessKey, LlamaServerProcessSupervisor.RunningProcess>(key, process);
+    }
+
+    /// <summary>
+    ///     A reaper's table of interactive chat processes, each holding a reserved chat port, on a frozen clock: the cap counts them as a
+    ///     running supervisor would, and each handle reports its reads so a test can act at a chosen claim.
+    /// </summary>
+    private sealed class LostClaimScene
+    {
+        private static readonly TimeSpan Ttl = TimeSpan.FromHours(1);
+        private readonly DateTimeOffset _now = DateTimeOffset.UtcNow;
+
+        public LostClaimScene(int cap)
+        {
+            Options = CapOf(cap, Ttl);
+            Ports = new LlamaServerPortAllocator(Options);
+        }
+
+        public LlamaServerSupervisorOptions Options { get; }
+
+        public LlamaServerPortAllocator Ports { get; }
+
+        public ConcurrentDictionary<LlamaServerProcessSupervisor.ProcessKey, LlamaServerProcessSupervisor.RunningProcess> Processes { get; } = NewProcessTable();
+
+        /// <summary>Registers a chat last used <paramref name="idleFor" /> ago; past the one-hour TTL it is an admission victim.</summary>
+        public LostClaimProcess Register(string modelName, TimeSpan idleFor)
+        {
+            var handle = new ReadReportingHandle(4000 + Processes.Count);
+            var registered = RegisterProcess(Processes, modelName, _now - idleFor, handle, Ports.Allocate());
+            return new LostClaimProcess
+            {
+                Key = registered.Key,
+                Process = registered.Value,
+                Handle = handle
+            };
+        }
+
+        public LlamaServerIdleReaper CreateReaper() =>
+            SupervisorEvictionTests.NewReaper(Processes, Options, new CallbackClock(_now), ports: Ports);
+    }
+
+    private sealed class LostClaimProcess
+    {
+        public required LlamaServerProcessSupervisor.ProcessKey Key { get; init; }
+
+        public required LlamaServerProcessSupervisor.RunningProcess Process { get; init; }
+
+        public required ReadReportingHandle Handle { get; init; }
+    }
+
+    /// <summary>A process handle that reports each <see cref="HasExited" /> read, numbered from 1, before it answers.</summary>
+    private sealed class ReadReportingHandle : IProcessTreeHandle
+    {
+        private readonly FakeProcessTreeHandle _inner;
+        private int _reads;
+
+        public ReadReportingHandle(int pid)
+        {
+            _inner = new FakeProcessTreeHandle(pid);
+        }
+
+        public Action<int>? OnRead { get; set; }
+
+        public int Reads => Volatile.Read(ref _reads);
+
+        public bool WasTreeKilled => _inner.WasTreeKilled;
+
+        public int ProcessId => _inner.ProcessId;
+
+        public bool HasExited
+        {
+            get
+            {
+                OnRead?.Invoke(Interlocked.Increment(ref _reads));
+                return _inner.HasExited;
+            }
+        }
+
+        public int? ExitCode => _inner.ExitCode;
+
+        public string? StderrTail => _inner.StderrTail;
+
+        public Task<bool> WaitForExitAsync(TimeSpan timeout, CancellationToken ct) =>
+            _inner.WaitForExitAsync(timeout, ct);
+
+        public void TreeKill() =>
+            _inner.TreeKill();
+
+        public void Dispose() =>
+            _inner.Dispose();
     }
 
     /// <summary>A frozen clock that reports each <see cref="GetUtcNow" /> read, numbered from 1, before it returns.</summary>

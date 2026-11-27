@@ -7,9 +7,9 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 public sealed class DeleteBenchmarkTaskItemEndpoint : Endpoint<DeleteBenchmarkTaskItemRequest>
 {
-    private readonly IBenchmarkTaskItemService _items;
+    private readonly BenchmarkTaskItemService _items;
 
-    public DeleteBenchmarkTaskItemEndpoint(IBenchmarkTaskItemService items)
+    public DeleteBenchmarkTaskItemEndpoint(BenchmarkTaskItemService items)
     {
         ArgumentNullException.ThrowIfNull(items);
         _items = items;

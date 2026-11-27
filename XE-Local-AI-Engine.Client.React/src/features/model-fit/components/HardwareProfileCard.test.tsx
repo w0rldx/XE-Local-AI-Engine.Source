@@ -1,14 +1,12 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { cleanup, render, screen } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { cleanup, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/core/api/errors/ApiError";
 import { HardwareProfileCard } from "@/features/model-fit/components/HardwareProfileCard";
 import type { HardwareProfile } from "@/features/model-fit/models/ModelFitModels";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { renderWithMantine } from "@/test/MantineTestRender";
 
 // Stands in for i18next including its {{placeholder}} interpolation, so assertions can read the rendered sentence
 // rather than an uninterpolated template. Mirrors the two call shapes the card uses: (key, default) and
@@ -25,14 +23,6 @@ vi.mock("react-i18next", () => ({
 		},
 	}),
 }));
-
-function renderWithProviders(ui: ReactElement) {
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			{ui}
-		</MantineProvider>,
-	);
-}
 
 function profile(overrides: Partial<HardwareProfile> = {}): HardwareProfile {
 	return {
@@ -60,7 +50,7 @@ function profile(overrides: Partial<HardwareProfile> = {}): HardwareProfile {
 }
 
 function renderCard(overrides: Partial<HardwareProfile> = {}) {
-	return renderWithProviders(
+	return renderWithMantine(
 		<HardwareProfileCard
 			profile={profile(overrides)}
 			isLoading={false}
@@ -91,7 +81,7 @@ describe("HardwareProfileCard CPU-fallback alert", () => {
 	});
 
 	it("renders a persistent alert with the reason and remediation its codes select when cpuFallback is true", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<HardwareProfileCard
 				profile={profile({
 					cpuFallback: true,
@@ -115,7 +105,7 @@ describe("HardwareProfileCard CPU-fallback alert", () => {
 	});
 
 	it("does not render the CPU-fallback alert when cpuFallback is false", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<HardwareProfileCard
 				profile={profile({ cpuFallback: false })}
 				isLoading={false}
@@ -129,7 +119,7 @@ describe("HardwareProfileCard CPU-fallback alert", () => {
 	});
 
 	it("falls back to the generic sentence and omits the remediation for codes this client does not know", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<HardwareProfileCard
 				profile={profile({ cpuFallback: true, cpuFallbackReasonCode: "future_reason", cpuFallbackRemediationCode: null })}
 				isLoading={false}
@@ -151,7 +141,7 @@ describe("HardwareProfileCard CPU-fallback alert", () => {
 		const detaillessApiError = new ApiError(500, { type: "", title: "", status: 500, detail: "" });
 		expect(detaillessApiError.message).toBe("");
 
-		renderWithProviders(
+		renderWithMantine(
 			<HardwareProfileCard
 				profile={profile()}
 				isLoading={false}

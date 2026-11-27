@@ -88,12 +88,6 @@ export function missingBenchmarkCellItems(cell: BenchmarkCell, scorableItems: re
 	return answered.size === 0 ? [] : scorableItems.filter((item) => !answered.has(item.id));
 }
 
-/** The item rows the cell mean is a mean OF — a NIAH case is reported on its own axis and is deliberately not here. */
-export function scorableCellItems(cell: BenchmarkCell, scorableItems: readonly BenchmarkTaskItem[]): BenchmarkCellItem[] {
-	const scorable = new Set(scorableItems.map((item) => item.id));
-	return cell.items.filter((item) => item.taskItemId === null || scorable.has(item.taskItemId));
-}
-
 export interface BenchmarkNiahRecall {
 	/** Cases the node reported a verifier verdict for. Only these can be found or missed. */
 	graded: number;

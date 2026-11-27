@@ -31,16 +31,15 @@ internal static class AddNodeBenchmarksExtensions
         builder.Services.AddScoped<BenchmarkRecordService>();
         builder.Services.AddScoped<BenchmarkComparisonService>();
         builder.Services.AddScoped<IBenchmarkReviewService, BenchmarkReviewService>();
-        builder.Services.AddScoped<IBenchmarkTaskItemService, BenchmarkTaskItemService>();
+        builder.Services.AddScoped<BenchmarkTaskItemService>();
         builder.Services.AddScoped<IBenchmarkExportFactsResolver, BenchmarkExportFactsResolver>();
-        builder.Services.AddScoped<IBenchmarkExportQuery, BenchmarkExportQuery>();
+        builder.Services.AddScoped<BenchmarkExportQuery>();
         builder.Services.AddScoped<IBenchmarkFreezeDependencyService, BenchmarkFreezeDependencyService>();
         builder.Services.AddScoped<IBenchmarkPhaseLaunchResolver, BenchmarkPhaseLaunchResolver>();
         builder.Services.AddScoped<IBenchmarkJudgeRuntimeResolver, BenchmarkJudgeRuntimeResolver>();
         builder.Services.AddScoped<IBenchmarkRunFreezeService, BenchmarkRunFreezeService>();
-        builder.Services.AddScoped<IBenchmarkRunBatchService, BenchmarkRunBatchService>();
+        builder.Services.AddScoped<BenchmarkRunBatchService>();
         builder.Services.AddScoped<IBenchmarkCatalogService, BenchmarkCatalogService>();
-        builder.Services.AddSingleton<IBenchmarkEligibilityPolicy, BenchmarkEligibilityPolicy>();
         builder.Services.AddSingleton<IBenchmarkRuntimeSnapshotFactory, BenchmarkRuntimeSnapshotFactory>();
 
         // Singleton: it owns a file-hash cache with file-system watchers, so one instance per process, not per run.
@@ -59,8 +58,8 @@ internal static class AddNodeBenchmarksExtensions
         builder.Services.AddScoped<IBenchmarkPythonTestsVerifier, BenchmarkPythonTestsVerifier>();
         builder.Services.AddSingleton<BenchmarkRunArtifactBlobStore>();
         builder.Services.AddScoped<IBenchmarkJudgeExecutor, BenchmarkJudgeExecutor>();
-        builder.Services.AddScoped<IBenchmarkFidelityExecutor, BenchmarkFidelityExecutor>();
-        builder.Services.AddScoped<IBenchmarkComparisonExecutor, BenchmarkComparisonExecutor>();
+        builder.Services.AddScoped<BenchmarkFidelityExecutor>();
+        builder.Services.AddScoped<BenchmarkComparisonExecutor>();
         builder.Services.AddScoped<IBenchmarkPairwiseFitter, BenchmarkPairwiseFitter>();
         builder.Services.AddScoped<IBenchmarkPairwisePlanner, BenchmarkPairwisePlanner>();
         builder.Services.AddSingleton(static services => new BenchmarkKldBaseCache(services.GetRequiredService<IFreeSpaceProbe>()));

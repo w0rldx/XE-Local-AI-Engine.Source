@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
-using System.Diagnostics;
 using System.Runtime.Versioning;
 using System.Text;
 using Microsoft.Extensions.Options;
@@ -501,39 +500,13 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
     {
         var repository = Path.Combine(_root, "repo-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(repository);
-        await RunGitAsync(repository, "init", "--initial-branch=main", ".");
-        await RunGitAsync(repository, "config", "user.email", "development-mounts@example.invalid");
-        await RunGitAsync(repository, "config", "user.name", "Development Mount Test");
+        await TestGit.RunAsync(repository, "init", "--initial-branch=main", ".");
+        await TestGit.RunAsync(repository, "config", "user.email", "development-mounts@example.invalid");
+        await TestGit.RunAsync(repository, "config", "user.name", "Development Mount Test");
         await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "base\n");
-        await RunGitAsync(repository, "add", "README.md");
-        await RunGitAsync(repository, "commit", "-m", "base");
+        await TestGit.RunAsync(repository, "add", "README.md");
+        await TestGit.RunAsync(repository, "commit", "-m", "base");
         return repository;
-    }
-
-    internal static async Task RunGitAsync(string workingDirectory, params string[] arguments)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "git",
-            WorkingDirectory = workingDirectory,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false
-        };
-        foreach (var argument in arguments)
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
-
-        using var process = new Process
-        {
-            StartInfo = startInfo
-        };
-        process.Start();
-        var error = process.StandardError.ReadToEndAsync();
-        _ = await process.StandardOutput.ReadToEndAsync();
-        await process.WaitForExitAsync();
-        AssertEx.Equal(expected: 0, process.ExitCode, await error);
     }
 
     /// <summary>

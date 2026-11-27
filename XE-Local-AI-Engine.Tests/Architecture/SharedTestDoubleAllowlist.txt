@@ -1,0 +1,16 @@
+# Private test copies of a shared double — the allowlist for SharedTestDoubleConventionTests.
+#
+# Format: <repository-relative file>|<type name>|<why the shared double does not fit>, one line per copy, sorted.
+#
+# A test uses the shared double (docs/wiki/17-writing-tests.md, "Shared doubles first"). A copy listed here does
+# something the shared one does not, or sits in a file another branch owns until it lands.
+#
+# The list is SHRINK-ONLY: an unlisted copy fails, and a listed copy that is gone fails as stale, so the commit that
+# adopts the shared double deletes its line.
+
+XE-Local-AI-Engine.Tests/AgentHome/AgentHomeServiceTests.cs|MutableIdentityProvider|a test switches the owner mid-test through its setters
+XE-Local-AI-Engine.Tests/Compute/ComputeToolGatewayTests.cs|StubIdentityProvider|records whether the gateway asked for an identity; the file belongs to the windows-sandbox branch until it lands
+XE-Local-AI-Engine.Tests/Mcp/McpWorkspaceExecutionSessionFactoryTests.cs|FakeIdentityProvider|runs a hook on every call, honours cancellation and throws when no owner is set
+XE-Local-AI-Engine.Tests/Mcp/SandboxedMcpStdioLiveTests.cs|StubIdentityProvider|returns a fresh node id on every call
+XE-Local-AI-Engine.Tests/Sandbox/ProcessSandboxRuntimeProviderTests.cs|TempDir|deferred to the sandbox cleanup that follows the windows-sandbox branch
+XE-Local-AI-Engine.Tests/Sandbox/SandboxJailPathGuardTests.cs|TempDir|deferred to the sandbox cleanup that follows the windows-sandbox branch

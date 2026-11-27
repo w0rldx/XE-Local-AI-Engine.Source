@@ -80,20 +80,6 @@ export function sourceBuildValidationIssue(draft: SourceBuildDraft): SourceBuild
 	return null;
 }
 
-export function sourceBuildValidationError(draft: SourceBuildDraft): string | null {
-	const issue = sourceBuildValidationIssue(draft);
-	if (issue === "commit") {
-		return "Commit must be a full 40-character hexadecimal SHA.";
-	}
-	if (issue === "repository") {
-		return "Use a canonical public GitHub HTTPS repository URL.";
-	}
-	if (issue === "acknowledgement") {
-		return "Acknowledge that custom repository code executes with the app user's privileges.";
-	}
-	return null;
-}
-
 export function sourceBuildIdentity(descriptor: LlamaCppSourceBuildDescriptor | null | undefined): string | null {
 	if (descriptor == null) {
 		return null;

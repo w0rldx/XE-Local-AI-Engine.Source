@@ -11,6 +11,7 @@ import type {
 } from "@/core/api/generated";
 import { getModelGgufInspectionOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { humanizeBytes } from "@/core/formatting/BytesFormatting";
+import { formatCount } from "@/core/formatting/NumberFormatting";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { ModelInspectMetadataItem } from "@/core/models/inspect/ModelInspectMetadataItem";
 import { type ComparedGroup, compareInspections } from "@/core/models/inspect/GgufInspectComparison";
@@ -121,18 +122,18 @@ function ComparisonResult({
 				/>
 				<ModelInspectMetadataItem
 					label={t("pages.models.inspect.compare.changedTypes", "Tensors that changed type")}
-					value={comparison.changedTypeCount.toLocaleString()}
+					value={formatCount(comparison.changedTypeCount)}
 				/>
 				{comparison.onlyInACount > 0 ? (
 					<ModelInspectMetadataItem
 						label={t("pages.models.inspect.compare.onlyIn", "Only in {{model}}", { model: quantA })}
-						value={comparison.onlyInACount.toLocaleString()}
+						value={formatCount(comparison.onlyInACount)}
 					/>
 				) : null}
 				{comparison.onlyInBCount > 0 ? (
 					<ModelInspectMetadataItem
 						label={t("pages.models.inspect.compare.onlyIn", "Only in {{model}}", { model: quantB })}
-						value={comparison.onlyInBCount.toLocaleString()}
+						value={formatCount(comparison.onlyInBCount)}
 					/>
 				) : null}
 			</SimpleGrid>

@@ -2,14 +2,14 @@
 
 import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ToolCallCard } from "@/core/chat/components/ToolCallCard";
 import type { ChatToolPart } from "@/core/models/ChatMessageParts";
 import type { ToolCatalogEntry } from "@/core/tools/models/ToolCatalogModels";
 import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
+import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // The Approve/Deny controls fire the generated resolve-approval mutation; stub its mutationFn so the click wiring can
 // be asserted without a backend. The card spreads the mutation, which preserves the
@@ -51,17 +51,6 @@ const chatCatalog: ToolCatalogEntry[] = [
 		isAvailableOnNode: true,
 	},
 ];
-
-function renderWithProviders(ui: ReactElement) {
-	const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
-	return render(
-		<QueryClientProvider client={queryClient}>
-			<MantineProvider env="test" theme={testMantineTheme}>
-				{ui}
-			</MantineProvider>
-		</QueryClientProvider>,
-	);
-}
 
 function toolPart(overrides: Partial<ChatToolPart> = {}): ChatToolPart {
 	return { kind: "tool", id: "call-1", sequence: 1, name: "get_time", state: "received", ...overrides };

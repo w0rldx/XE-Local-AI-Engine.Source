@@ -1,3 +1,4 @@
+import { gitEnvironment } from "./GitEnvironment.mjs";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -67,6 +68,7 @@ export function refreshDependencies({
 	const status = spawn("git", ["status", "--short", "--untracked-files=no", "--", ...derivedPaths], {
 		cwd,
 		encoding: "utf8",
+		env: gitEnvironment(),
 		shell: false,
 	});
 	if (status.error || status.status !== 0) {

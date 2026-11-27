@@ -85,7 +85,7 @@ internal static class AddNodeModelFitExtensions
         });
         // The GGUF variant recommender annotates a repo's selectable files (quality tier, hardware fit verdict, one recommended pick)
         // for the download picker's inspect endpoint. Singleton: stateless over the GPU-variant selector and free-VRAM probe, and never persists.
-        builder.Services.AddSingleton<IGgufVariantRecommender, GgufVariantRecommender>();
+        builder.Services.AddSingleton<GgufVariantRecommender>();
         // The VRAM the configured knowledge reranker and embedder will claim, which both recommendation paths keep free. Singleton over singletons.
         builder.Services.AddSingleton<IKnowledgeCompanionReserve, KnowledgeCompanionReserve>();
         // Shares Hugging Face discovery across the per-use-case runs of one "Refresh now"; the advisor below discovers through it.
@@ -98,14 +98,14 @@ internal static class AddNodeModelFitExtensions
         // request is cancellable by another, and tracks sanitized progress. Singleton: the download runs detached after its request scope returns.
         builder.Services.AddSingleton<IGgufAcquisitionOperationRegistry, GgufAcquisitionOperationRegistry>();
         builder.Services.AddSingleton<IGgufDownloadCoordinator, GgufDownloadCoordinator>();
-        builder.Services.AddSingleton<IGgufImportTransactionCoordinator, GgufImportTransactionCoordinator>();
+        builder.Services.AddSingleton<GgufImportTransactionCoordinator>();
         // No-op download event publisher default, so the singleton coordinator resolves a publisher in Application-only and test hosts
         // that wire no hub. The Client host supersedes it with a hub-backed publisher pushing download status changes live.
         builder.Services.AddSingleton<IGgufDownloadEventPublisher, NullGgufDownloadEventPublisher>();
         // Model-fit local-API services. The query service is a pure cache reader over the stores, with NO dependency on the runner or
         // refresh service, so a read never starts an advisor run; the refresh trigger only fires an existing definition. Both Scoped.
-        builder.Services.AddScoped<IModelFitQueryService, ModelFitQueryService>();
-        builder.Services.AddScoped<IModelFitRefreshTrigger, ModelFitRefreshTrigger>();
+        builder.Services.AddScoped<ModelFitQueryService>();
+        builder.Services.AddScoped<ModelFitRefreshTrigger>();
 
         // The provider-neutral hardware profiler reports RAM, VRAM, GPU vendor, CPU and free disk across platforms. Singleton: the
         // profile is cached and re-probed only on forceRefresh. Free disk is the models volume, from the same root INodeDataDirectory resolves.

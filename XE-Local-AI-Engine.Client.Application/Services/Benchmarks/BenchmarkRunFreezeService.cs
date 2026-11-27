@@ -75,7 +75,6 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
     private readonly IGgufModelStore _ggufModels;
     private readonly IBenchmarkInstalledModelLeaseProvider _installedModels;
     private readonly IModelClassificationStore _classifications;
-    private readonly IBenchmarkEligibilityPolicy _eligibilityPolicy;
     private readonly IBenchmarkFreezeDependencyService _dependencies;
     private readonly IBenchmarkRuntimeSnapshotFactory _snapshots;
     private readonly IBenchmarkPhaseLaunchResolver _launchResolver;
@@ -127,7 +126,6 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         IGgufModelStore ggufModels,
         IBenchmarkInstalledModelLeaseProvider installedModels,
         IModelClassificationStore classifications,
-        IBenchmarkEligibilityPolicy eligibilityPolicy,
         IBenchmarkFreezeDependencyService dependencies,
         IBenchmarkRuntimeSnapshotFactory snapshots,
         IBenchmarkPhaseLaunchResolver launchResolver,
@@ -149,7 +147,6 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         ArgumentNullException.ThrowIfNull(ggufModels);
         ArgumentNullException.ThrowIfNull(installedModels);
         ArgumentNullException.ThrowIfNull(classifications);
-        ArgumentNullException.ThrowIfNull(eligibilityPolicy);
         ArgumentNullException.ThrowIfNull(dependencies);
         ArgumentNullException.ThrowIfNull(snapshots);
         ArgumentNullException.ThrowIfNull(launchResolver);
@@ -168,7 +165,6 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         _ggufModels = ggufModels;
         _installedModels = installedModels;
         _classifications = classifications;
-        _eligibilityPolicy = eligibilityPolicy;
         _dependencies = dependencies;
         _snapshots = snapshots;
         _launchResolver = launchResolver;
@@ -495,7 +491,7 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
                                activeModelIsCloud: false,
                                cancellationToken)
                            ?? throw new BenchmarkEligibilityException("The selected agent definition no longer exists.");
-            var eligible = _eligibilityPolicy.Apply(resolved);
+            var eligible = BenchmarkEligibilityPolicy.Apply(resolved);
             EnsureTaskFitsContext(project, eligible, item.Index, itemCoreTask, resolvedPrimaryModelName, primarySampling, defaultContextTokens);
             var dependencySet = await _dependencies.CaptureAsync(agentDefinitionId,
                 eligible,

@@ -41,7 +41,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
     private readonly NodeChatDbContext _dbContext;
     private readonly IKnowledgeDocumentBlobStore _blobStore;
     private readonly IDocumentTextExtractor _extractor;
-    private readonly IChunkingService _chunkingService;
+    private readonly HeaderBoundaryChunkingService _chunkingService;
     private readonly IKnowledgeChunkEmbedder _embedder;
     private readonly IKnowledgeIndexWriter _indexWriter;
     private readonly IKnowledgeIndexingNotifier _notifier;
@@ -55,7 +55,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
     public KnowledgeIngestionService(NodeChatDbContext dbContext,
         IKnowledgeDocumentBlobStore blobStore,
         IDocumentTextExtractor extractor,
-        IChunkingService chunkingService,
+        HeaderBoundaryChunkingService chunkingService,
         IKnowledgeChunkEmbedder embedder,
         IKnowledgeIndexWriter indexWriter,
         IKnowledgeIndexingNotifier notifier,

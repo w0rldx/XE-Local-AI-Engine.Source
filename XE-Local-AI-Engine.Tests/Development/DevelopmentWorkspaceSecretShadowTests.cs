@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
-using System.Diagnostics;
 using System.Text;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -112,7 +111,7 @@ public sealed class DevelopmentWorkspaceSecretShadowTests : IDisposable
 
         var (session, _) = await PrepareAsync(sandbox, ".env");
 
-        var status = await ReadGitOutputAsync(session.HostWorktreePath, "status", "--porcelain");
+        var status = (await TestGit.RunAsync(session.HostWorktreePath, "status", "--porcelain")).Trim();
         AssertEx.Equal(string.Empty, status, "the shadow must leave the worktree byte-identical to its base commit.");
     }
 
@@ -203,9 +202,9 @@ public sealed class DevelopmentWorkspaceSecretShadowTests : IDisposable
         Directory.CreateDirectory(_root);
         var repository = Path.Combine(_root, "repo-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(repository);
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "init", "--initial-branch=main", ".");
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.email", "development-secret@example.invalid");
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.name", "Development Secret Test");
+        await TestGit.RunAsync(repository, "init", "--initial-branch=main", ".");
+        await TestGit.RunAsync(repository, "config", "user.email", "development-secret@example.invalid");
+        await TestGit.RunAsync(repository, "config", "user.name", "Development Secret Test");
         await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "base\n");
         foreach (var path in committed)
         {
@@ -214,8 +213,8 @@ public sealed class DevelopmentWorkspaceSecretShadowTests : IDisposable
             await File.WriteAllTextAsync(full, SecretContent);
         }
 
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "add", "-A", "--", ".");
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "commit", "-m", "base");
+        await TestGit.RunAsync(repository, "add", "-A", "--", ".");
+        await TestGit.RunAsync(repository, "commit", "-m", "base");
 
         foreach (var path in untracked)
         {
@@ -245,33 +244,6 @@ public sealed class DevelopmentWorkspaceSecretShadowTests : IDisposable
                 RepositoryIdentityHash = identity
             });
         return (session, sink);
-    }
-
-    private static async Task<string> ReadGitOutputAsync(string workingDirectory, params string[] arguments)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "git",
-            WorkingDirectory = workingDirectory,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false
-        };
-        foreach (var argument in arguments)
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
-
-        using var process = new Process
-        {
-            StartInfo = startInfo
-        };
-        process.Start();
-        var error = process.StandardError.ReadToEndAsync();
-        var output = await process.StandardOutput.ReadToEndAsync();
-        await process.WaitForExitAsync();
-        AssertEx.Equal(expected: 0, process.ExitCode, await error);
-        return output.Trim();
     }
 
     private static DevelopmentOptions OptionsValue() =>

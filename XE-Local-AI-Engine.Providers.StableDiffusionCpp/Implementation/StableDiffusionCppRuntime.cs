@@ -187,7 +187,10 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
             }
         }
 
-        throw new StableDiffusionRuntimeException("The image runtime unloaded the model while the generation was starting. Try again.");
+        throw new StableDiffusionRuntimeException("The image runtime unloaded the model while the generation was starting. Try again.")
+        {
+            ModelUnloadedWhileStarting = true
+        };
     }
 
     /// <summary>An ensured daemon's endpoint and the job lease held on that same daemon.</summary>

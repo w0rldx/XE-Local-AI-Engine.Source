@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { cleanup, render, screen } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { cleanup, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { type ToolCatalogEntry, toToolDisplayName } from "@/core/tools/models/ToolCatalogModels";
@@ -30,7 +28,7 @@ vi.mock("react-i18next", () => ({
 }));
 
 import { LocalToolsOverview } from "@/features/tools/components/LocalToolsOverview";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { installJsdomEnvironmentMocks, renderWithMantine } from "@/test/MantineTestRender";
 
 const builtinTools: ToolCatalogEntry[] = [
 	{
@@ -66,42 +64,6 @@ const mcpTool: ToolCatalogEntry = {
 	isAvailableOnNode: true,
 };
 
-function renderWithProviders(ui: ReactElement) {
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			{ui}
-		</MantineProvider>,
-	);
-}
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-	Object.defineProperty(document, "fonts", {
-		writable: true,
-		value: { ready: Promise.resolve(), addEventListener: vi.fn(), removeEventListener: vi.fn() },
-	});
-}
-
 describe("LocalToolsOverview", () => {
 	beforeEach(() => {
 		installJsdomEnvironmentMocks();
@@ -114,20 +76,20 @@ describe("LocalToolsOverview", () => {
 	});
 
 	it("renders the overview panel", () => {
-		renderWithProviders(<LocalToolsOverview />);
+		renderWithMantine(<LocalToolsOverview />);
 
 		expect(screen.getByTestId("local-tools-overview")).toBeTruthy();
 	});
 
 	it("lists the built-in catalog tools from the fetched catalog", () => {
-		renderWithProviders(<LocalToolsOverview />);
+		renderWithMantine(<LocalToolsOverview />);
 
 		expect(screen.getByTestId("local-tool-row-GetCurrentTime")).toBeTruthy();
 		expect(screen.getByTestId("local-tool-row-Calculate")).toBeTruthy();
 	});
 
 	it("shows auto-execute badges for built-in tools", () => {
-		renderWithProviders(<LocalToolsOverview />);
+		renderWithMantine(<LocalToolsOverview />);
 
 		for (const tool of builtinTools) {
 			const badge = screen.getByTestId(`local-tool-approval-badge-${tool.name}`);
@@ -142,7 +104,7 @@ describe("LocalToolsOverview", () => {
 			error: null,
 		});
 
-		renderWithProviders(<LocalToolsOverview />);
+		renderWithMantine(<LocalToolsOverview />);
 
 		expect(screen.getByTestId(`local-tool-row-${mcpTool.name}`)).toBeTruthy();
 		const approvalBadge = screen.getByTestId(`local-tool-approval-badge-${mcpTool.name}`);
@@ -161,7 +123,7 @@ describe("LocalToolsOverview", () => {
 		};
 		useToolCatalogMock.mockReturnValue({ data: [longNameTool], isLoading: false, error: null });
 
-		renderWithProviders(<LocalToolsOverview />);
+		renderWithMantine(<LocalToolsOverview />);
 
 		const name = screen.getByTestId(`local-tool-name-${longNameTool.name}`);
 		expect(name.style.minWidth).toBe("0px");
@@ -180,7 +142,7 @@ describe("LocalToolsOverview", () => {
 	it("shows a loading state while the catalog is fetching", () => {
 		useToolCatalogMock.mockReturnValue({ data: undefined, isLoading: true, error: null });
 
-		renderWithProviders(<LocalToolsOverview />);
+		renderWithMantine(<LocalToolsOverview />);
 
 		expect(screen.getByTestId("local-tools-loading")).toBeTruthy();
 	});
@@ -188,7 +150,7 @@ describe("LocalToolsOverview", () => {
 	it("shows an empty state when the catalog has no tools", () => {
 		useToolCatalogMock.mockReturnValue({ data: [], isLoading: false, error: null });
 
-		renderWithProviders(<LocalToolsOverview />);
+		renderWithMantine(<LocalToolsOverview />);
 
 		expect(screen.getByTestId("local-tools-empty")).toBeTruthy();
 	});
@@ -197,14 +159,14 @@ describe("LocalToolsOverview", () => {
 	// the ToolCapableModels allow-list and the agent's AllowedToolNames. The copy has to say so rather than imply the
 	// listed tools are all callable right now.
 	it("labels the list as what is installed on the node, not what a turn can call", () => {
-		renderWithProviders(<LocalToolsOverview />);
+		renderWithMantine(<LocalToolsOverview />);
 
 		expect(screen.getByText("Tools installed on this node")).toBeTruthy();
 		expect(screen.getByText("2 installed")).toBeTruthy();
 	});
 
 	it("states that the usable subset depends on the model and the agent", () => {
-		renderWithProviders(<LocalToolsOverview />);
+		renderWithMantine(<LocalToolsOverview />);
 
 		const notice = screen.getByTestId("local-tools-scope-notice").textContent ?? "";
 		expect(notice).toContain("full node catalog");
@@ -215,7 +177,7 @@ describe("LocalToolsOverview", () => {
 	it("shows an error state when the catalog fails to load", () => {
 		useToolCatalogMock.mockReturnValue({ data: undefined, isLoading: false, error: new Error("boom") });
 
-		renderWithProviders(<LocalToolsOverview />);
+		renderWithMantine(<LocalToolsOverview />);
 
 		expect(screen.getByTestId("local-tools-error")).toBeTruthy();
 	});

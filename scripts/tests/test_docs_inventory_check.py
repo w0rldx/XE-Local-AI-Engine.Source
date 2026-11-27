@@ -90,19 +90,36 @@ HOME_MD = """# Home
 | 10 | [React Client](10-react-client.md#features) | features |
 """
 
+# Each inventory is split between a parent page and its reference pages, so a name on either one counts; a React
+# feature counts only as a row of the feature-folder table.
 API_AND_HUBS_MD = """# API & Hubs
 
-| **Widgets** (`widgets/*`) | routes | owner |
-| **Gadgets** (`gadgets/*`) | routes | owner |
+Route families start with `Widgets`; hubs start with `AlphaHub`.
+"""
 
-Hubs: `AlphaHub`, `BetaHub`.
+ENDPOINT_INVENTORY_MD = """# Endpoint Inventory
+
+| **Gadgets** (`gadgets/*`) | routes | owner |
+"""
+
+SIGNALR_HUBS_MD = """# SignalR Hubs
+
+| `BetaHub` | `/gadgets/hub` |
 """
 
 REACT_CLIENT_MD = """# React Client
 
 ## Features
 
-Feature areas: `alpha`, `beta`.
+Feature areas start with `alpha` and `beta`.
+"""
+
+FEATURE_FOLDERS_MD = """# Feature Folders
+
+| Feature | What it owns |
+|---|---|
+| `alpha` | owns alpha, next to `beta` |
+| `beta` | owns beta |
 """
 
 PROJECT_LAYOUT_MD = """# Project Layout
@@ -122,7 +139,7 @@ BUILD_TOPIC_MD = """# Build
 
 ### Short rule
 
-Do the thing; it prevents the failure. Authority: a test.
+Do the thing; it prevents the failure. Authority: `scripts/alpha.sh`.
 
 ## Subsection
 
@@ -137,11 +154,19 @@ PROPOSED_TOPIC_MD = """# Proposed
 
 """ + ("narrative " * 200)
 
+RATCHET_HEADER = "# check|key|limit|reason\n"
+
+
+GIT_ENV_SPEC = importlib.util.spec_from_file_location("git_env", REPO_ROOT / "scripts" / "lib" / "git_env.py")
+if GIT_ENV_SPEC is None or GIT_ENV_SPEC.loader is None:
+    raise RuntimeError("could not load scripts/lib/git_env.py")
+GIT_ENV: Any = importlib.util.module_from_spec(GIT_ENV_SPEC)
+GIT_ENV_SPEC.loader.exec_module(GIT_ENV)
+
 
 def git(root: Path, *args: str) -> None:
-    """Run git on the fixture repository, never on an index or repository the caller exported."""
-    env = {key: value for key, value in os.environ.items() if key not in MODULE.GIT_REPO_ENV_VARS}
-    subprocess.run(["git", *args], cwd=root, env=env, check=True)
+    """Run git on the fixture repository, never on an index, repository or config file the caller exported."""
+    subprocess.run(["git", *args], cwd=root, env=GIT_ENV.fixture_env(), check=True)
 
 
 class DocsInventoryCheckTests(unittest.TestCase):
@@ -171,6 +196,11 @@ class DocsInventoryCheckTests(unittest.TestCase):
         (wiki / "02-project-layout.md").write_text(PROJECT_LAYOUT_MD, encoding="utf-8")
         (wiki / "09-api-and-hubs.md").write_text(API_AND_HUBS_MD, encoding="utf-8")
         (wiki / "10-react-client.md").write_text(REACT_CLIENT_MD, encoding="utf-8")
+        reference = wiki / "reference"
+        reference.mkdir()
+        (reference / "09-endpoint-inventory.md").write_text(ENDPOINT_INVENTORY_MD, encoding="utf-8")
+        (reference / "09-signalr-hubs.md").write_text(SIGNALR_HUBS_MD, encoding="utf-8")
+        (reference / "10-feature-folders.md").write_text(FEATURE_FOLDERS_MD, encoding="utf-8")
 
         (root / "docs" / "agent-knowledge.md").write_text(AGENT_KNOWLEDGE_INDEX_MD, encoding="utf-8")
         topics = root / "docs" / "agent-knowledge"
@@ -185,6 +215,7 @@ class DocsInventoryCheckTests(unittest.TestCase):
         # The generated preamble links the dev-stop guide.
         (scripts / "README-dev-stop.md").write_text("# Stopping\n", encoding="utf-8")
         (scripts / "README.md").write_text(MODULE.render_scripts_readme(scripts), encoding="utf-8")
+        (scripts / "docs-inventory-ratchet.txt").write_text(RATCHET_HEADER, encoding="utf-8")
 
         # main() runs check_markdown_links over `git ls-files`, so the miniature repository is a git repository.
         if shutil.which("git") is None:
@@ -225,15 +256,38 @@ class DocsInventoryCheckTests(unittest.TestCase):
 
     def test_signalr_hubs_report_a_hub_missing_from_the_api_page(self) -> None:
         root = self.make_repo()
-        self.drop(root, "docs/wiki/09-api-and-hubs.md", "BetaHub")
+        self.drop(root, "docs/wiki/reference/09-signalr-hubs.md", "BetaHub")
 
         result = MODULE.check_signalr_hubs(root)
 
         self.assertEqual(["BetaHub"], [item.name for item in result.missing])
         self.assertEqual(
-            "MISSING signalr-hubs: BetaHub — expected in docs/wiki/09-api-and-hubs.md",
+            "MISSING signalr-hubs: BetaHub — expected in docs/wiki/reference/09-signalr-hubs.md",
             result.missing[0].render(),
         )
+
+    def test_signalr_hubs_report_a_hub_named_on_no_page(self) -> None:
+        root = self.make_repo()
+        self.drop(root, "docs/wiki/09-api-and-hubs.md", "AlphaHub")
+
+        result = MODULE.check_signalr_hubs(root)
+
+        # The parent page counts as much as the reference page: dropping it there is a miss too.
+        self.assertEqual(["AlphaHub"], [item.name for item in result.missing])
+
+    def test_inventories_fail_to_run_when_a_reference_page_is_gone(self) -> None:
+        cases = (
+            ("09-signalr-hubs.md", MODULE.check_signalr_hubs),
+            ("09-endpoint-inventory.md", MODULE.check_local_api_route_families),
+            ("10-feature-folders.md", MODULE.check_react_features),
+        )
+        for page, check in cases:
+            with self.subTest(page=page):
+                root = self.make_repo()
+                (root / "docs" / "wiki" / "reference" / page).unlink()
+
+                with self.assertRaisesRegex(MODULE.InventoryError, page):
+                    check(root)
 
     def test_route_families_take_only_the_classes_nested_directly_in_local_api_routes(self) -> None:
         result = MODULE.check_local_api_route_families(self.make_repo())
@@ -257,11 +311,12 @@ class DocsInventoryCheckTests(unittest.TestCase):
 
     def test_route_families_report_a_family_missing_from_the_api_page(self) -> None:
         root = self.make_repo()
-        self.drop(root, "docs/wiki/09-api-and-hubs.md", "Widgets")
+        self.drop(root, "docs/wiki/reference/09-endpoint-inventory.md", "Gadgets")
 
         result = MODULE.check_local_api_route_families(root)
 
-        self.assertEqual(["Widgets"], [item.name for item in result.missing])
+        self.assertEqual(["Gadgets"], [item.name for item in result.missing])
+        self.assertEqual("docs/wiki/reference/09-endpoint-inventory.md", result.missing[0].doc.as_posix())
 
     def test_react_features_pass_when_every_directory_is_named(self) -> None:
         result = MODULE.check_react_features(self.make_repo())
@@ -276,7 +331,26 @@ class DocsInventoryCheckTests(unittest.TestCase):
         result = MODULE.check_react_features(root)
 
         self.assertEqual(["gamma"], [item.name for item in result.missing])
-        self.assertEqual("docs/wiki/10-react-client.md", result.missing[0].doc.as_posix())
+        self.assertEqual("docs/wiki/reference/10-feature-folders.md", result.missing[0].doc.as_posix())
+
+    def test_react_features_report_a_feature_dropped_from_the_reference_page(self) -> None:
+        root = self.make_repo()
+        self.drop(root, "docs/wiki/reference/10-feature-folders.md", "beta")
+
+        result = MODULE.check_react_features(root)
+
+        self.assertEqual(["beta"], [item.name for item in result.missing])
+
+    def test_react_features_report_a_deleted_row_while_other_pages_still_mention_it(self) -> None:
+        root = self.make_repo()
+        self.drop(root, "docs/wiki/reference/10-feature-folders.md", "| `beta` | owns beta |\n")
+
+        result = MODULE.check_react_features(root)
+
+        # `beta` is still written in the alpha row's prose and on the parent page, but it has no row of its own.
+        self.assertIn("beta", (root / "docs/wiki/reference/10-feature-folders.md").read_text(encoding="utf-8"))
+        self.assertEqual(["beta"], [item.name for item in result.missing])
+        self.assertEqual("docs/wiki/reference/10-feature-folders.md", result.missing[0].doc.as_posix())
 
     def test_wiki_pages_pass_when_home_links_every_numbered_page(self) -> None:
         result = MODULE.check_wiki_pages_linked(self.make_repo())
@@ -411,7 +485,7 @@ class DocsInventoryCheckTests(unittest.TestCase):
 
     def test_main_reports_and_fails_on_a_stale_page(self) -> None:
         root = self.make_repo()
-        self.drop(root, "docs/wiki/09-api-and-hubs.md", "BetaHub")
+        self.drop(root, "docs/wiki/reference/09-signalr-hubs.md", "BetaHub")
 
         stdout = io.StringIO()
         with contextlib.redirect_stdout(stdout):
@@ -419,7 +493,7 @@ class DocsInventoryCheckTests(unittest.TestCase):
 
         out = stdout.getvalue()
         self.assertEqual(1, exit_code)
-        self.assertIn("MISSING signalr-hubs: BetaHub — expected in docs/wiki/09-api-and-hubs.md", out)
+        self.assertIn("MISSING signalr-hubs: BetaHub — expected in docs/wiki/reference/09-signalr-hubs.md", out)
         self.assertIn("1 missing", out)
 
     def test_agent_knowledge_index_passes_when_every_topic_is_linked(self) -> None:
@@ -966,6 +1040,11 @@ class DocsInventoryCheckTests(unittest.TestCase):
             found,
         )
 
+    def test_the_dropped_git_variables_are_the_ones_the_scripts_drop(self) -> None:
+        script = (REPO_ROOT / "scripts" / "lib" / "git-env.sh").read_text(encoding="utf-8")
+        listed = script.split("XE_GIT_REPO_ENV_VARS=(", 1)[1].split(")", 1)[0].split()
+        self.assertEqual(sorted(listed), sorted(MODULE.GIT_REPO_ENV_VARS))
+
     def test_git_queries_ignore_an_exported_private_index(self) -> None:
         root = self.make_repo()
         stale_index = root.parent / "stale-index"
@@ -983,13 +1062,199 @@ class DocsInventoryCheckTests(unittest.TestCase):
 
         self.assertEqual(["node.key"], [item.name for item in result.missing])
 
+    @staticmethod
+    def ratchet(root: Path, *rows: str) -> None:
+        (root / "scripts" / "docs-inventory-ratchet.txt").write_text(
+            RATCHET_HEADER + "".join(f"{row}\n" for row in rows), encoding="utf-8"
+        )
+
+    def test_ratchets_pass_on_a_clean_repository(self) -> None:
+        root = self.make_repo()
+        for check in (MODULE.check_wiki_page_sizes, MODULE.check_history_prose, MODULE.check_path_references):
+            with self.subTest(check=check.__name__):
+                result = check(root)
+                self.assertNotEqual((), result.inventory)
+                self.assertEqual((), result.missing)
+
+    def test_ratchet_rows_that_cannot_be_read_stop_the_check(self) -> None:
+        root = self.make_repo()
+        for rows in (
+            ("wiki-page-size|docs/wiki/Home.md|70000",),
+            ("wiki-page-size|docs/wiki/Home.md|big|reason",),
+            ("wiki-page-size|docs/wiki/Home.md|70000| ",),
+            ("page-size|docs/wiki/Home.md|70000|reason",),
+            ("wiki-page-size|docs/wiki/Home.md|70000|reason", "wiki-page-size|docs/wiki/Home.md|69000|reason"),
+        ):
+            with self.subTest(rows=rows):
+                self.ratchet(root, *rows)
+                with self.assertRaises(MODULE.InventoryError):
+                    MODULE.check_wiki_page_sizes(root)
+        (root / "scripts" / "docs-inventory-ratchet.txt").unlink()
+        with self.assertRaises(MODULE.InventoryError):
+            MODULE.check_wiki_page_sizes(root)
+
+    def test_wiki_page_size_reports_a_page_over_the_cap_and_passes_one_under_its_ceiling(self) -> None:
+        root = self.make_repo()
+        big = "x" * (MODULE.WIKI_PAGE_MAX_BYTES + 1)
+        (root / "docs" / "wiki" / "reference" / "30-big.md").write_text(big, encoding="utf-8")
+
+        result = MODULE.check_wiki_page_sizes(root)
+
+        self.assertEqual(
+            [
+                f"OVER-CAP wiki-page-size: docs/wiki/reference/30-big.md: page is {len(big)} bytes, ceiling "
+                f"{MODULE.WIKI_PAGE_MAX_BYTES}; move lookup material to docs/wiki/reference/ or delete history"
+            ],
+            [item.render() for item in result.missing],
+        )
+        self.ratchet(root, f"wiki-page-size|docs/wiki/reference/30-big.md|{len(big) + 49}|lookup table")
+        self.assertEqual((), MODULE.check_wiki_page_sizes(root).missing)
+
+    def test_wiki_page_size_reports_a_listed_page_over_its_ceiling(self) -> None:
+        root = self.make_repo()
+        (root / "docs" / "wiki" / "09-api-and-hubs.md").write_text("y" * 70001, encoding="utf-8")
+        self.ratchet(root, "wiki-page-size|docs/wiki/09-api-and-hubs.md|70000|over the cap at introduction")
+
+        result = MODULE.check_wiki_page_sizes(root)
+
+        self.assertEqual(["docs/wiki/09-api-and-hubs.md"], [item.name for item in result.missing])
+        self.assertIn("page is 70001 bytes, ceiling 70000", result.missing[0].render())
+
+    def test_wiki_page_size_reports_a_row_for_a_page_gone_or_back_under_the_cap(self) -> None:
+        root = self.make_repo()
+        # 10-react-client.md is under the cap; 99-gone.md does not exist. A page under its ceiling but over the
+        # cap keeps its row.
+        (root / "docs" / "wiki" / "09-api-and-hubs.md").write_text("y" * 65000, encoding="utf-8")
+        self.ratchet(
+            root,
+            "wiki-page-size|docs/wiki/09-api-and-hubs.md|70000|over the cap at introduction",
+            "wiki-page-size|docs/wiki/10-react-client.md|70000|over the cap at introduction",
+            "wiki-page-size|docs/wiki/99-gone.md|70000|over the cap at introduction",
+        )
+
+        result = MODULE.check_wiki_page_sizes(root)
+
+        self.assertEqual(
+            ["docs/wiki/10-react-client.md", "docs/wiki/99-gone.md"], [item.name for item in result.missing]
+        )
+        self.assertTrue(all(item.render().startswith("STALE wiki-page-size: scripts/") for item in result.missing))
+
+    def test_history_prose_reports_gone_no_longer_exists_and_dated_change_lines(self) -> None:
+        root = self.make_repo()
+        page = root / "docs" / "wiki" / "reference" / "09-endpoint-inventory.md"
+        page.write_text(
+            ENDPOINT_INVENTORY_MD
+            + "**Gone.** The old route.\n"
+            + "The Foo page no longer exists.\n"
+            + "Renamed on 2026-09-16 from `Bar`.\n"
+            + "Measured 2026-10-02 on a 9B model.\n"
+            + "Since rc.3 the route takes a body.\n",
+            encoding="utf-8",
+        )
+
+        result = MODULE.check_history_prose(root)
+
+        self.assertEqual(
+            [
+                "HISTORY history-prose: docs/wiki/reference/09-endpoint-inventory.md: 3 history-prose lines "
+                "(lines 4, 5, 6), allowed 0; describe current behaviour, history lives in git and the ADRs"
+            ],
+            [item.render() for item in result.missing],
+        )
+        self.ratchet(root, "history-prose|docs/wiki/reference/09-endpoint-inventory.md|3|at introduction")
+        self.assertEqual((), MODULE.check_history_prose(root).missing)
+
+    def test_history_prose_rows_only_shrink(self) -> None:
+        root = self.make_repo()
+        page = root / "docs" / "wiki" / "09-api-and-hubs.md"
+        page.write_text(API_AND_HUBS_MD + "**Gone.** One.\n**Gone.** Two.\n", encoding="utf-8")
+        cases = {"1": ["HISTORY"], "3": ["STALE"]}
+        for limit, labels in cases.items():
+            with self.subTest(limit=limit):
+                self.ratchet(root, f"history-prose|docs/wiki/09-api-and-hubs.md|{limit}|at introduction")
+                result = MODULE.check_history_prose(root)
+                self.assertEqual(labels, [item.render().split()[0] for item in result.missing])
+        page.write_text(API_AND_HUBS_MD, encoding="utf-8")
+        self.ratchet(root, "history-prose|docs/wiki/09-api-and-hubs.md|2|at introduction")
+        self.assertEqual(["STALE"], [item.render().split()[0] for item in MODULE.check_history_prose(root).missing])
+
+    def test_path_references_report_a_path_that_resolves_nowhere(self) -> None:
+        root = self.make_repo()
+        self.track(
+            root,
+            {
+                ".gitignore": "/scripts/.data/\n",
+                "XE-Local-AI-Engine.Client.React/scripts/check.mjs": "",
+                "docs/wiki/30-paths.md": (
+                    "# Paths\n\n"
+                    "Tracked `scripts/alpha.sh` and `scripts/lib/`, a tail `scripts/check.mjs`, "
+                    "a run `scripts/beta.py --flag`, an ignored `scripts/.data/node.key`, "
+                    "a route `scripts/import`, an untracked root `.tmp/run.log`.\n"
+                    "Gone: `scripts/removed.sh#usage`.\n"
+                ),
+            },
+        )
+        (root / "scripts" / "lib" / "keep.sh").write_text("", encoding="utf-8")
+        self.track(root, {})
+
+        result = MODULE.check_path_references(root)
+
+        self.assertIn("scripts/check.mjs", result.inventory)
+        self.assertNotIn("scripts/import", result.inventory)
+        self.assertEqual(
+            [
+                "UNRESOLVED path-references: docs/wiki/30-paths.md: `scripts/removed.sh` names no tracked or "
+                "git-ignored path, cited 1 times (allowed 0) at docs/wiki/30-paths.md:4; fix the citation"
+            ],
+            [item.render() for item in result.missing],
+        )
+
+    def test_path_references_resolve_a_react_relative_path_inside_the_react_project_only(self) -> None:
+        root = self.make_repo()
+        self.track(
+            root,
+            {
+                "XE-Local-AI-Engine.Client.React/src/core/Live.ts": "",
+                "XE-Local-AI-Engine.Client.React/config/budget.json": "",
+                # The same tail outside the React project does not resolve a React-relative citation.
+                "tools/other/src/core/Elsewhere.ts": "",
+                "docs/wiki/30-paths.md": (
+                    "# Paths\n\n"
+                    "Live `src/core/Live.ts`, `src/core/` and `config/budget.json`.\n"
+                    "Removed `src/core/Removed.ts`; elsewhere `src/core/Elsewhere.ts`.\n"
+                ),
+            },
+        )
+
+        result = MODULE.check_path_references(root)
+
+        self.assertIn("src/core/Live.ts", result.inventory)
+        self.assertEqual(
+            ["src/core/Elsewhere.ts", "src/core/Removed.ts"],
+            [item.name for item in result.missing],
+        )
+        self.assertTrue(all(item.render().startswith("UNRESOLVED") for item in result.missing))
+
+    def test_path_references_allow_a_listed_path_until_it_resolves_or_drops(self) -> None:
+        root = self.make_repo()
+        self.track(root, {"docs/wiki/30-paths.md": "Upstream `scripts/server.cpp` and `scripts/server.cpp`.\n"})
+        self.ratchet(root, "path-references|scripts/server.cpp|2|upstream source file")
+        self.assertEqual((), MODULE.check_path_references(root).missing)
+
+        self.track(root, {"scripts/server.cpp": ""})
+
+        result = MODULE.check_path_references(root)
+
+        self.assertEqual(["scripts/server.cpp"], [item.name for item in result.missing])
+        self.assertIn("STALE path-references: scripts/docs-inventory-ratchet.txt: entry", result.missing[0].render())
+
     def test_the_script_exits_zero_on_the_real_repository(self) -> None:
         completed = subprocess.run(
             [sys.executable, str(MODULE_PATH)], cwd=REPO_ROOT, capture_output=True, text=True, check=False
         )
 
         self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
-        self.assertIn("14 checks", completed.stdout)
+        self.assertIn("17 checks", completed.stdout)
 
     def test_main_is_clean_on_the_real_repository(self) -> None:
         stdout = io.StringIO()

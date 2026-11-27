@@ -238,8 +238,6 @@ export const nodeRoutePaths = {
 	diagnostics: "/diagnostics",
 } as const;
 
-export type NodeRouteId = keyof typeof nodeRoutePaths;
-
 // The two navigation modes the operator picks between, stored server-side as `uiMode` on the node settings. `simple`
 // shows the everyday surfaces only; `advanced` shows everything this build offers, and is what an absent server value
 // reads as, so a node that never answered looks exactly as it did before the mode existed.

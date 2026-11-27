@@ -4,9 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { recordError, SCHEMA_VERSION } from "@/core/diagnostics/Diagnostics";
-import { REDACTED } from "@/core/diagnostics/Redact";
 import { startRrwebRecording, stopRrwebRecording } from "@/core/diagnostics/RrwebRecorder";
-import { captureSnapshot, installAutoCapture, registerSnapshotStateProvider } from "@/features/diagnostics/models/BuildSnapshot";
+import { captureSnapshot, installAutoCapture } from "@/features/diagnostics/models/BuildSnapshot";
 import { clearSnapshots, getSnapshot, listSnapshots, subscribeSnapshots } from "@/features/diagnostics/stores/SnapshotStore";
 
 // Capture the options rrweb's `record` is called with, without loading the real library (hermetic).
@@ -36,9 +35,7 @@ afterEach(() => {
 });
 
 describe("captureSnapshot", () => {
-	it("builds a valid persisted snapshot with redacted opted-in state", async () => {
-		const unregister = registerSnapshotStateProvider("auth", () => ({ token: "secret-token", userId: "u1" }));
-
+	it("builds a valid persisted snapshot", async () => {
 		const snapshot = await captureSnapshot("manual");
 
 		expect(snapshot.id).toBeTruthy();
@@ -47,14 +44,8 @@ describe("captureSnapshot", () => {
 		expect(snapshot.kind).toBe("manual");
 		expect(snapshot.error).toBeUndefined();
 
-		const authState = snapshot.state?.["auth"] as Record<string, unknown> | undefined;
-		expect(authState?.["token"]).toBe(REDACTED);
-		expect(authState?.["userId"]).toBe("u1");
-
 		// It is persisted and retrievable.
 		expect(await getSnapshot(snapshot.id)).toEqual(snapshot);
-
-		unregister();
 	});
 
 	it("attaches the recorder's rrweb segment while Developer Mode is recording, and nothing otherwise", async () => {

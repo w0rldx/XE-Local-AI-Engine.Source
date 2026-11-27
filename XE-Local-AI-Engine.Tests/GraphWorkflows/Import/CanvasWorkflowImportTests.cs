@@ -193,6 +193,33 @@ public sealed class CanvasWorkflowImportTests
         AssertEx.Equal("Imported while off", (await ListDefinitionsAsync(factory)).Single().Name);
     }
 
+    /// <summary>A name longer than the 255-character column is cut to it, and a cut that would split a surrogate pair drops the whole pair.</summary>
+    [Test]
+    public async Task ImportAsync_WithOverlongNames_CutsEachToTheColumnOnAWholeCharacter()
+    {
+        await using var factory = NewHost();
+        string[] names = [new string('a', count: 300), new string('a', count: 254) + "\U0001F600z", new string('b', count: 255)];
+
+        await ImportAsync(factory, new CanvasWorkflowImportSnapshot
+        {
+            Candidates =
+            [
+                .. names.Select(static (name, index) => new CanvasWorkflowImportCandidate
+                {
+                    Id = Guid.NewGuid(),
+                    Name = name,
+                    GraphJson = CanvasGraphs.Linear,
+                    CreatedAtUtc = index + 1
+                })
+            ],
+            FailedCount = 0
+        }, new RecordingLogger<CanvasWorkflowImportTests>());
+
+        var stored = (await ListDefinitionsAsync(factory)).Select(static summary => summary.Name).Order(StringComparer.Ordinal).ToArray();
+        string[] expected = [new string('a', count: 254), new string('a', count: 255), new string('b', count: 255)];
+        AssertEx.True(expected.SequenceEqual(stored), string.Join(" | ", stored.Select(static name => name.Length)));
+    }
+
     /// <summary>A host of this test's own, because every definition count here is an absolute one.</summary>
     private static TestServerWebAppFactory NewHost() =>
         GraphWorkflowHostFixture.NewFactory();

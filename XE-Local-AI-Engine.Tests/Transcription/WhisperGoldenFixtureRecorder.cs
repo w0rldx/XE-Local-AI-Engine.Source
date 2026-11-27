@@ -86,7 +86,8 @@ public sealed class WhisperGoldenFixtureRecorder
             Windows = windows
         };
 
-        var destination = SourceTreeFixturePath("jfk-golden-base.json");
+        // The source-tree copy, not the one beside the binary, so the run produces a committable file.
+        var destination = RepositoryPaths.Combine("XE-Local-AI-Engine.Tests", "Fixtures", "Transcription", "jfk-golden-base.json");
         RecordedWhisperTranscriber.WriteFixture(destination, fixture);
 
         // A recorder that only wrote a file would be a vacuous test: read back what it wrote and assert the two
@@ -143,19 +144,6 @@ public sealed class WhisperGoldenFixtureRecorder
 
         _ = await segmenter.FlushAsync(CancellationToken.None);
         return recorder.Windows;
-    }
-
-    /// <summary>Resolves the fixture inside the source tree, so the run produces a committable file.</summary>
-    private static string SourceTreeFixturePath(string fileName)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "XE-Local-AI-Engine.slnx")))
-        {
-            directory = directory.Parent;
-        }
-
-        var root = AssertEx.NotNull(directory, "The recorder writes into the source tree, and the repository root was not found above the test binary.");
-        return Path.Combine(root.FullName, "XE-Local-AI-Engine.Tests", "Fixtures", "Transcription", fileName);
     }
 }
 

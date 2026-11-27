@@ -2,14 +2,21 @@ import type { KnipConfig } from "knip";
 
 const config: KnipConfig = {
 	entry: [
-		"src/Main.tsx",
+		"src/Main.tsx!",
 		"src/**/*.test.{ts,tsx}",
 		"OpenapiTs.config.ts",
 		"vite.config.ts",
 		"vite-plugins/**/*.ts",
 		"scripts/**/*.mjs",
 	],
-	project: ["src/**/*.{ts,tsx}", "vite-plugins/**/*.ts", "scripts/**/*.mjs"],
+	project: [
+		"src/**/*.{ts,tsx}!",
+		"!src/**/*.test.{ts,tsx}!",
+		"!src/test/**!",
+		"!src/**/test/**!",
+		"vite-plugins/**/*.ts",
+		"scripts/**/*.mjs",
+	],
 	ignore: ["src/core/api/generated/**"],
 	rules: {
 		types: "off",

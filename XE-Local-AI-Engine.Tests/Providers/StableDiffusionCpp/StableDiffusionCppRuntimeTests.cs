@@ -323,6 +323,7 @@ public sealed class StableDiffusionCppRuntimeTests
         var exception = await AssertEx.ThrowsAsync<StableDiffusionRuntimeException>(() => runtime.GenerateAsync(Request(), new RecordingProgress(), CancellationToken.None));
 
         AssertEx.Contains(exception.Message, "Try again", StringComparison.Ordinal);
+        AssertEx.True(exception.ModelUnloadedWhileStarting, "the image job maps this flag to its own failure reason instead of the generic one");
         AssertEx.Equal(expected: 2, supervisor.EnsureCount, "one bounded re-ensure, then the failure");
         AssertEx.Equal(expected: 0, handler.Ports.Count, "nothing may be submitted without a lease on the daemon");
     }

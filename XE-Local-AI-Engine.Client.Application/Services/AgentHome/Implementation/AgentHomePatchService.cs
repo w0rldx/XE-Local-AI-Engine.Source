@@ -9,7 +9,8 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 
 /// <summary>
-///     Patch export implementation for <see cref="IAgentHomePatchService" />.
+///     Patch export: after the run, diff the in-sandbox git baseline that the workspace copy created and write
+///     <c>changes.patch</c> and <c>changed-files.json</c> under the host-side <c>runs/&lt;run-id&gt;/patches/</c>.
 /// </summary>
 /// <remarks>
 ///     It stages the workspace with <c>add -A</c> — not <c>--force</c>, so <c>.gitignore</c> still decides what is offered, as it did for the baseline — then
@@ -18,7 +19,7 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 ///     turn has ended, and all three scoped to the copied folders' aliases. Their standard output becomes <c>changes.patch</c> and <c>changed-files.json</c>
 ///     under <c>runs/&lt;run-id&gt;/patches/</c>, bounded by <see cref="AgentHomeOptions.MaxPatchBytes" />. Model-facing paths stay run-relative.
 /// </remarks>
-internal sealed class AgentHomePatchService : IAgentHomePatchService
+internal sealed class AgentHomePatchService
 {
     private static readonly JsonSerializerOptions ChangedFilesJsonOptions =
         new(JsonSerializerDefaults.Web)
@@ -46,6 +47,7 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
         _logger = logger;
     }
 
+    /// <summary>Exports the run's patch; the result carries run-relative paths and counts only, never a host path.</summary>
     public async Task<AgentHomePatchExport> ExportPatchAsync(SandboxHandle handle,
         AgentHomePatchExportRequest request,
         CancellationToken cancellationToken = default)

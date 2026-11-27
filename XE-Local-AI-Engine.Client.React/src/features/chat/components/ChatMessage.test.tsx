@@ -1,7 +1,5 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -23,24 +21,12 @@ vi.mock("@tanstack/react-router", async (importOriginal) => {
 import { ChatMessage } from "@/features/chat/components/ChatMessage";
 import type { ChatMessageModel } from "@/features/chat/models/ChatModels";
 import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { createProvidersWrapper } from "@/test/RenderWithProviders";
 
-// A tool-call card in the ordered parts can now fire the resolve-approval TanStack mutation, so the render
-// tree needs a QueryClientProvider even for turns that never surface an approval. Kept as an element helper (not a
-// named component) so the test module stays fast-refresh-clean under biome's useComponentExportOnlyModules rule.
-function withProviders(ui: ReactNode): ReactElement {
-	const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
-	return (
-		<QueryClientProvider client={queryClient}>
-			<MantineProvider env="test" theme={testMantineTheme}>
-				{ui}
-			</MantineProvider>
-		</QueryClientProvider>
-	);
-}
-
-function renderWithProviders(ui: ReactElement) {
-	return render(withProviders(ui));
+// A tool-call card in the ordered parts can fire the resolve-approval TanStack mutation, so the tree needs a
+// QueryClientProvider even for turns that never surface an approval. A `wrapper`, so `rerender` keeps the providers.
+function renderKeepingProviders(ui: ReactElement) {
+	return render(ui, { wrapper: createProvidersWrapper().wrapper });
 }
 
 function assistantMessage(overrides: Partial<ChatMessageModel> = {}): ChatMessageModel {
@@ -99,7 +85,7 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("copies the message content to the clipboard", async () => {
-		renderWithProviders(<ChatMessage message={assistantMessage()} />);
+		renderKeepingProviders(<ChatMessage message={assistantMessage()} />);
 
 		fireEvent.click(screen.getByLabelText("Copy message"));
 
@@ -108,7 +94,7 @@ describe("ChatMessage actions", () => {
 
 	it("invokes onRegenerate with the assistant message id", () => {
 		const onRegenerate = vi.fn();
-		renderWithProviders(<ChatMessage message={assistantMessage()} onRegenerate={onRegenerate} />);
+		renderKeepingProviders(<ChatMessage message={assistantMessage()} onRegenerate={onRegenerate} />);
 
 		fireEvent.click(screen.getByLabelText("Regenerate response"));
 
@@ -116,7 +102,7 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("hides actions while the assistant message is streaming", () => {
-		renderWithProviders(
+		renderKeepingProviders(
 			<ChatMessage message={assistantMessage({ status: "streaming" })} isStreaming={true} onRegenerate={vi.fn()} />,
 		);
 
@@ -126,7 +112,7 @@ describe("ChatMessage actions", () => {
 
 	it("does not offer regenerate on user messages", () => {
 		const onRegenerate = vi.fn();
-		renderWithProviders(
+		renderKeepingProviders(
 			<ChatMessage
 				message={assistantMessage({ id: "user-1", role: "user", content: "Question?" })}
 				onRegenerate={onRegenerate}
@@ -139,7 +125,7 @@ describe("ChatMessage actions", () => {
 
 	it("invokes onBranch with the assistant message id", () => {
 		const onBranch = vi.fn();
-		renderWithProviders(<ChatMessage message={assistantMessage()} onBranch={onBranch} />);
+		renderKeepingProviders(<ChatMessage message={assistantMessage()} onBranch={onBranch} />);
 
 		fireEvent.click(screen.getByLabelText("Branch conversation"));
 
@@ -148,7 +134,7 @@ describe("ChatMessage actions", () => {
 
 	it("renders revision navigation and pages between siblings", () => {
 		const onPrevious = vi.fn();
-		renderWithProviders(
+		renderKeepingProviders(
 			<ChatMessage message={assistantMessage()} revisionNav={{ activeIndex: 1, total: 3, onPrevious, onNext: vi.fn() }} />,
 		);
 
@@ -158,19 +144,19 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("hides feedback controls unless enabled", () => {
-		const { rerender } = renderWithProviders(
+		const { rerender } = renderKeepingProviders(
 			<ChatMessage message={assistantMessage()} onSubmitFeedback={vi.fn()} showFeedbackControls={false} />,
 		);
 		expect(screen.queryByLabelText("Good response")).toBeNull();
 
-		rerender(withProviders(<ChatMessage message={assistantMessage()} onSubmitFeedback={vi.fn()} showFeedbackControls={true} />));
+		rerender(<ChatMessage message={assistantMessage()} onSubmitFeedback={vi.fn()} showFeedbackControls={true} />);
 		expect(screen.getByLabelText("Good response")).toBeTruthy();
 		expect(screen.getByLabelText("Bad response")).toBeTruthy();
 	});
 
 	it("submits feedback with the chosen rating and comment", async () => {
 		const onSubmitFeedback = vi.fn();
-		renderWithProviders(
+		renderKeepingProviders(
 			<ChatMessage message={assistantMessage()} onSubmitFeedback={onSubmitFeedback} showFeedbackControls={true} />,
 		);
 
@@ -183,7 +169,7 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("flags reasoning emitted while the 'none' effort is selected", () => {
-		renderWithProviders(
+		renderKeepingProviders(
 			<ChatMessage message={assistantMessage({ reasoning: "Considering the request." })} reasoningEffort="none" />,
 		);
 
@@ -191,7 +177,7 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("does not flag a bypass when the effort is not 'none'", () => {
-		renderWithProviders(
+		renderKeepingProviders(
 			<ChatMessage message={assistantMessage({ reasoning: "Considering the request." })} reasoningEffort="medium" />,
 		);
 
@@ -213,7 +199,7 @@ describe("ChatMessage actions", () => {
 			detail: "length",
 		};
 		const reasoningPart = { kind: "reasoning" as const, id: "assistant-1:1", sequence: 1, text: "Weighing the options." };
-		renderWithProviders(
+		renderKeepingProviders(
 			<ChatMessage
 				message={assistantMessage({
 					content: "",
@@ -231,13 +217,13 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("does not flag a bypass when 'none' is selected but no reasoning was emitted", () => {
-		renderWithProviders(<ChatMessage message={assistantMessage()} reasoningEffort="none" />);
+		renderKeepingProviders(<ChatMessage message={assistantMessage()} reasoningEffort="none" />);
 
 		expect(screen.queryByTestId("chat-message-reasoning-bypass-assistant-1")).toBeNull();
 	});
 
 	it("renders the agent name on the attribution row for assistant turns", () => {
-		renderWithProviders(
+		renderKeepingProviders(
 			<ChatMessage message={assistantMessage({ agentName: "My Custom Agent", createdAt: "2026-06-03T10:00:00.000Z" })} />,
 		);
 
@@ -247,7 +233,7 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("lets the attribution row wrap on narrow widths instead of overlaying the action icons", () => {
-		renderWithProviders(
+		renderKeepingProviders(
 			<ChatMessage message={assistantMessage({ agentName: "My Custom Agent", model: "a-very-long-model-identifier-Q4_K_M" })} />,
 		);
 
@@ -260,7 +246,7 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("falls back to Default Assistant label when agentName is absent on an assistant turn", () => {
-		renderWithProviders(<ChatMessage message={assistantMessage({ agentName: undefined })} />);
+		renderKeepingProviders(<ChatMessage message={assistantMessage({ agentName: undefined })} />);
 
 		const attribution = screen.getByTestId("chat-message-agent-assistant-1");
 		// i18n fallback key value in test environment
@@ -268,7 +254,7 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("does not render the attribution testid on user messages", () => {
-		renderWithProviders(<ChatMessage message={assistantMessage({ id: "user-1", role: "user", content: "Question?" })} />);
+		renderKeepingProviders(<ChatMessage message={assistantMessage({ id: "user-1", role: "user", content: "Question?" })} />);
 
 		expect(screen.queryByTestId("chat-message-agent-user-1")).toBeNull();
 	});
@@ -277,7 +263,7 @@ describe("ChatMessage actions", () => {
 		// The test environment runs without full i18n initialization: t() returns fallback strings, and
 		// variable interpolation inside fallbacks is not performed. The outer fallback for the reasoning
 		// label is "Reasoning: {{effort}}" — its presence proves the segment was rendered.
-		renderWithProviders(
+		renderKeepingProviders(
 			<ChatMessage message={assistantMessage({ reasoningEffort: "medium", createdAt: "2026-06-04T10:00:00.000Z" })} />,
 		);
 
@@ -292,7 +278,9 @@ describe("ChatMessage actions", () => {
 		// Audit cue: multi-provider threads must show which model produced each assistant turn. The outer
 		// fallback "Model: {{model}}" is not interpolated in the test env, but the model id is passed as a var
 		// and the "Model:" prefix proves the segment rendered.
-		renderWithProviders(<ChatMessage message={assistantMessage({ model: "gpt-5.5", createdAt: "2026-06-08T10:00:00.000Z" })} />);
+		renderKeepingProviders(
+			<ChatMessage message={assistantMessage({ model: "gpt-5.5", createdAt: "2026-06-08T10:00:00.000Z" })} />,
+		);
 
 		const attribution = screen.getByTestId("chat-message-agent-assistant-1").textContent ?? "";
 		expect(attribution).toContain("Model:");
@@ -300,7 +288,7 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("omits the model segment when message.model is absent", () => {
-		renderWithProviders(<ChatMessage message={assistantMessage({ model: undefined })} />);
+		renderKeepingProviders(<ChatMessage message={assistantMessage({ model: undefined })} />);
 
 		const attribution = screen.getByTestId("chat-message-agent-assistant-1").textContent ?? "";
 		expect(attribution).not.toContain("Model:");
@@ -311,7 +299,7 @@ describe("ChatMessage actions", () => {
 		// like any other effort. The label key "pages.chat.reasoning.effort.none" maps to "Off" in the
 		// real locale (kept in sync with the composer menu's reasoningEffortOptions.none = "Off"); in
 		// test env the fallback string is returned, but the segment is still present.
-		renderWithProviders(
+		renderKeepingProviders(
 			<ChatMessage message={assistantMessage({ reasoningEffort: "none", createdAt: "2026-06-04T10:00:00.000Z" })} />,
 		);
 
@@ -321,7 +309,7 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("omits the reasoning label from the attribution row when reasoningEffort is absent (legacy turn)", () => {
-		renderWithProviders(
+		renderKeepingProviders(
 			<ChatMessage message={assistantMessage({ reasoningEffort: undefined, createdAt: "2026-06-04T10:00:00.000Z" })} />,
 		);
 
@@ -331,7 +319,7 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("renders the ordered parts interleave: reasoning → tool card → reasoning", () => {
-		renderWithProviders(
+		renderKeepingProviders(
 			<ChatMessage
 				message={assistantMessage({
 					parts: [
@@ -353,7 +341,7 @@ describe("ChatMessage actions", () => {
 
 	it("renders a persisted failed turn's error block once and offers regenerate", () => {
 		const onRegenerate = vi.fn();
-		renderWithProviders(
+		renderKeepingProviders(
 			<ChatMessage
 				message={assistantMessage({ content: "", status: "failed", error: "Stream timed out at hf.co/unsloth/model." })}
 				onRegenerate={onRegenerate}
@@ -372,7 +360,7 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("folds the live failure category into the error block", () => {
-		renderWithProviders(
+		renderKeepingProviders(
 			<ChatMessage
 				message={assistantMessage({ content: "", status: "failed", error: "Inter-chunk stall." })}
 				failureCategory="inter-chunk-stall"
@@ -383,7 +371,7 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("shows the localized headline above the raw server text as a dimmed detail for a known category", () => {
-		renderWithProviders(
+		renderKeepingProviders(
 			<ChatMessage
 				message={assistantMessage({
 					content: "",
@@ -405,7 +393,7 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("shows the shared provider headline for every provider category", () => {
-		renderWithProviders(
+		renderKeepingProviders(
 			<ChatMessage
 				message={assistantMessage({ content: "", status: "failed", error: "HTTP 429 from the gateway." })}
 				failureCategory="ProviderRateLimited"
@@ -419,7 +407,7 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("shows the raw server text alone for a category without a headline", () => {
-		renderWithProviders(
+		renderKeepingProviders(
 			<ChatMessage
 				message={assistantMessage({ content: "", status: "failed", error: "Something new broke." })}
 				failureCategory="SomeFutureCategory"
@@ -433,7 +421,7 @@ describe("ChatMessage actions", () => {
 
 	it("heads the ModelNotInstalled failure with a localized line, keeps the server's text as detail and links Models", () => {
 		// A "Local runtime default" send with no installed GGUF chat model surfaces FailureCategory ModelNotInstalled.
-		renderWithProviders(
+		renderKeepingProviders(
 			<ChatMessage
 				message={assistantMessage({
 					content: "",
@@ -457,7 +445,7 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("does not claim no chat model is installed when one named model is missing beside others", () => {
-		renderWithProviders(
+		renderKeepingProviders(
 			<ChatMessage
 				message={assistantMessage({
 					content: "",
@@ -476,7 +464,7 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("falls back to a localized ModelNotInstalled text that claims neither case when the server sent none", () => {
-		renderWithProviders(
+		renderKeepingProviders(
 			<ChatMessage message={assistantMessage({ content: "", status: "failed" })} failureCategory="ModelNotInstalled" />,
 		);
 
@@ -491,7 +479,7 @@ describe("ChatMessage actions", () => {
 		// Regression for the MEDIUM bug: the original guard `!hasContentStarted` hid the error whenever
 		// the turn had any content, so a partial-stream failure showed truncated text with no error indicator.
 		// The error Alert must render AFTER the content Paper regardless of whether content is present.
-		renderWithProviders(
+		renderKeepingProviders(
 			<ChatMessage
 				message={assistantMessage({ content: "Partial answer so far…", status: "failed", error: "Stream failed mid-response." })}
 			/>,
@@ -504,7 +492,7 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("renders the live tool card and its result from the streaming parts while streaming", () => {
-		renderWithProviders(
+		renderKeepingProviders(
 			<ChatMessage
 				message={assistantMessage({ status: "streaming", content: "" })}
 				isStreaming={true}
@@ -519,18 +507,18 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("renders the ⋮ options menu on a completed assistant turn", () => {
-		renderWithProviders(<ChatMessage message={assistantMessage()} />);
+		renderKeepingProviders(<ChatMessage message={assistantMessage()} />);
 
 		expect(screen.getByTestId("chat-message-menu-assistant-1")).toBeTruthy();
 	});
 
 	it("does not render the ⋮ options menu while streaming or on user turns", () => {
-		const { rerender } = renderWithProviders(
+		const { rerender } = renderKeepingProviders(
 			<ChatMessage message={assistantMessage({ status: "streaming", content: "" })} isStreaming={true} />,
 		);
 		expect(screen.queryByTestId("chat-message-menu-assistant-1")).toBeNull();
 
-		rerender(withProviders(<ChatMessage message={assistantMessage({ id: "user-1", role: "user", content: "Question?" })} />));
+		rerender(<ChatMessage message={assistantMessage({ id: "user-1", role: "user", content: "Question?" })} />);
 		expect(screen.queryByTestId("chat-message-menu-user-1")).toBeNull();
 	});
 
@@ -539,7 +527,7 @@ describe("ChatMessage actions", () => {
 		[true, true],
 		[false, false],
 	])("with showTurnThroughput %s shows the throughput line: %s", (showTurnThroughput, shown) => {
-		renderWithProviders(
+		renderKeepingProviders(
 			<ChatMessage
 				message={assistantMessage({ throughput: { timeToFirstTokenMs: 1_400, generationTokens: 150, generationMs: 2_000 } })}
 				showTurnThroughput={showTurnThroughput}
@@ -550,23 +538,21 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("shows no throughput line for a turn without throughput, nor while the turn streams", () => {
-		const { rerender } = renderWithProviders(<ChatMessage message={assistantMessage()} showTurnThroughput={true} />);
+		const { rerender } = renderKeepingProviders(<ChatMessage message={assistantMessage()} showTurnThroughput={true} />);
 		expect(screen.queryByTestId("chat-message-throughput-assistant-1")).toBeNull();
 
 		rerender(
-			withProviders(
-				<ChatMessage
-					message={assistantMessage({ throughput: { generationTokens: 150, generationMs: 2_000 } })}
-					showTurnThroughput={true}
-					isStreaming={true}
-				/>,
-			),
+			<ChatMessage
+				message={assistantMessage({ throughput: { generationTokens: 150, generationMs: 2_000 } })}
+				showTurnThroughput={true}
+				isStreaming={true}
+			/>,
 		);
 		expect(screen.queryByTestId("chat-message-throughput-assistant-1")).toBeNull();
 	});
 
 	it("does not show tokens/sec by default even when duration and tokens are present", () => {
-		renderWithProviders(
+		renderKeepingProviders(
 			<ChatMessage
 				message={assistantMessage({ generationDurationMs: 2000, outputTokens: 84, createdAt: "2026-06-05T10:00:00.000Z" })}
 			/>,
@@ -582,7 +568,7 @@ describe("ChatMessage actions", () => {
 		// proves the tps was computed (> 0) and the segment was added to the attribution row (same pattern the
 		// reasoning-label tests use for "Reasoning:").
 		useNodeChatPreferencesStore.getState().actions.setShowTokensPerSecond(true);
-		renderWithProviders(
+		renderKeepingProviders(
 			<ChatMessage
 				message={assistantMessage({ generationDurationMs: 2000, outputTokens: 84, createdAt: "2026-06-05T10:00:00.000Z" })}
 			/>,
@@ -594,7 +580,9 @@ describe("ChatMessage actions", () => {
 
 	it("hides tokens/sec when the toggle is on but the turn has no recorded duration (legacy turn)", () => {
 		useNodeChatPreferencesStore.getState().actions.setShowTokensPerSecond(true);
-		renderWithProviders(<ChatMessage message={assistantMessage({ outputTokens: 84, createdAt: "2026-06-05T10:00:00.000Z" })} />);
+		renderKeepingProviders(
+			<ChatMessage message={assistantMessage({ outputTokens: 84, createdAt: "2026-06-05T10:00:00.000Z" })} />,
+		);
 
 		const attribution = screen.getByTestId("chat-message-agent-assistant-1").textContent ?? "";
 		expect(attribution).not.toContain("tok/s");
@@ -602,7 +590,7 @@ describe("ChatMessage actions", () => {
 
 	it("hides tokens/sec when the toggle is on but the duration is zero (no div-by-zero)", () => {
 		useNodeChatPreferencesStore.getState().actions.setShowTokensPerSecond(true);
-		renderWithProviders(
+		renderKeepingProviders(
 			<ChatMessage
 				message={assistantMessage({ generationDurationMs: 0, outputTokens: 84, createdAt: "2026-06-05T10:00:00.000Z" })}
 			/>,
@@ -613,7 +601,7 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("toggles the tokens/sec preference from the menu item", async () => {
-		renderWithProviders(<ChatMessage message={assistantMessage()} />);
+		renderKeepingProviders(<ChatMessage message={assistantMessage()} />);
 
 		expect(useNodeChatPreferencesStore.getState().showTokensPerSecond).toBe(false);
 
@@ -628,7 +616,7 @@ describe("ChatMessage actions", () => {
 
 	// A user cancellation is a neutral, expected outcome — never the red "Response failed" alert.
 	it("renders a cancelled turn as a neutral 'Generation stopped' line, not the red error alert", () => {
-		renderWithProviders(<ChatMessage message={assistantMessage({ content: "Partial answer…", status: "cancelled" })} />);
+		renderKeepingProviders(<ChatMessage message={assistantMessage({ content: "Partial answer…", status: "cancelled" })} />);
 
 		expect(screen.getByTestId("chat-message-stopped-assistant-1")).toBeTruthy();
 		expect(screen.getByTestId("chat-message-stopped-assistant-1").textContent).toContain("Generation stopped");
@@ -642,7 +630,7 @@ describe("ChatMessage actions", () => {
 		// Classification is driven by the terminal `status`, never by the error text. The backend keeps a reason only on a
 		// cancel the user did not ask for (an operator eject), and the neutral line shows it instead of "Generation stopped".
 		const reason = "The model was ejected by the operator; it reloads when it is next used directly.";
-		renderWithProviders(<ChatMessage message={assistantMessage({ content: "", status: "cancelled", error: reason })} />);
+		renderKeepingProviders(<ChatMessage message={assistantMessage({ content: "", status: "cancelled", error: reason })} />);
 
 		const stopped = screen.getByTestId("chat-message-stopped-assistant-1");
 		expect(stopped.textContent).toBe(reason);
@@ -650,7 +638,7 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("localizes an ejected model's cancelled turn from its category over the raw English reason", () => {
-		renderWithProviders(
+		renderKeepingProviders(
 			<ChatMessage
 				message={assistantMessage({ content: "", status: "cancelled", error: "The model was unloaded." })}
 				failureCategory="ModelEjected"
@@ -664,7 +652,7 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("labels a turn stopped before any answer text, with reasoning, as 'Stopped while thinking'", () => {
-		renderWithProviders(
+		renderKeepingProviders(
 			<ChatMessage message={assistantMessage({ content: "", reasoning: "Let me work out", status: "cancelled" })} />,
 		);
 
@@ -672,7 +660,9 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("still renders the red error alert for a genuinely failed turn (cancelled classification does not leak)", () => {
-		renderWithProviders(<ChatMessage message={assistantMessage({ content: "", status: "failed", error: "Stream failed." })} />);
+		renderKeepingProviders(
+			<ChatMessage message={assistantMessage({ content: "", status: "failed", error: "Stream failed." })} />,
+		);
 
 		expect(screen.getByTestId("chat-message-error-assistant-1")).toBeTruthy();
 		expect(screen.queryByTestId("chat-message-stopped-assistant-1")).toBeNull();
@@ -684,7 +674,7 @@ describe("ChatMessage actions", () => {
 		"This step reached its provider-call cap; the work session continues from its saved state on the next step.";
 
 	it("renders a work-session step that spent its call cap as a neutral notice, not the red error alert", () => {
-		renderWithProviders(
+		renderKeepingProviders(
 			<ChatMessage
 				message={assistantMessage({ content: "Partial step output…", status: "failed", error: stepCapError })}
 				isWorkSessionConversation={true}
@@ -697,14 +687,14 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("keeps the red error alert for the same text outside a work session", () => {
-		renderWithProviders(<ChatMessage message={assistantMessage({ content: "", status: "failed", error: stepCapError })} />);
+		renderKeepingProviders(<ChatMessage message={assistantMessage({ content: "", status: "failed", error: stepCapError })} />);
 
 		expect(screen.getByTestId("chat-message-error-assistant-1")).toBeTruthy();
 		expect(screen.queryByTestId("chat-message-step-budget-assistant-1")).toBeNull();
 	});
 
 	it("keeps the red error alert for any other failure inside a work session", () => {
-		renderWithProviders(
+		renderKeepingProviders(
 			<ChatMessage
 				message={assistantMessage({ content: "", status: "failed", error: "The model went away." })}
 				isWorkSessionConversation={true}

@@ -804,11 +804,20 @@ $forbiddenPublishArtifacts = @(
     @{ Pattern = "work-sessions"; Reason = "local data from a used checkout, past the project's Remove lists" },
     @{ Pattern = "benchmarks"; Reason = "local data from a used checkout, past the project's Remove lists" },
     @{ Pattern = "tmp"; Reason = "local data from a used checkout, past the project's Remove lists" },
-    @{ Pattern = "model-catalog-remote-cache.json"; Reason = "local data from a used checkout, past the project's Remove lists" }
+    @{ Pattern = "model-catalog-remote-cache.json"; Reason = "local data from a used checkout, past the project's Remove lists" },
+    @{ Pattern = "training-scripts/**/test_*.py"; Reason = "Python test module (repository only, never shipped)" }
 )
 $leakedArtifacts = [System.Collections.Generic.List[string]]::new()
 foreach ($forbidden in $forbiddenPublishArtifacts) {
-    foreach ($match in @(Get-ChildItem -Path $publishDir -Recurse -Force -Filter $forbidden.Pattern -ErrorAction SilentlyContinue)) {
+    # "<dir>/**/<name>" matches <name> under <dir> only, as in package-rc.sh.
+    $searchRoot = $publishDir
+    $filter = $forbidden.Pattern
+    if ($filter.Contains('/**/')) {
+        $searchRoot = Join-Path $publishDir ($filter -replace '/\*\*/.*$', '')
+        $filter = Split-Path $filter -Leaf
+        if (-not (Test-Path $searchRoot -PathType Container)) { continue }
+    }
+    foreach ($match in @(Get-ChildItem -Path $searchRoot -Recurse -Force -Filter $filter -ErrorAction SilentlyContinue)) {
         $relativePath = $match.FullName.Substring((Resolve-Path $publishDir).Path.Length).TrimStart('\')
         $leakedArtifacts.Add("$relativePath — $($forbidden.Reason)")
     }
@@ -823,10 +832,14 @@ Runtime state means the application was executed from '$publishDir'. Never run t
 it writes logs, queues and (in desktop mode) its database and keys next to itself. Delete that directory and
 re-run this script. Smoke-test the packed Portable.zip instead, which is what testers actually receive.
 A *.map means the SPA was built with source maps; rebuild it without them. A used checkout's local data means an
-entry is missing from the Client project's Remove lists; add it there.
+entry is missing from the Client project's Remove lists; add it there. A test_*.py means the Client project's
+training-scripts Content exclude was lost.
 "@
 }
-Write-Host ">> Publish output carries no runtime state, local checkout data or source maps."
+if (-not (Test-Path (Join-Path $publishDir "training-scripts/train.py") -PathType Leaf)) {
+    throw "$publishDir/training-scripts/train.py is missing: the training runtime did not ship."
+}
+Write-Host ">> Publish output carries no runtime state, local checkout data, source maps or Python tests, and the training runtime."
 
 $publishedUpdateConfigPath = Join-Path $publishDir "appsettings.AppUpdate.json"
 if (-not (Test-Path $publishedUpdateConfigPath -PathType Leaf)) {

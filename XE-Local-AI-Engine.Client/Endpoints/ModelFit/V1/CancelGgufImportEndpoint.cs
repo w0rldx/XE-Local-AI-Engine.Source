@@ -3,13 +3,13 @@ namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Client.Services.ModelFit;
+using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 
 public sealed class CancelGgufImportEndpoint : Endpoint<GgufImportOperationRequest, CancelGgufImportResponse>
 {
-    private readonly IGgufImportTransactionCoordinator _coordinator;
+    private readonly GgufImportTransactionCoordinator _coordinator;
 
-    public CancelGgufImportEndpoint(IGgufImportTransactionCoordinator coordinator)
+    public CancelGgufImportEndpoint(GgufImportTransactionCoordinator coordinator)
     {
         ArgumentNullException.ThrowIfNull(coordinator);
         _coordinator = coordinator;

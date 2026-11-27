@@ -9,9 +9,9 @@
 #   style     ruff format --check + ruff check
 #   types     pyrefly check
 #   tests     pytest with the coverage options from pyproject.toml
-#   security  bandit over tools/training, scripts and catalog/external-apps/tools
+#   security  bandit over every root in PY_ROOTS
 #   changed   auto-detect scope from git diff against --base (default develop)
-#   full      deps, then style/types/tests/security in parallel
+#   full      deps, then style/types/tests/security and skill-lint.py over each skills/<name>/ in parallel
 #
 # Behavior:
 #   - Independent trees run in parallel by default (--serial disables that).
@@ -25,13 +25,23 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+# A caller's GIT_DIR or private GIT_INDEX_FILE must steer neither this gate's own git queries nor any test it runs: a
+# fixture's git init/add/commit would write into that index; an inherited GIT_CONFIG would take a fixture's
+# `git config user.*` (scripts/lib/git-env.sh).
+# shellcheck source=scripts/lib/git-env.sh
+source "${SCRIPT_DIR}/lib/git-env.sh" \
+  || { echo "[python-validate] FAIL: cannot load ${SCRIPT_DIR}/lib/git-env.sh; copy scripts/lib/ along with this script." >&2; exit 2; }
+xe_drop_git_repo_env
+xe_drop_git_config_env
 LOG_DIR="${PROJECT_ROOT}/.tmp/validate-logs"
 TS="$(date +%Y%m%d-%H%M%S)"
 mkdir -p "${LOG_DIR}"
 
 PARALLEL="true"
 LOG_RETENTION="${VALIDATE_LOG_RETENTION:-10}"
-PY_ROOTS=(tools/training scripts catalog/external-apps/tools)
+# Every tracked *.py lives under one of these (scripts/tests/python-validation.test.sh asserts it). The benchmark
+# harness is an embedded resource that runs on the compute runtime's Python.
+PY_ROOTS=(tools/training scripts catalog/external-apps/tools XE-Local-AI-Engine.Client.Application/Services/Benchmarks/PythonTests)
 
 log() { echo "[python-validate] $*"; }
 
@@ -42,7 +52,7 @@ command -v uv >/dev/null 2>&1 || {
 
 _rotate_logs() {
   local tree
-  for tree in deps style types tests security; do
+  for tree in deps style types tests security skills; do
     find "${LOG_DIR}" -maxdepth 1 -type f -name "${tree}-*.log" -printf '%T@ %p\n' 2>/dev/null \
       | sort -nr \
       | tail -n +"$((LOG_RETENTION + 1))" \
@@ -72,6 +82,13 @@ _tree_style() {
 _tree_types() { uv run pyrefly check; }
 _tree_tests() { uv run pytest; }
 _tree_security() { uv run bandit -c pyproject.toml -r "${PY_ROOTS[@]}"; }
+_tree_skills() {
+  local skill
+  for skill in skills/*/; do
+    [[ -d "${skill}" ]] || continue  # no skills: the unmatched glob stays literal
+    uv run python scripts/skill-lint.py "${skill%/}" --repo-root .
+  done
+}
 
 declare -A RESULTS
 RESULT_ORDER=()
@@ -156,7 +173,8 @@ scope_full() {
     "style" _tree_style \
     "types" _tree_types \
     "tests" _tree_tests \
-    "security" _tree_security
+    "security" _tree_security \
+    "skills" _tree_skills
   _report
 }
 
@@ -183,35 +201,38 @@ scope_changed() {
   }
 
   # Committed + staged + unstaged changes since the merge base, plus untracked files, so a pre-commit
-  # run sees the same set a post-commit run would.
-  local changed_files
-  changed_files="$(
+  # run sees the same set a post-commit run would. NUL records (-z): git otherwise quotes a name holding a
+  # non-ASCII byte, a tab or a line break ("scripts/Gr\303\266\303\237e.py"), which no pattern below matches.
+  local -a changed_files
+  local file
+  mapfile -d '' -t changed_files < <(
     {
-      git -C "${PROJECT_ROOT}" diff --name-only "${merge_base}"
-      git -C "${PROJECT_ROOT}" ls-files --others --exclude-standard
-    } | LC_ALL=C sort -u
-  )"
+      git -C "${PROJECT_ROOT}" diff --name-only -z "${merge_base}"
+      git -C "${PROJECT_ROOT}" ls-files --others --exclude-standard -z
+    } | LC_ALL=C sort -zu
+  )
 
-  if [[ -z "${changed_files}" ]]; then
+  if [[ "${#changed_files[@]}" -eq 0 ]]; then
     log "No changed files detected."
     return 0
   fi
 
   log "Changed files detected:"
-  while IFS= read -r file; do echo "  ${file}"; done <<< "${changed_files}"
+  for file in "${changed_files[@]}"; do echo "  ${file}"; done
 
   local run_full=false run_py=false
-  while IFS= read -r file; do
+  for file in "${changed_files[@]}"; do
     case "${file}" in
       pyproject.toml|uv.lock|scripts/python-validation.sh|.gitignore) run_full=true ;;
       tools/training/*.py|scripts/*.py) run_py=true ;;  # bash case globs cross "/" — this covers nested dirs
+      XE-Local-AI-Engine.Client.Application/Services/Benchmarks/PythonTests/*.py) run_py=true ;;
       # The catalog converter's inputs and outputs are data, not Python: an edited compose.yml,
       # variables.json, manifest.overrides.json or dist/applications.json is exactly what the drift,
       # fingerprint and byte-identity tests exist to catch, and a *.py arm alone would miss all of it.
       catalog/*) run_py=true ;;
       XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Catalog/external-apps-catalog.seed.json) run_py=true ;;
     esac
-  done <<< "${changed_files}"
+  done
 
   if [[ "${run_full}" == "true" ]]; then
     scope_full
@@ -241,9 +262,9 @@ Scopes:
   style     ruff format --check + ruff check
   types     pyrefly check
   tests     pytest with coverage from pyproject.toml
-  security  bandit over tools/training, scripts and catalog/external-apps/tools
+  security  bandit over every Python root
   changed   auto-detect scope from git diff (--base defaults to develop)
-  full      deps, then style/types/tests/security
+  full      deps, then style/types/tests/security and skill-lint over skills/*/
 
 Options:
   --base <branch>  Branch/ref to diff against for changed scope (default: develop)

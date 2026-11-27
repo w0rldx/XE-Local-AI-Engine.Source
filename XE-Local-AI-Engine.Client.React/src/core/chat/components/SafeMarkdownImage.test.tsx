@@ -1,21 +1,12 @@
 // @vitest-environment jsdom
 
 import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { isRemoteImageSrc, markdownImageUrlTransform, remoteImageOrigin } from "@/core/chat/components/MarkdownImagePolicy";
 import { SafeMarkdownImage } from "@/core/chat/components/SafeMarkdownImage";
-import { testMantineTheme } from "@/test/MantineTestRender";
-
-function renderWithProviders(ui: ReactElement) {
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			{ui}
-		</MantineProvider>,
-	);
-}
+import { renderWithMantine, testMantineTheme } from "@/test/MantineTestRender";
 
 const DATA_IMAGE =
 	"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
@@ -117,7 +108,7 @@ describe("remoteImageOrigin", () => {
 
 describe("SafeMarkdownImage consent flow", () => {
 	it("hides a remote image behind a consent placeholder showing its origin, then loads it on click", () => {
-		renderWithProviders(<SafeMarkdownImage src="https://tracker.example.com/pixel.png" alt="a picture" />);
+		renderWithMantine(<SafeMarkdownImage src="https://tracker.example.com/pixel.png" alt="a picture" />);
 
 		// Blocked initially: no <img>, a consent control naming the remote origin.
 		expect(screen.queryByRole("img")).toBeNull();
@@ -135,7 +126,7 @@ describe("SafeMarkdownImage consent flow", () => {
 	});
 
 	it("does not carry consent to a new source when the same element's src changes", () => {
-		const { rerender } = renderWithProviders(<SafeMarkdownImage src="https://a.example.com/one.png" alt="one" />);
+		const { rerender } = renderWithMantine(<SafeMarkdownImage src="https://a.example.com/one.png" alt="one" />);
 
 		// Consent to source A: the image loads.
 		fireEvent.click(screen.getByTestId("remote-image-consent"));
@@ -157,7 +148,7 @@ describe("SafeMarkdownImage consent flow", () => {
 	});
 
 	it("renders a data: image directly without a consent placeholder", () => {
-		renderWithProviders(<SafeMarkdownImage src={DATA_IMAGE} alt="inline" />);
+		renderWithMantine(<SafeMarkdownImage src={DATA_IMAGE} alt="inline" />);
 
 		expect(screen.queryByTestId("remote-image-consent")).toBeNull();
 		const img = screen.getByRole("img");
@@ -167,7 +158,7 @@ describe("SafeMarkdownImage consent flow", () => {
 	});
 
 	it("renders nothing when the src was stripped to empty (dangerous scheme)", () => {
-		const { container } = renderWithProviders(<SafeMarkdownImage src="" alt="x" />);
+		const { container } = renderWithMantine(<SafeMarkdownImage src="" alt="x" />);
 		expect(container.querySelector("img")).toBeNull();
 		expect(screen.queryByTestId("remote-image-consent")).toBeNull();
 	});

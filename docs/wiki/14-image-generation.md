@@ -1,7 +1,5 @@
 # Image Generation (stable-diffusion.cpp)
 
-> Reviewed: 2026-10-02 · Code-grounded.
-
 **What this page covers.** Local image generation with stable-diffusion.cpp: the app supervises one resident
 `sd-server` per model on a loopback port range, serializes generation to one job at a time through
 `ImageJobCoordinator`, and stores every image encrypted at rest before the job is marked succeeded. The same daemon
@@ -356,8 +354,8 @@ The rules that fall out of it:
   again, so a forced teardown (restart, evict, dispose) between the lookup and the latch releases the lease and fails
   acquisition. `StableDiffusionCppRuntime.EnsureLeasedAsync` then ensures once more; when the second lease also fails,
   it throws `StableDiffusionRuntimeException` ("The image runtime unloaded the model while the generation was starting. Try
-  again.") before anything was submitted; `ImageJobCoordinator` maps it to the generic "Image generation failed.", and
-  the node log keeps the specific message. A job is never submitted to a stale endpoint or run without a lease.
+  again.") before anything was submitted; `ImageJobCoordinator` stores that message with the `ModelUnloadedWhileStarting`
+  reason. A job is never submitted to a stale endpoint or run without a lease.
 - **The lease spans the whole generation.** `StableDiffusionCppRuntime` holds it across submit → poll → complete, so the
   reaper and the LRU evictor never tree-kill a daemon mid-generation even when the job outruns the idle TTL. Each poll
   `Touch()`es the lease, so the idle window is measured from the last observed progress rather than from submission.
@@ -458,7 +456,8 @@ A job the daemon itself reports as `failed` (for example CUDA out of memory afte
 
 **Every failure carries a reason the UI translates.** Beside the English `sanitized_error`, each `Failed` job stores
 `failure_reason`, an `ImageJobFailureReason` name (`Generic`, `EditModeUnsupported`, `ProcessExited`, `OutOfMemory`,
-`LoadedModelCapReached`, `SourceImageMissing`, `TrainingRunning`, `ChatModelBusy`, `Interrupted`). The job response
+`LoadedModelCapReached`, `SourceImageMissing`, `TrainingRunning`, `ChatModelBusy`, `Interrupted`,
+`ModelUnloadedWhileStarting`). The job response
 and the `imageJob.statusChanged` push expose it as `failureReason`, and the SPA renders
 `pages.images.jobs.failure.<reason>` in the operator's language. The English text stays for API clients and for a job
 that failed before the column existed (its reason is null, so the SPA shows the stored text). The translated

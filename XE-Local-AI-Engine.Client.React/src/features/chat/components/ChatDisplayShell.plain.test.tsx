@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -11,17 +9,11 @@ import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStor
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { ChatDisplayShell } from "@/features/chat/components/ChatDisplayShell";
 import type { ChatConversationModel, ChatDisplayShellProps } from "@/features/chat/models/ChatModels";
-import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
+import { installJsdomEnvironmentMocks } from "@/test/MantineTestRender";
+import { renderWithProviders } from "@/test/RenderWithProviders";
 
-function renderWithProviders(ui: ReactElement) {
-	const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
-	return render(
-		<QueryClientProvider client={queryClient}>
-			<MantineProvider env="test" theme={testMantineTheme}>
-				<ConfirmProvider>{ui}</ConfirmProvider>
-			</MantineProvider>
-		</QueryClientProvider>,
-	);
+function renderWithConfirm(ui: ReactElement) {
+	return renderWithProviders(<ConfirmProvider>{ui}</ConfirmProvider>);
 }
 
 const conversation: ChatConversationModel = {
@@ -75,7 +67,7 @@ describe("ChatDisplayShell plain conversations", () => {
 
 	it("turns plain mode on through the header toggle", () => {
 		const onSetConversationPlain = vi.fn();
-		renderWithProviders(<ChatDisplayShell {...shellProps({ onSetConversationPlain })} />);
+		renderWithConfirm(<ChatDisplayShell {...shellProps({ onSetConversationPlain })} />);
 
 		fireEvent.click(screen.getByTestId("chat-plain-toggle"));
 
@@ -83,7 +75,7 @@ describe("ChatDisplayShell plain conversations", () => {
 	});
 
 	it("shows the agent picker, tools and knowledge-base toggles on a normal conversation", () => {
-		renderWithProviders(<ChatDisplayShell {...shellProps()} />);
+		renderWithConfirm(<ChatDisplayShell {...shellProps()} />);
 
 		expect(screen.getByTestId("chat-agent-selector-trigger")).toBeTruthy();
 		expect(screen.getByTestId("chat-local-tools-toggle")).toBeTruthy();
@@ -92,7 +84,7 @@ describe("ChatDisplayShell plain conversations", () => {
 	});
 
 	it("hides the agent picker, tools and knowledge-base toggles on a plain conversation and says why", () => {
-		renderWithProviders(<ChatDisplayShell {...shellProps({ conversations: [{ ...conversation, isPlain: true }] })} />);
+		renderWithConfirm(<ChatDisplayShell {...shellProps({ conversations: [{ ...conversation, isPlain: true }] })} />);
 
 		expect((screen.getByTestId("chat-plain-toggle") as HTMLInputElement).checked).toBe(true);
 		expect(screen.queryByTestId("chat-agent-selector-trigger")).toBeNull();
@@ -106,7 +98,7 @@ describe("ChatDisplayShell plain conversations", () => {
 	it("keeps the context readout, compact and context-state buttons but drops the workflow picker when plain", () => {
 		const contextUsage = { usedTokens: 10, maxTokens: 100, isAuthoritative: true, modelLabel: "Model A", nodeLabel: "Local" };
 		const workflow = { selector: <span data-testid="workflow-selector-probe" /> };
-		renderWithProviders(
+		renderWithConfirm(
 			<ChatDisplayShell {...shellProps({ conversations: [{ ...conversation, isPlain: true }], contextUsage, workflow })} />,
 		);
 
@@ -118,14 +110,14 @@ describe("ChatDisplayShell plain conversations", () => {
 
 	it("keeps the workflow picker on a normal conversation", () => {
 		const workflow = { selector: <span data-testid="workflow-selector-probe" /> };
-		renderWithProviders(<ChatDisplayShell {...shellProps({ workflow })} />);
+		renderWithConfirm(<ChatDisplayShell {...shellProps({ workflow })} />);
 
 		expect(screen.getByTestId("workflow-selector-probe")).toBeTruthy();
 	});
 
 	it("saves the edited system prompt for a plain conversation", () => {
 		const onSetConversationPlain = vi.fn();
-		renderWithProviders(
+		renderWithConfirm(
 			<ChatDisplayShell
 				{...shellProps({
 					conversations: [{ ...conversation, isPlain: true, plainSystemPrompt: "Old prompt." }],
@@ -145,7 +137,7 @@ describe("ChatDisplayShell plain conversations", () => {
 
 	it("clears the system prompt when it is saved blank", () => {
 		const onSetConversationPlain = vi.fn();
-		renderWithProviders(
+		renderWithConfirm(
 			<ChatDisplayShell
 				{...shellProps({
 					conversations: [{ ...conversation, isPlain: true, plainSystemPrompt: "Old prompt." }],
@@ -171,7 +163,7 @@ describe("ChatDisplayShell plain conversations", () => {
 			[true, false],
 		])("with the full read loaded=%s, the dialog's Save stays disabled=%s", (loaded, saveDisabled) => {
 			useDeveloperModeStore.getState().actions.setDeveloperMode(true);
-			renderWithProviders(
+			renderWithConfirm(
 				<ChatDisplayShell
 					{...shellProps({
 						conversations: [{ ...conversation, samplingOptions: { temperature: 0.3 } }],

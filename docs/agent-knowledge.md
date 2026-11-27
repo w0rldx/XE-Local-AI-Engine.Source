@@ -38,10 +38,12 @@ resolving the conflict, re-read every `<remarks>` and comment run in each confli
 | Running, scoping or debugging a backend test run; `scripts/run-tests-memory-safe.sh`, the build lock, test width, flakes | [backend-tests-runner](agent-knowledge/backend-tests-runner.md) |
 | Writing a backend test; `TestServerWebAppFactory`, a `Testing.*` project, fixtures, temp state, SQLite test databases, browser E2E host | [backend-tests-conventions](agent-knowledge/backend-tests-conventions.md) |
 | `.github/workflows/**`, `HEAVY`/sharding, coverage merge, `publish/**`, `scripts/release/**`, `cliff.toml`, Velopack bootstrap; committing in a shared worktree | [ci-and-release](agent-knowledge/ci-and-release.md) |
-| Running or scripting a dev host or live round; `Program.cs`/Kestrel/auth, HTTP clients, sandbox host side, Windows-only branches | [dev-runtime](agent-knowledge/dev-runtime.md) |
+| Starting, stopping or scripting a dev host, lab or live round; its data and model dirs, the node secret, GPU probing | [dev-lab](agent-knowledge/dev-lab.md) |
+| `Program.cs`/Kestrel/auth, HTTP clients, sandbox host side, Windows-only branches | [dev-runtime](agent-knowledge/dev-runtime.md) |
 | `Providers.LlamaServer`, the llama.cpp pin or binaries, launch fallback, tool offering or a tool schema, chat-template capability detection | [inference-runtime](agent-knowledge/inference-runtime.md) |
 | Model fit / HF discovery, `CapacityService`, llama-server supervisor | [model-fit-and-discovery](agent-knowledge/model-fit-and-discovery.md) |
-| `Benchmark*`, knowledge base, `Services/Training`, `Services/ModelLab`, `Services/Transcription` | [benchmarks-kb-training-transcription](agent-knowledge/benchmarks-kb-training-transcription.md) |
+| `Benchmark*`, knowledge base, `Services/Training`, `Services/Transcription` | [benchmarks-kb-training-transcription](agent-knowledge/benchmarks-kb-training-transcription.md) |
+| Model Lab: `Services/ModelLab`, `modellab.py`, `nnplayground.py`, the `modelLab` feature (how it works: wiki 25) | [benchmarks-kb-training-transcription](agent-knowledge/benchmarks-kb-training-transcription.md) |
 | `AI.Agent`, tool invocation or approval, cloud/MCP providers, Graph Workflows, `LaunchMode.McpOnly`, MAF/MEAI/`OpenAI` bumps | [agents-and-sandbox](agent-knowledge/agents-and-sandbox.md) |
 | `Services/Sandbox`/`Compute`/`AgentHome`, bubblewrap, any path-containment or patch-apply check | [sandbox-and-compute](agent-knowledge/sandbox-and-compute.md) |
 | `XE-Local-AI-Engine.Client.React/`, an endpoint's request/response/error declaration, hub payloads, `openapi/v1.json` | [frontend-and-api](agent-knowledge/frontend-and-api.md) |
@@ -57,7 +59,8 @@ The traps behind them are in
 
 ## 2. Dev environment & local runtime
 
-Dev host lifecycle, node secret and data dirs, the shared model store, live rounds, sandbox host side, Windows:
+Dev host lifecycle, node secret, data and model dirs, lab and live rounds, GPU probing:
+[dev-lab](agent-knowledge/dev-lab.md). Host pipeline, HTTP clients, sandbox host side, Windows:
 [dev-runtime](agent-knowledge/dev-runtime.md). llama.cpp binaries and launch fallback, tool-call gates:
 [inference-runtime](agent-knowledge/inference-runtime.md).
 

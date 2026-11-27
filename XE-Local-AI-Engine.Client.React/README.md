@@ -34,8 +34,10 @@ Non-loopback proxy targets are rejected. The development certificate plugin may 
 Before committing, run:
 
 ```sh
-pnpm run acceptance
+../scripts/run-gate-lane.sh frontend
 ```
+
+The wrapper runs `pnpm run acceptance` under the repository build lock and records the lane row the squash guard reads.
 
 It first checks that Node runs the same major as CI (Node 26; `engines` in `package.json` is only the floor) and
 stops otherwise; `XE_ALLOW_NODE_DRIFT=1` continues with a warning that the run is not CI evidence. It then runs

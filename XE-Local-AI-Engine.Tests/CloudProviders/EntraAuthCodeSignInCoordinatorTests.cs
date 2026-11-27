@@ -77,7 +77,7 @@ public sealed class EntraAuthCodeSignInCoordinatorTests
         var handle = await StartOnFreePortAsync(coordinator, store);
         await SendCallbackAsync(RedirectPort(store), code: "some-code", state: "not-the-real-state");
 
-        await AssertEx.EventuallyAsync(() => coordinator.GetStatus().State == EntraAuthCodeSignInState.Failed,
+        await AssertEx.EventuallyAsync(() => coordinator.Status.State == EntraAuthCodeSignInState.Failed,
             TestBudgets.Contended,
             "sign-in should fail once the callback's state does not match.");
         AssertEx.Equal(0, redeemer.CallCount);
@@ -95,7 +95,7 @@ public sealed class EntraAuthCodeSignInCoordinatorTests
         var state = ExtractQueryValue(handle.AuthorizeUrl, "state");
         await SendCallbackAsync(RedirectPort(store), code: null, state: state, error: "access_denied", errorDescription: "The user declined consent.");
 
-        await AssertEx.EventuallyAsync(() => coordinator.GetStatus().State == EntraAuthCodeSignInState.Failed,
+        await AssertEx.EventuallyAsync(() => coordinator.Status.State == EntraAuthCodeSignInState.Failed,
             TestBudgets.Contended,
             "sign-in should fail once AAD reports an error.");
         AssertEx.Equal(0, redeemer.CallCount);
@@ -120,7 +120,7 @@ public sealed class EntraAuthCodeSignInCoordinatorTests
             error: "access_denied\r\nforged",
             errorDescription: "declined\u2028next\u0085tail");
 
-        await AssertEx.EventuallyAsync(() => coordinator.GetStatus().State == EntraAuthCodeSignInState.Failed,
+        await AssertEx.EventuallyAsync(() => coordinator.Status.State == EntraAuthCodeSignInState.Failed,
             TestBudgets.Contended,
             "sign-in should fail once AAD reports an error.");
 
@@ -143,7 +143,7 @@ public sealed class EntraAuthCodeSignInCoordinatorTests
         var state = ExtractQueryValue(handle.AuthorizeUrl, "state");
         await SendCallbackAsync(RedirectPort(store), code: null, state: state);
 
-        await AssertEx.EventuallyAsync(() => coordinator.GetStatus().State == EntraAuthCodeSignInState.Failed,
+        await AssertEx.EventuallyAsync(() => coordinator.Status.State == EntraAuthCodeSignInState.Failed,
             TestBudgets.Contended,
             "sign-in should fail once the callback carries no authorization code.");
         AssertEx.Equal(0, redeemer.CallCount);
@@ -159,11 +159,11 @@ public sealed class EntraAuthCodeSignInCoordinatorTests
 
         await StartOnFreePortAsync(coordinator, store);
         var firstPort = RedirectPort(store);
-        AssertEx.Equal(EntraAuthCodeSignInState.Pending, coordinator.GetStatus().State);
+        AssertEx.Equal(EntraAuthCodeSignInState.Pending, coordinator.Status.State);
 
         await StartOnFreePortAsync(coordinator, store);
 
-        AssertEx.Equal(EntraAuthCodeSignInState.Pending, coordinator.GetStatus().State);
+        AssertEx.Equal(EntraAuthCodeSignInState.Pending, coordinator.Status.State);
 
         // Proves the FIRST attempt's loopback listener was actually stopped (not leaked) — otherwise this bind
         // would fail with "address already in use".
@@ -184,13 +184,13 @@ public sealed class EntraAuthCodeSignInCoordinatorTests
         using var coordinator = CreateCoordinator(store);
 
         await AssertEx.ThrowsAsync<InvalidOperationException>(() => coordinator.StartAsync(CancellationToken.None));
-        AssertEx.Equal(EntraAuthCodeSignInState.None, coordinator.GetStatus().State);
+        AssertEx.Equal(EntraAuthCodeSignInState.None, coordinator.Status.State);
 
         // Proves _pendingCts was actually cleared (not left dangling) — a retry on a free port must succeed cleanly
         // and reach Pending, not silently no-op because the failed attempt still "owns" the slot.
         var handle = await StartOnFreePortAsync(coordinator, store);
         AssertEx.NotNull(handle);
-        AssertEx.Equal(EntraAuthCodeSignInState.Pending, coordinator.GetStatus().State);
+        AssertEx.Equal(EntraAuthCodeSignInState.Pending, coordinator.Status.State);
     }
 
     [Test]
@@ -207,7 +207,7 @@ public sealed class EntraAuthCodeSignInCoordinatorTests
         var state = ExtractQueryValue(handle.AuthorizeUrl, "state");
         await SendCallbackAsync(RedirectPort(store), code: "some-code", state: state);
 
-        await AssertEx.EventuallyAsync(() => coordinator.GetStatus().State == EntraAuthCodeSignInState.Failed,
+        await AssertEx.EventuallyAsync(() => coordinator.Status.State == EntraAuthCodeSignInState.Failed,
             TestBudgets.Contended,
             "an unexpected exception type during redemption must resolve to Failed, not leave status stuck at Pending.");
     }
@@ -217,7 +217,7 @@ public sealed class EntraAuthCodeSignInCoordinatorTests
     {
         using var coordinator = CreateCoordinator(new FakeCloudCredentialStore(config: null));
 
-        AssertEx.Equal(EntraAuthCodeSignInState.None, coordinator.GetStatus().State);
+        AssertEx.Equal(EntraAuthCodeSignInState.None, coordinator.Status.State);
     }
 
     private static EntraAuthCodeSignInCoordinator CreateCoordinator(ICloudCredentialStore credentialStore,

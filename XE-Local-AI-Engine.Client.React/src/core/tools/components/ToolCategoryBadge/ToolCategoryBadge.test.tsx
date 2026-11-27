@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { cleanup, render, screen } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { cleanup, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("react-i18next", () => ({
@@ -20,43 +18,7 @@ vi.mock("react-i18next", () => ({
 }));
 
 import { ToolCategoryBadge } from "@/core/tools/components/ToolCategoryBadge/ToolCategoryBadge";
-import { testMantineTheme } from "@/test/MantineTestRender";
-
-function renderWithProviders(ui: ReactElement) {
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			{ui}
-		</MantineProvider>,
-	);
-}
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-	Object.defineProperty(document, "fonts", {
-		writable: true,
-		value: { ready: Promise.resolve(), addEventListener: vi.fn(), removeEventListener: vi.fn() },
-	});
-}
+import { installJsdomEnvironmentMocks, renderWithMantine } from "@/test/MantineTestRender";
 
 describe("ToolCategoryBadge", () => {
 	beforeEach(() => {
@@ -68,7 +30,7 @@ describe("ToolCategoryBadge", () => {
 	});
 
 	it("renders a ReadLocal tool as auto-executing (no approval shield)", () => {
-		renderWithProviders(<ToolCategoryBadge category="ReadLocal" effectiveRequiresApproval={false} />);
+		renderWithMantine(<ToolCategoryBadge category="ReadLocal" effectiveRequiresApproval={false} />);
 
 		const badge = screen.getByTestId("tool-category-badge-ReadLocal");
 		expect(badge.textContent).toContain("read-only");
@@ -76,7 +38,7 @@ describe("ToolCategoryBadge", () => {
 	});
 
 	it("renders a Network tool as approval-required", () => {
-		renderWithProviders(<ToolCategoryBadge category="Network" effectiveRequiresApproval={true} />);
+		renderWithMantine(<ToolCategoryBadge category="Network" effectiveRequiresApproval={true} />);
 
 		const badge = screen.getByTestId("tool-category-badge-Network");
 		expect(badge.textContent).toContain("network");
@@ -84,7 +46,7 @@ describe("ToolCategoryBadge", () => {
 	});
 
 	it("renders an Unknown tool fail-closed (approval-required)", () => {
-		renderWithProviders(<ToolCategoryBadge category="Unknown" effectiveRequiresApproval={true} />);
+		renderWithMantine(<ToolCategoryBadge category="Unknown" effectiveRequiresApproval={true} />);
 
 		const badge = screen.getByTestId("tool-category-badge-Unknown");
 		expect(badge.textContent).toContain("uncategorized");

@@ -45,6 +45,17 @@ describe("invocation monitor model", () => {
 		expect(formatInvocationDuration(120_000)).toBe("2.0 min");
 	});
 
+	it("formats durations with the UI language's decimal separator", async () => {
+		await i18next.changeLanguage("de");
+		try {
+			expect(formatInvocationDuration(1500)).toBe("1,5 s");
+			expect(formatInvocationDuration(90_000)).toBe("1,5 min");
+			expect(formatInvocationDuration(60_000_000)).toBe("1000,0 min");
+		} finally {
+			await i18next.changeLanguage("en");
+		}
+	});
+
 	it("maps status colors and active state", () => {
 		expect(getInvocationStatusColor("Running")).toBe("blue");
 		expect(getInvocationStatusColor("Completed")).toBe("green");

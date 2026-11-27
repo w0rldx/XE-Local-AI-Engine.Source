@@ -1,12 +1,10 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MarkdownEditorField } from "@/core/ui/components/MarkdownEditorField/MarkdownEditorField";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { renderWithMantine } from "@/test/MantineTestRender";
 
 // A fake Monaco at the runtime level: the real CodeEditor and MonacoCodeEditor run, only the ~3 MB editor is faked.
 const editorMock = vi.hoisted(() => {
@@ -45,14 +43,6 @@ vi.mock("@/core/ui/components/CodeEditor/MonacoRuntime", () => ({
 	monaco: { editor: { create: editorMock.create, setModelLanguage: vi.fn(), setTheme: vi.fn() } },
 }));
 
-function renderWithProviders(ui: ReactElement) {
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			{ui}
-		</MantineProvider>,
-	);
-}
-
 describe("MarkdownEditorField", () => {
 	beforeEach(() => {
 		Object.defineProperty(window, "matchMedia", {
@@ -86,20 +76,20 @@ describe("MarkdownEditorField", () => {
 	});
 
 	it("renders a textarea in edit mode by default", () => {
-		renderWithProviders(<MarkdownEditorField value="hello" onChange={vi.fn()} data-testid="mef" />);
+		renderWithMantine(<MarkdownEditorField value="hello" onChange={vi.fn()} data-testid="mef" />);
 		expect(screen.getByTestId("mef-textarea")).toBeTruthy();
 		expect(screen.getByRole("radiogroup", { name: "Editor view" })).toBeTruthy();
 	});
 
 	it("calls onChange when the textarea value changes", () => {
 		const onChange = vi.fn();
-		renderWithProviders(<MarkdownEditorField value="" onChange={onChange} data-testid="mef" />);
+		renderWithMantine(<MarkdownEditorField value="" onChange={onChange} data-testid="mef" />);
 		fireEvent.change(screen.getByTestId("mef-textarea"), { target: { value: "new text" } });
 		expect(onChange).toHaveBeenCalledWith("new text");
 	});
 
 	it("switches to preview pane when Preview segment is clicked", () => {
-		renderWithProviders(<MarkdownEditorField value="**bold**" onChange={vi.fn()} data-testid="mef" />);
+		renderWithMantine(<MarkdownEditorField value="**bold**" onChange={vi.fn()} data-testid="mef" />);
 		fireEvent.click(screen.getByText("Preview"));
 		expect(screen.getByTestId("mef-preview")).toBeTruthy();
 		// Textarea should no longer be in the DOM
@@ -107,7 +97,7 @@ describe("MarkdownEditorField", () => {
 	});
 
 	it("renders markdown content in preview mode", () => {
-		renderWithProviders(<MarkdownEditorField value="Hello **world**" onChange={vi.fn()} data-testid="mef" />);
+		renderWithMantine(<MarkdownEditorField value="Hello **world**" onChange={vi.fn()} data-testid="mef" />);
 		fireEvent.click(screen.getByText("Preview"));
 		// The preview pane should contain the rendered text
 		expect(screen.getByTestId("mef-preview").textContent).toContain("Hello");
@@ -115,7 +105,7 @@ describe("MarkdownEditorField", () => {
 	});
 
 	it("switches back to edit mode when Edit segment is clicked", () => {
-		renderWithProviders(<MarkdownEditorField value="text" onChange={vi.fn()} data-testid="mef" />);
+		renderWithMantine(<MarkdownEditorField value="text" onChange={vi.fn()} data-testid="mef" />);
 		fireEvent.click(screen.getByText("Preview"));
 		fireEvent.click(screen.getByText("Edit"));
 		expect(screen.getByTestId("mef-textarea")).toBeTruthy();
@@ -123,16 +113,14 @@ describe("MarkdownEditorField", () => {
 	});
 
 	it("renders label and required marker in preview mode", () => {
-		renderWithProviders(
-			<MarkdownEditorField value="" onChange={vi.fn()} label="Instructions" required={true} data-testid="mef" />,
-		);
+		renderWithMantine(<MarkdownEditorField value="" onChange={vi.fn()} label="Instructions" required={true} data-testid="mef" />);
 		fireEvent.click(screen.getByText("Preview"));
 		expect(screen.getByText("Instructions")).toBeTruthy();
 		expect(screen.getByText("*")).toBeTruthy();
 	});
 
 	it("renders an error message in preview mode", () => {
-		renderWithProviders(<MarkdownEditorField value="" onChange={vi.fn()} error="Required field" data-testid="mef" />);
+		renderWithMantine(<MarkdownEditorField value="" onChange={vi.fn()} error="Required field" data-testid="mef" />);
 		fireEvent.click(screen.getByText("Preview"));
 		expect(screen.getByText("Required field")).toBeTruthy();
 	});
@@ -143,7 +131,7 @@ describe("MarkdownEditorField", () => {
 		});
 
 		it("renders a markdown code editor inside the label, description and error wrapper, named by the label", async () => {
-			renderWithProviders(
+			renderWithMantine(
 				<MarkdownEditorField
 					value="# Title"
 					onChange={vi.fn()}
@@ -176,7 +164,7 @@ describe("MarkdownEditorField", () => {
 
 		it("forwards an edit in the code editor through onChange", async () => {
 			const onChange = vi.fn();
-			renderWithProviders(<MarkdownEditorField value="" onChange={onChange} editor="code" data-testid="mef" />);
+			renderWithMantine(<MarkdownEditorField value="" onChange={onChange} editor="code" data-testid="mef" />);
 			await screen.findByTestId("mef-editor");
 
 			act(() => editorMock.type("typed text"));
@@ -185,7 +173,7 @@ describe("MarkdownEditorField", () => {
 		});
 
 		it("toggles between the code editor and the preview", async () => {
-			renderWithProviders(<MarkdownEditorField value="Hello **world**" onChange={vi.fn()} editor="code" data-testid="mef" />);
+			renderWithMantine(<MarkdownEditorField value="Hello **world**" onChange={vi.fn()} editor="code" data-testid="mef" />);
 			await screen.findByTestId("mef-editor");
 
 			fireEvent.click(screen.getByText("Preview"));

@@ -16,9 +16,8 @@ interface ArchitectureBlockTraceProps {
 
 // What the chosen trace measured on this block, or why it has nothing to say.
 export function ArchitectureBlockTrace({ untraceable, summaries, blockIndex, level }: ArchitectureBlockTraceProps) {
-	const { t, i18n } = useTranslation();
+	const { t } = useTranslation();
 	const [openMetric, setOpenMetric] = useState<string | null>(null);
-	const formatValue = (value: number | null): string => formatTraceValue(value, i18n.language);
 	if (untraceable) {
 		return (
 			<Text size="sm" c="dimmed" data-testid="model-lab-architecture-untraceable">
@@ -54,8 +53,8 @@ export function ArchitectureBlockTrace({ untraceable, summaries, blockIndex, lev
 						"pages.modelLab.architecture.traceSummary",
 						"Mean norm {{mean}}, highest p99 {{p99}}. Most frequent top dimensions: {{dimensions}}.",
 						{
-							mean: formatValue(summary.meanNorm),
-							p99: formatValue(summary.maxP99),
+							mean: formatTraceValue(summary.meanNorm),
+							p99: formatTraceValue(summary.maxP99),
 							dimensions: summary.topDimensions.length > 0 ? summary.topDimensions.join(", ") : "–",
 						},
 					)}

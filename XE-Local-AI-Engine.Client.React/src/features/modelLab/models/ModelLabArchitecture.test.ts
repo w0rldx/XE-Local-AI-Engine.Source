@@ -1,6 +1,7 @@
-import { createInstance } from "i18next";
-import { describe, expect, it } from "vitest";
+import i18next, { createInstance } from "i18next";
+import { afterEach, describe, expect, it } from "vitest";
 
+import { zGetModelLabArchitectureResponse } from "@/core/api/generated/zod.gen";
 import de from "@/features/modelLab/locales/model-lab-de.json";
 import en from "@/features/modelLab/locales/model-lab-en.json";
 import {
@@ -57,11 +58,18 @@ describe("formatBlockRanges", () => {
 });
 
 describe("formatTraceValue", () => {
-	it("formats in the page's language, and a missing value as a dash", () => {
-		expect(formatTraceValue(3.856, "en")).toBe("3.86");
-		expect(formatTraceValue(3.856, "de")).toBe("3,86");
-		expect(formatTraceValue(null, "de")).toBe("–");
-		expect(formatTraceValue(3.5, "en_US")).toBe((3.5).toLocaleString(undefined, { maximumFractionDigits: 2 }));
+	afterEach(async () => {
+		await i18next.changeLanguage("en");
+	});
+
+	it("formats in the page's language, and a missing value as a dash", async () => {
+		await i18next.changeLanguage("en");
+		expect(formatTraceValue(3.856)).toBe("3.86");
+		await i18next.changeLanguage("de");
+		expect(formatTraceValue(3.856)).toBe("3,86");
+		expect(formatTraceValue(null)).toBe("–");
+		await i18next.changeLanguage("en_US");
+		expect(formatTraceValue(3.5)).toBe((3.5).toLocaleString(undefined, { maximumFractionDigits: 2 }));
 	});
 });
 
@@ -131,5 +139,48 @@ describe("layoutTemplate", () => {
 
 		const rows = ["a", "b", "c", "d", "e"].map((id) => positions.get(id)?.y);
 		expect(rows).toEqual([0, 90, 180, 270, 360]);
+	});
+});
+
+// The node passes a header value only within 0..2^53-1 (larger ones as null); the generated validator agrees at the edge.
+describe("architecture response validator", () => {
+	// A response with no blocks: these cases are about the hyperparameters alone.
+	const response = {
+		descriptorVersion: 1,
+		modelName: "org/Tiny-GGUF:Q4_K_M",
+		architecture: "qwen35",
+		support: "detailed",
+		readFailure: null,
+		suggestedBaseRepo: null,
+		hyperparameters: null,
+		blocks: [],
+		templates: [],
+		nonBlock: [],
+	};
+	const values = {
+		fileType: "Q4_K_M",
+		declaredParamCount: Number.MAX_SAFE_INTEGER,
+		blockCount: 25,
+		nextnPredictLayers: 1,
+		splitCount: null,
+		attentionHeadCount: 8,
+		attentionHeadCountKv: 2,
+		attentionKeyLength: 256,
+		attentionValueLength: 256,
+		embeddingLength: 1024,
+		contextLength: 262144,
+		expertCount: 0,
+		expertUsedCount: null,
+		fullAttentionInterval: 4,
+	};
+
+	it("accepts the largest safe integer, zero and null values", () => {
+		expect(zGetModelLabArchitectureResponse.safeParse({ ...response, hyperparameters: values }).success).toBe(true);
+		expect(zGetModelLabArchitectureResponse.safeParse({ ...response, hyperparameters: null }).success).toBe(true);
+	});
+
+	it("rejects a value past the safe integer range", () => {
+		const unsafe = { ...values, declaredParamCount: Number.MAX_SAFE_INTEGER + 1 };
+		expect(zGetModelLabArchitectureResponse.safeParse({ ...response, hyperparameters: unsafe }).success).toBe(false);
 	});
 });

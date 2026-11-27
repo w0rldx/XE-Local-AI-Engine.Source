@@ -69,6 +69,16 @@ function formatIn(
 	}
 }
 
+// Narrow style keeps the label as short as the list row needs ("5m ago", "vor 5 m"); `auto` turns zero seconds into
+// "now"/"jetzt". A malformed stored language tag throws a RangeError, so it falls back to the environment's default.
+export function relativeTimeFormat(language: string | undefined): Intl.RelativeTimeFormat {
+	try {
+		return new Intl.RelativeTimeFormat(language, { numeric: "auto", style: "narrow" });
+	} catch {
+		return new Intl.RelativeTimeFormat(undefined, { numeric: "auto", style: "narrow" });
+	}
+}
+
 /** Formats a millisecond duration as a compact seconds string, or a dash when absent. */
 export function formatDurationSeconds(durationMs: number | null): string {
 	return durationMs === null ? "—" : `${(durationMs / 1000).toFixed(1)}s`;

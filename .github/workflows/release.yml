@@ -48,6 +48,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup pinned Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.14'
+
       - name: Verify supported .NET runtime floor
         run: scripts/compliance/verify-dotnet-runtime-floor.py
 
@@ -133,6 +138,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+
+      - name: Setup pinned Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.14'
 
       - name: Setup .NET 8 runtime for pinned release tooling
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
@@ -344,6 +354,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup pinned Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.14'
+
       - name: Verify release authority and unsigned-risk decision again
         run: python3 scripts/release/verify-release-authority.py
 
@@ -433,7 +448,7 @@ jobs:
             echo "## Portable release published"
             echo "- Tag: v${{ needs.version.outputs.pack-version }}"
             echo "- Source: $GITHUB_SHA"
-            echo "- Windows: framework-dependent Velopack Portable.zip (ASP.NET Core Runtime 10.0.12+ x64 required; no Setup.exe)"
+            echo "- Windows: framework-dependent Velopack Portable.zip (ASP.NET Core Runtime 10.0.15+ x64 required; no Setup.exe)"
             echo "- Linux: Velopack AppImage"
             echo "- Signing: unsigned; approved risk record required by publication gate"
           } >> "$GITHUB_STEP_SUMMARY"

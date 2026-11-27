@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
 import tempfile
 import unittest
+from collections.abc import Callable
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -17,6 +19,42 @@ WINDOWS_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "windows-tests.yml"
 VERSION_READER = REPO_ROOT / "scripts" / "read-release-version.py"
 PACKAGE_RC = REPO_ROOT / "publish" / "package-rc.sh"
 PACKAGE_TESTER_WIN = REPO_ROOT / "publish" / "package-tester-win.ps1"
+
+
+def write_shipped_payload(publish_dir: Path) -> None:
+    """The training runtime as a real payload carries it, plus a benchmark corpus file whose name looks like a test."""
+    scripts = publish_dir / "training-scripts"
+    scripts.mkdir()
+    (scripts / "train.py").write_text("shipped", encoding="utf-8")
+    (scripts / "modellab.py").write_text("shipped", encoding="utf-8")
+    corpus = publish_dir / "benchmark-corpus"
+    corpus.mkdir()
+    (corpus / "test_corpus.py").write_text("shipped data", encoding="utf-8")
+
+
+def assert_training_payload_guard(
+    case: unittest.TestCase, run_guard: Callable[[Path], subprocess.CompletedProcess[str]]
+) -> None:
+    """A packager guard refuses a training test module at any depth and a missing train.py, and passes the rest."""
+    for planted in ("training-scripts/test_x.py", "training-scripts/sub/test_x.py"):
+        with case.subTest(planted=planted), tempfile.TemporaryDirectory() as root:
+            publish_dir = Path(root)
+            write_shipped_payload(publish_dir)
+            clean = run_guard(publish_dir)
+            case.assertEqual(0, clean.returncode, clean.stderr)
+            planted_file = publish_dir / planted
+            planted_file.parent.mkdir(parents=True, exist_ok=True)
+            planted_file.write_text("test", encoding="utf-8")
+            leaked = run_guard(publish_dir)
+            case.assertNotEqual(0, leaked.returncode, leaked.stdout)
+            case.assertIn("Python test module", leaked.stderr + leaked.stdout)
+    with case.subTest(missing="training-scripts/train.py"), tempfile.TemporaryDirectory() as root:
+        publish_dir = Path(root)
+        write_shipped_payload(publish_dir)
+        (publish_dir / "training-scripts" / "train.py").unlink()
+        missing = run_guard(publish_dir)
+        case.assertNotEqual(0, missing.returncode, missing.stdout)
+        case.assertIn("train.py is missing", missing.stderr + missing.stdout)
 
 
 class ReleaseWorkflowContractTests(unittest.TestCase):
@@ -66,6 +104,30 @@ class ReleaseWorkflowContractTests(unittest.TestCase):
         self.assertIn("python-version: '3.14'", body)
         self.assertNotIn("python3", body)
         self.assertIn("python scripts/compliance/create_bundle_input_manifest.py", body)
+
+    def test_every_linux_job_running_repo_python_pins_python_first(self) -> None:
+        """scripts/** targets Python 3.13 and run-release-contract-tests.sh refuses an older python3; an Ubuntu 24.04
+        runner image ships 3.12, so each job provisions the pinned interpreter before its first Python use."""
+        setup = (
+            "uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0\n"
+            "        with:\n"
+            "          python-version: '3.14'"
+        )
+        uses_python = re.compile(r"python3? |\.py\b|run-release-contract-tests\.sh|openapi:breaking")
+        checked = []
+        for name, source in (("build-and-test.yml", self.build_source), ("release.yml", self.source)):
+            jobs = source[source.index("\njobs:\n") :]
+            for job in re.finditer(r"\n  (?P<name>[a-z-]+):\n(?P<body>.*?)(?=\n  [a-z-]+:\n|\Z)", jobs, re.DOTALL):
+                body = "\n".join(line for line in job["body"].splitlines() if not line.lstrip().startswith("#"))
+                first = uses_python.search(body)
+                if "runs-on: ubuntu" not in body or first is None:
+                    continue
+                checked.append(f"{name}:{job['name']}")
+                with self.subTest(job=checked[-1]):
+                    self.assertIn(setup, body)
+                    self.assertLess(body.index(setup), first.start())
+        for job in ("release-contracts", "python-quality"):
+            self.assertIn(f"build-and-test.yml:{job}", checked)
 
     def test_release_serialization_is_repository_wide(self) -> None:
         self.assertIn("group: official-release-${{ github.repository }}", self.source)
@@ -238,6 +300,30 @@ class ReleaseWorkflowContractTests(unittest.TestCase):
         self.assertGreater(len(rc_entries), 0)
         self.assertEqual(rc_entries, win_entries)
         self.assertIn(("*.map", "source map (debug artifact; production builds emit none)"), rc_entries)
+        self.assertIn(
+            ("training-scripts/**/test_*.py", "Python test module (repository only, never shipped)"), rc_entries
+        )
+
+    def test_payload_training_gate_runs_on_every_rid_after_the_last_publish_and_before_pack(self) -> None:
+        step = re.search(
+            r"\n(?P<indent>\s+)- name: Verify payload carries the training runtime without its tests\n"
+            r"(?P<body>.*?)(?=\n(?P=indent)- name:)",
+            self.package_source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(step)
+        body = step.group("body")
+        self.assertNotIn("if:", body)
+        self.assertIn("shell: bash", body)
+        self.assertIn("set -euo pipefail", body)
+        self.assertIn('scripts_dir="${{ matrix.publish-dir }}/training-scripts"', body)
+        self.assertIn('[[ ! -f "$scripts_dir/train.py" ]]', body)
+        self.assertIn("find \"$scripts_dir\" -name 'test_*.py'", body)
+        self.assertEqual(2, body.count("exit 1"))
+        gate = self.package_source.index("name: Verify payload carries the training runtime without its tests")
+        self.assertLess(self.package_source.index("name: Build and test Windows framework launcher"), gate)
+        self.assertLess(gate, self.package_source.index("name: Generate and validate payload SPDX"))
+        self.assertLess(gate, self.package_source.index("name: Pack portable artifact with Velopack"))
 
     def test_publish_output_guard_refuses_a_planted_local_file_and_passes_the_linked_training_scripts(self) -> None:
         guard = re.search(
@@ -257,6 +343,8 @@ class ReleaseWorkflowContractTests(unittest.TestCase):
                 check=False,
             )
 
+        assert_training_payload_guard(self, run_guard)
+
         for planted in (
             "training/base/a/config.json",
             "runtime/x",
@@ -267,9 +355,7 @@ class ReleaseWorkflowContractTests(unittest.TestCase):
         ):
             with self.subTest(planted=planted), tempfile.TemporaryDirectory() as root:
                 publish_dir = Path(root)
-                scripts = publish_dir / "training-scripts"
-                scripts.mkdir()
-                (scripts / "modellab.py").write_text("shipped", encoding="utf-8")
+                write_shipped_payload(publish_dir)
                 clean = run_guard(publish_dir)
                 self.assertEqual(0, clean.returncode, clean.stderr)
 
@@ -279,6 +365,35 @@ class ReleaseWorkflowContractTests(unittest.TestCase):
                 leaked = run_guard(publish_dir)
                 self.assertEqual(1, leaked.returncode, leaked.stdout)
                 self.assertIn(planted.split("/")[0], leaked.stderr)
+
+    @unittest.skipUnless(shutil.which("pwsh"), "pwsh is not on PATH; the Windows packager guard cannot run here")
+    def test_windows_publish_output_guard_refuses_training_tests_and_requires_train_py(self) -> None:
+        guard = re.search(
+            r"^\$forbiddenPublishArtifacts = @\(\n.*?^Write-Host \">> Publish output carries[^\n]*\n",
+            PACKAGE_TESTER_WIN.read_text(encoding="utf-8"),
+            re.DOTALL | re.MULTILINE,
+        )
+        self.assertIsNotNone(guard)
+        with tempfile.TemporaryDirectory() as script_root:
+            script = Path(script_root) / "guard.ps1"
+            # The raw message on stderr: pwsh's error view wraps and colours a thrown here-string.
+            script.write_text(
+                "param($publishDir)\n$ErrorActionPreference = 'Stop'\ntry {\n"
+                + guard.group(0)
+                + "} catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }\n",
+                encoding="utf-8",
+            )
+
+            def run_guard(publish_dir: Path) -> subprocess.CompletedProcess[str]:
+                return subprocess.run(
+                    ["pwsh", "-NoProfile", "-NonInteractive", "-File", str(script), str(publish_dir)],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                    check=False,
+                )
+
+            assert_training_payload_guard(self, run_guard)
 
     def test_one_protected_serial_job_owns_explicit_bound_draft_creation(self) -> None:
         prepare_job = re.search(

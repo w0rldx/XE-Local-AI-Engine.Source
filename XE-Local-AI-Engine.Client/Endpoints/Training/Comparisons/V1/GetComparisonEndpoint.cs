@@ -8,9 +8,9 @@ using XE_Local_AI_Engine.Client.Services.Training.Comparison;
 
 public sealed class GetComparisonEndpoint : Endpoint<ComparisonByIdRequest, ComparisonResponse>
 {
-    private readonly IComparisonReportService _comparisons;
+    private readonly ComparisonReportService _comparisons;
 
-    public GetComparisonEndpoint(IComparisonReportService comparisons)
+    public GetComparisonEndpoint(ComparisonReportService comparisons)
     {
         ArgumentNullException.ThrowIfNull(comparisons);
         _comparisons = comparisons;

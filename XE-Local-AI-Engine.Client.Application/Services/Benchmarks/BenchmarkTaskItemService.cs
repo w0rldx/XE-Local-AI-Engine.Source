@@ -10,30 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     decided by the store; this layer decodes the wire shape, applies the caps, and refuses the kinds this build
 ///     cannot yet execute.
 /// </remarks>
-public interface IBenchmarkTaskItemService
-{
-    Task<IReadOnlyList<BenchmarkTaskItemRecord>> ListAsync(Guid projectId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    ///     The project's items, materializing item 0 for a project created before task items existed. Reads only for
-    ///     every project created since — those get their items in the same transaction as themselves.
-    /// </summary>
-    Task<IReadOnlyList<BenchmarkTaskItemRecord>> GetOrCreateItemsAsync(Guid projectId, CancellationToken cancellationToken = default);
-
-    Task<BenchmarkTaskItemRecord> CreateAsync(Guid projectId, long expectedProjectVersion, BenchmarkTaskItemDraft draft, CancellationToken cancellationToken = default);
-
-    Task<BenchmarkTaskItemRecord> UpdateAsync(Guid projectId,
-        Guid itemId,
-        long expectedVersion,
-        BenchmarkTaskItemDraft draft,
-        CancellationToken cancellationToken = default);
-
-    Task DeleteAsync(Guid projectId, Guid itemId, long expectedVersion, CancellationToken cancellationToken = default);
-
-    Task<IReadOnlyList<BenchmarkTaskItemRecord>> ReorderAsync(Guid projectId, IReadOnlyList<Guid> orderedItemIds, CancellationToken cancellationToken = default);
-}
-
-public sealed class BenchmarkTaskItemService : IBenchmarkTaskItemService
+public sealed class BenchmarkTaskItemService
 {
     /// <summary>The cap on LEAF items — the ones a freeze actually fans out over, so a generator's cases each count.</summary>
     /// <remarks>
@@ -59,6 +36,10 @@ public sealed class BenchmarkTaskItemService : IBenchmarkTaskItemService
     public Task<IReadOnlyList<BenchmarkTaskItemRecord>> ListAsync(Guid projectId, CancellationToken cancellationToken = default) =>
         _taskItemStore.ListTaskItemsAsync(projectId, cancellationToken);
 
+    /// <summary>
+    ///     The project's items, materializing item 0 for a project created before task items existed. Reads only for
+    ///     every project created since — those get their items in the same transaction as themselves.
+    /// </summary>
     public Task<IReadOnlyList<BenchmarkTaskItemRecord>> GetOrCreateItemsAsync(Guid projectId, CancellationToken cancellationToken = default) =>
         _taskItemStore.GetOrCreateItemsAsync(projectId, cancellationToken);
 

@@ -20,7 +20,7 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
     /// </summary>
     private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
-    private readonly IExternalAppCatalogCacheStore _cacheStore;
+    private readonly ExternalAppCatalogCacheStore _cacheStore;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<ApplicationCatalogProvider> _logger;
     private readonly IOptions<ExternalAppCatalogOptions> _options;
@@ -39,7 +39,7 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
     private DateTimeOffset _lastAttemptUtc = DateTimeOffset.MinValue;
 
     public ApplicationCatalogProvider(IHttpClientFactory httpClientFactory,
-        IExternalAppCatalogCacheStore cacheStore,
+        ExternalAppCatalogCacheStore cacheStore,
         IOptions<ExternalAppCatalogOptions> options,
         TimeProvider timeProvider,
         ILogger<ApplicationCatalogProvider> logger)
@@ -250,7 +250,13 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
                     LastRefreshFailure: null);
                 _lastETag = outcome.ETag;
 
-                await _cacheStore.SaveAsync(new StoredExternalAppCatalogCache(outcome.Raw!, attemptAtUtc, refreshUrl, outcome.ETag), cancellationToken);
+                await _cacheStore.SaveAsync(new StoredExternalAppCatalogCache
+                {
+                    RawJson = outcome.Raw!,
+                    FetchedAtUtc = attemptAtUtc,
+                    SourceUrl = refreshUrl,
+                    ETag = outcome.ETag
+                }, cancellationToken);
                 return new ExternalAppCatalogRefreshResult
                 {
                     Snapshot = _current,

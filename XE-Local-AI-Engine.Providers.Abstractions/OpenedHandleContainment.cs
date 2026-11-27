@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Providers.Abstractions;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.InteropServices;
-using System.Text;
 using Microsoft.Win32.SafeHandles;
 
 /// <summary>
@@ -18,9 +17,8 @@ using Microsoft.Win32.SafeHandles;
 /// </remarks>
 public static class OpenedHandleContainment
 {
-    // O_PATH (010000000) | O_CLOEXEC (02000000), the asm-generic values x64 and arm64 share: names the inode without read access,
-    // works on directories, and follows links, which is what resolving a trusted root needs.
-    private const int PathOnlyCloseOnExecFlags = 0x200000 | 0x80000;
+    // O_PATH names the inode without read access, works on directories, and follows links: what resolving a trusted root needs.
+    private const int PathOnlyCloseOnExecFlags = LinuxOpenFlags.PathOnly | LinuxOpenFlags.CloseOnExec;
 
     private const uint FileFlagBackupSemantics = 0x02000000;
 
@@ -61,9 +59,7 @@ public static class OpenedHandleContainment
 
         if (OperatingSystem.IsLinux())
         {
-            var pathBytes = new byte[Encoding.UTF8.GetByteCount(path) + 1];
-            Encoding.UTF8.GetBytes(path, pathBytes);
-            var descriptor = open(pathBytes, PathOnlyCloseOnExecFlags);
+            var descriptor = LinuxOpenFlags.Open(path, PathOnlyCloseOnExecFlags);
             if (descriptor < 0)
             {
                 return null;
@@ -96,7 +92,7 @@ public static class OpenedHandleContainment
     [SuppressMessage("Sonar Code Smell", "S3869:SafeHandle instances should not use DangerousGetHandle",
         Justification =
             "Linux exposes an opened file's canonical target through /proc/self/fd/{fd}; the owning SafeFileHandle remains live for this synchronous lookup and is never released or transferred here.")]
-    private static string? FinalPathOrNull(SafeFileHandle handle)
+    public static string? FinalPathOrNull(SafeFileHandle handle)
     {
         if (OperatingSystem.IsLinux())
         {
@@ -136,11 +132,6 @@ public static class OpenedHandleContainment
 
     private static string? TrimmedOrNull(string? path) =>
         path is null ? null : Path.TrimEndingDirectorySeparator(path);
-
-    // A single libc open(). The caller marshals the path into a null-terminated UTF-8 byte array so any filename round-trips.
-    [DllImport("libc", EntryPoint = "open", SetLastError = true)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
-    private static extern int open(byte[] pathname, int flags);
 
     [DllImport("kernel32.dll", EntryPoint = "CreateFileW", CharSet = CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]

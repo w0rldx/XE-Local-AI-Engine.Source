@@ -85,9 +85,9 @@ unless `needs.backend-tests.result == 'success'`. `TEST_SHARD` without `TEST_GRO
 
 **Rule:** after a NuGet or packaging dependency round lands on `develop`, dispatch `dev-build` on `develop` and wait for its `package / build-pack` jobs on linux-x64 and win-x64; `build-and-test` never packs. **Prevents:** a green `build-and-test` hiding a package job that fails on the backend license corpus, the bundle-input evidence merge across the single-file publishes, or the `vpk` pin (both package jobs red after the Velopack 1.2.161 round, 2026-10-18). **Authority:** `.github/workflows/dev-build.yml`, `package-velopack.yml`; "A NuGet bump of a package with a curated upstream license needs a new exact mapping" above.
 
-### Size the application bundle budget for the Windows pack
+### Size a bundle budget raise for the Windows pack
 
-**Rule:** when raising `applicationJavaScriptBytes` in `XE-Local-AI-Engine.Client.React/config/bundle-budget.json`, leave at least 400 B above the Linux measurement. The Windows `package / build-pack (win-x64)` job measures the main `index` chunk about 335 B larger than the Linux build of the same commit, and only the nightly `dev-build` and `release` run it. **Prevents:** a budget raise that is green on every push (Linux only) failing the nightly Windows pack. **Authority:** `XE-Local-AI-Engine.Client.React/scripts/CheckBundleBudget.mjs`, the `build-pack` job in `.github/workflows/package-velopack.yml`.
+**Rule:** when a budget in `XE-Local-AI-Engine.Client.React/config/bundle-budget.json` must rise, take the suggested limit `bundle:check` prints (measured + `headroomPercent`), never the bare Linux measurement. The Windows `package / build-pack (win-x64)` job measures the main `index` chunk a few hundred bytes larger than the Linux build of the same commit, and only the nightly `dev-build` and `release` run it. What `index.html` loads or modulepreloads has its own `eagerJavaScriptBytes` budget. **Prevents:** a budget raise that is green on every push (Linux only) failing the nightly Windows pack. **Authority:** `XE-Local-AI-Engine.Client.React/scripts/CheckBundleBudget.mjs`, the `build-pack` job in `.github/workflows/package-velopack.yml`.
 
 ## Packaging and release
 

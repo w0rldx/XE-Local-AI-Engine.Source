@@ -40,7 +40,7 @@ internal static class AddNodeAgentHomeExtensions
         // Workspace copy service: selected-folder copy with exclusions, symlink-escape guard, byte budget, and git baseline.
         builder.Services.AddSingleton<IAgentHomeWorkspaceService, AgentHomeWorkspaceService>();
         // Patch export service: post-run diff of the workspace-copy baseline with changes.patch, changed-files.json, and budget guard.
-        builder.Services.AddSingleton<IAgentHomePatchService, AgentHomePatchService>();
+        builder.Services.AddSingleton<AgentHomePatchService>();
         // Goal executor: the bounded inner agent loop that turns the model's `goal` into real workspace work. It takes the
         // shared IChatClient, so it stays out of AgentHomeService, which has no model dependency of its own.
         builder.Services.AddSingleton<IAgentHomeGoalExecutor, AgentHomeGoalExecutor>();

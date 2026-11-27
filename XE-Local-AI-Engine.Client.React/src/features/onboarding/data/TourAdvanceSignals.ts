@@ -56,7 +56,3 @@ export function countVisibleAssistantReplies(queryClient: QueryClient): number {
 		0,
 	);
 }
-
-export function hasVisibleAssistantReply(queryClient: QueryClient): boolean {
-	return countVisibleAssistantReplies(queryClient) > 0;
-}

@@ -19,6 +19,50 @@ and adding a pip dependency to a pre-RC smoke would be a new failure mode of its
 
 Values are newline-escaped (``\\n`` -> ``\\\\n``) so one record is always one line.
 
+Recorded evidence (``http.jsonl`` here, ``http.log`` through lab-api.sh) is deny-by-default for credentials. The rules
+fail closed: nothing is returned partly masked.
+
+  * the request and response bodies of every route in ``CREDENTIAL_ROUTES`` (and every SignalR negotiate) are replaced
+    by a marker; method, path, status and body size stay. So are the bodies of a request path that is neither a plain
+    path nor a full URL to the node itself (``//mcp/…``, ``http:mcp/…``): its route is ambiguous. Re-derive the list
+    after adding a route family:
+    ``grep -hE 'const string' XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes*.cs`` and the audit below;
+  * a body, a SignalR frame or a string inside either that looks like JSON (``{`` or ``[`` as its first visible
+    character, after any whitespace, byte-order mark, zero-width, other format or control character such as NUL) but
+    does not parse (a truncated transfer, cut tool arguments) is replaced by a marker as a whole;
+  * every query value is masked, in a logged path (absolute or relative, every route) and anywhere in recorded text,
+    whatever its name; a query name stays only as a plain identifier after one decoding, otherwise it is masked too.
+    A logged path's query runs to its end; one inside other text runs to the next whitespace;
+  * every userinfo (``//user:password@``) is masked; scheme, host and path stay;
+  * a path segment that is a credential is masked in every logged path, driver error and recorded text: the segment
+    after each ``SECRET_SEGMENT_PREFIXES`` prefix, derived from every ``LocalApiRoutes`` template whose parameter name
+    ``is_secret_key`` matches (``{token}``; ``…Id``/``…Key`` names such as ``sessionId``, ``keyId``, ``nodeKey`` are
+    ids the node lists, not credentials). A logged path whose spelling hides such a segment is masked whole, and the
+    bodies of every path holding one are omitted like a credential route's. A URL or path inside recorded text or a
+    driver error (a tool result linking a skill preview on a conversation route) whose spelling hides one replaces
+    the containing string, body or message by a marker;
+  * every other body is scrubbed by ``scrub`` as defence in depth: a field is redacted when its lowercased name is in
+    ``SECRET_KEYS`` or ends in one of ``SECRET_KEY_SUFFIXES`` (passwords, tokens, API and private keys, secrets,
+    recovery/reset/user/device/one-time/authorization codes, cookies, signatures, credentials, connection strings),
+    plus the sibling rules in ``scrub_field``;
+  * a credential value (``SECRET_VALUE_PREFIXES``: a PEM block, an inbound MCP, integration or proxy key) anywhere in
+    a string, any case, redacts that string, in a JSON name (parsed answers included) redacts that name and its value,
+    and anywhere in a body, frame or driver error that is not JSON (a text artifact, an error page) replaces it by a
+    marker;
+  * a body that is neither JSON nor text (a control character other than tab and line breaks, or bytes that are not
+    UTF-8: an image, an archive) is replaced by a marker.
+
+Re-run this audit after adding a request, response or hub DTO; every name it prints must sit on a credential route, be
+redacted, or be a non-secret id, count or flag (booleans are never redacted):
+
+  grep -rhoE '[A-Z][A-Za-z0-9]* \\{ get' XE-Local-AI-Engine.Client/Endpoints XE-Local-AI-Engine.Client/Hubs \\
+    XE-Local-AI-Engine.Client.Application --include='*.cs' | sort -u \\
+    | grep -iE '(pass|secret|token|key|code|cookie|signature|credential|connection|pat|otp|pin) \\{'
+
+The OpenAPI document (XE-Local-AI-Engine.Client.React/openapi/v1.json) lacks the locked pre-host's vault routes, so the
+source, not the document, is audited. Dictionary-valued credentials (MCP ``headers``/``env``) and ``isSecret`` header
+and environment models have no credential-like name, so their routes must stay in ``CREDENTIAL_ROUTES``.
+
 Chat is driven over SignalR **long polling** rather than WebSockets. LocalChatHub is
 ``[Authorize(AuthenticationSchemes = JwtBearer)]``; long polling carries the bearer token in
 an ordinary Authorization header on every request, needs no websocket client, and is
@@ -31,17 +75,22 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import datetime
 import hashlib
 import json
+import re
 import ssl
 import struct
 import sys
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
 import zlib
+from collections.abc import Callable
+from pathlib import Path
 
 # SignalR's record separator. Every frame on the wire ends with it.
 RECORD_SEPARATOR = "\x1e"
@@ -94,12 +143,19 @@ def build_ssl_context(base_url: str) -> ssl.SSLContext | None:
     return context
 
 
+def direct_opener(context: ssl.SSLContext | None = None) -> urllib.request.OpenerDirector:
+    """An opener that ignores the proxy variables (``http_proxy``, ``https_proxy``, ``all_proxy``): a loopback node's
+    requests, its bearer token and the login password never travel through a proxy."""
+    return urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPSHandler(context=context))
+
+
 class NodeClient:
     def __init__(self, base_url: str, token: str | None = None, timeout: float = 120.0) -> None:
         self.base_url = base_url.rstrip("/")
         self.token = token
         self.timeout = timeout
         self.ssl_context = build_ssl_context(self.base_url)
+        self.opener = direct_opener(self.ssl_context)
 
     def request(
         self,
@@ -112,7 +168,7 @@ class NodeClient:
     ) -> tuple[int, object]:
         url = path if path.startswith("http") else self.base_url + path
         if urllib.parse.urlsplit(url).scheme not in ("http", "https"):
-            raise DriverError(f"{method} {path} -> refusing a URL that is not http(s)")
+            raise DriverError(f"{method} {redact_path(path)} -> refusing a URL that is not http(s)")
         data = body.encode("utf-8") if isinstance(body, str) else body
         request = urllib.request.Request(url, data=data, method=method)  # noqa: S310  # scheme pinned above
         if self.token:
@@ -121,19 +177,18 @@ class NodeClient:
             request.add_header("Content-Type", content_type)
         try:
             # Scheme pinned to http(s) above; file:/custom schemes are unreachable here.
-            with urllib.request.urlopen(  # noqa: S310  # nosec B310
-                request, context=self.ssl_context, timeout=self.timeout
-            ) as response:
+            with self.opener.open(request, timeout=self.timeout) as response:  # nosec B310
                 raw = response.read()
                 status = response.status
         except urllib.error.HTTPError as error:
             raw = error.read()
             status = error.code
             if status not in allowed_status:
-                detail = raw[:400].decode("utf-8", "replace")
-                raise DriverError(f"{method} {path} -> HTTP {status}: {detail}") from error
+                # A server can echo the requested URL or a credential in its error body.
+                detail = redact(raw.decode("utf-8", "replace"), path, self.base_url)[:400]
+                raise DriverError(redact_url(f"{method} {redact_path(path)} -> HTTP {status}: {detail}")) from error
         except urllib.error.URLError as error:
-            raise DriverError(f"{method} {path} -> {error.reason}") from error
+            raise DriverError(redact_url(f"{method} {redact_path(path)} -> {error.reason}")) from error
         if expect_binary:
             return status, raw
         if not raw:
@@ -141,7 +196,7 @@ class NodeClient:
         try:
             return status, json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as error:
-            raise DriverError(f"{method} {path} returned a non-JSON body") from error
+            raise DriverError(f"{method} {redact_path(path)} returned a non-JSON body") from error
 
     def get_json(self, path: str) -> object:
         _, payload = self.request("GET", path)
@@ -152,6 +207,390 @@ def require_mapping(payload: object, what: str) -> dict:
     if not isinstance(payload, dict):
         raise DriverError(f"{what} did not return a JSON object")
     return payload
+
+
+def now() -> str:
+    return datetime.datetime.now().isoformat(timespec="milliseconds")
+
+
+def append_jsonl(path: Path, record: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        # codeql[py/clear-text-storage-sensitive-data] scrub() redacts credential-like keys at any depth first.
+        handle.write(json.dumps(scrub(record), ensure_ascii=False, default=str) + "\n")
+
+
+# Credential-like JSON names, lowercased (audit: module docstring). A SignalR negotiate answers the connection token
+# under connectionToken, and under connectionId before version 1.
+SECRET_KEYS = frozenset({"bearer", "connectionid", "pat", "otp"})
+# Every wire name ending in "token" but "perToken" is a credential or an opaque handle ("tokens", "tokenIds" and the
+# *Tokens counts do not end in it). "code" alone is no suffix: errorCode, reasonCode and a problem's code are ids.
+SECRET_KEY_SUFFIXES = (
+    "password",
+    "passphrase",
+    "secret",
+    "token",
+    "apikey",
+    "api_key",
+    "privatekey",
+    "private_key",
+    "recoverycode",
+    "resetcode",
+    "usercode",
+    "devicecode",
+    "onetimecode",
+    "authorizationcode",
+    "cookie",
+    "signature",
+    "credential",
+    "credentials",
+    "connectionstring",
+)
+# Values that are credentials whatever field holds them: PEM blocks and inbound MCP, integration and proxy keys.
+SECRET_VALUE_PREFIXES = ("-----BEGIN", "xemcp_", "xeint_", "xeprx_")
+# A prefix is searched anywhere and in any case: a key or PEM block in the middle of a text or a line is one too.
+SECRET_VALUE = re.compile("|".join(map(re.escape, SECRET_VALUE_PREFIXES)), re.IGNORECASE)
+
+
+def is_secret_key(key: str) -> bool:
+    lowered = key.lower()
+    # expertsPerToken and kvBytesPerToken are per-token metrics, not tokens.
+    return lowered in SECRET_KEYS or (lowered.endswith(SECRET_KEY_SUFFIXES) and not lowered.endswith("pertoken"))
+
+
+def scrub_field(key: str, value: object, siblings: dict) -> object:
+    """``value`` as recorded under ``key`` of the object whose lowercased names map to ``siblings``, a credential the
+    node never returns redacted."""
+    if isinstance(value, bool):
+        return value  # a flag (isSecret, hasStoredApiKey) is never the credential itself
+    name = key.lower()
+    # An external app's variable map is never echoed back, and the app manifest, not the request, says which variable
+    # is secret: every value is redacted, the names stay.
+    if name == "variables" and isinstance(value, dict):
+        return scrub(dict.fromkeys(value, "(redacted)"))
+    secret = (
+        is_secret_key(key)
+        # The inbound MCP key create answers its one-time plaintext under a bare "key" beside "apiKey"; a generic
+        # "key" anywhere else (a setting name, a map entry) stays readable.
+        or (name == "key" and "apikey" in siblings)
+        # A cloud or custom-tool header and a custom-tool environment variable carry their value beside an isSecret
+        # flag; the node returns the value only when the flag is false.
+        or (name == "value" and siblings.get("issecret") is True)
+        # A scheduled job's parameter JSON is stored encrypted and never echoed back.
+        or (name == "parameters" and isinstance(value, str))
+    )
+    return "(redacted)" if secret else scrub(value)
+
+
+def visible_start(text: str) -> str:
+    """``text`` from its first visible character. json.loads rejects a leading byte-order mark, zero-width or other
+    format character (category Cf) and NUL or another control character (Cc), so whatever follows them is judged."""
+    for index, char in enumerate(text):
+        if not (char.isspace() or unicodedata.category(char) in ("Cc", "Cf")):
+            return text[index:]
+    return ""
+
+
+def scrub(value: object) -> object:
+    """Replace credential-like fields (passwords, access/refresh tokens, secrets, API keys) at any depth."""
+    if isinstance(value, dict):
+        # The node binds JSON names case-insensitively, so names are compared lowercased and recorded as sent. A name
+        # repeated in another case counts as secret when any spelling of its flag is true.
+        siblings = {str(k).lower(): v for k, v in value.items()}
+        siblings.update((str(k).lower(), True) for k, v in value.items() if v is True)
+        # A data-defined name (a model-keyed map) can be a credential value itself: the pair becomes one marker pair.
+        return dict(
+            ("(redacted)", "(redacted)") if SECRET_VALUE.search(str(k)) else (k, scrub_field(str(k), v, siblings))
+            for k, v in value.items()
+        )
+    if isinstance(value, list):
+        return [scrub(v) for v in value]
+    if not isinstance(value, str):
+        return value
+    if SECRET_VALUE.search(value):
+        return "(redacted)"
+    visible = visible_start(value)
+    # Tool-call arguments and results, and a recorded SignalR body, arrive as strings holding JSON, so a nested
+    # credential would pass through. A record's own omission marker also starts with "[" and stays as it is.
+    if (visible[:1] in ("{", "[") or RECORD_SEPARATOR in value) and not OMISSION_MARKER.fullmatch(value):
+        return redact(value)
+    return redact_url(value)
+
+
+# A query runs from "?" to whitespace, which a URL never carries unencoded. A "//" authority runs to the first "/", "?",
+# "#" or whitespace and its userinfo to the LAST "@" in it (an unencoded email-style username holds one more); the rest
+# up to the query is the path and fragment.
+QUERY = re.compile(r"\?(\S*)")
+AUTHORITY = re.compile(r"//([^\s/?#]*)([^\s?]*)")
+# A host is one optional bracketed IP literal and a bracket-free rest (port included).
+HOST = re.compile(r"(\[[^][]*\])?[^][]*")
+# The literal prefix of every LocalApiRoutes template whose next segment is a parameter is_secret_key names a credential
+# (the skill import preview token; an external provider's connectionId, a slug the name rule masks too). The segment
+# after a prefix is masked in every logged path and recorded text. Derivation: test_model_matrix_driver.py
+# (test_secret_path_segments_are_derived_from_the_route_templates) reads every template and fails on a difference.
+SECRET_SEGMENT_PREFIXES = ("external-providers/connections", "skills/import/preview")
+SECRET_SEGMENT = re.compile(
+    r"(?i)\b("
+    + "|".join("/+".join(map(re.escape, prefix.split("/"))) for prefix in SECRET_SEGMENT_PREFIXES)
+    + r")/+[^/\s?#]+"
+)
+# A query name kept in the clear; any other name, once decoded, is masked with its value.
+QUERY_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_.-]*")
+
+
+def mask_query(query: str) -> str:
+    """``query`` (without its ``?``) with every value masked; a name is kept, decoded once, only when it is a plain
+    identifier (an encoded ``=`` or ``&`` could hide a value in it)."""
+    masked = []
+    for part in query.split("&"):
+        name, equals, _ = part.partition("=")
+        name = urllib.parse.unquote_plus(name)
+        masked.append(name + "=(redacted)" if equals and QUERY_NAME.fullmatch(name) else "(redacted)" if part else "")
+    return "&".join(masked)
+
+
+def mask_authority(match: re.Match[str]) -> str:
+    """A ``//`` authority with its userinfo masked through the last ``@``. When the split is ambiguous (an ``@`` after
+    a path delimiter, where a parser could end the userinfo instead, or unbalanced host brackets), the authority, path
+    and fragment become one marker."""
+    _, at, host = match[1].rpartition("@")
+    if "@" in match[2] or not HOST.fullmatch(host):
+        return "//(redacted)"
+    return "//" + ("(redacted)@" if at else "") + host + match[2]
+
+
+def mask_url(text: str) -> str:
+    """``text`` with every query value, every userinfo and every secret path segment in its canonical spelling
+    masked."""
+    text = SECRET_SEGMENT.sub(r"\1/(redacted)", AUTHORITY.sub(mask_authority, text))
+    return QUERY.sub(lambda match: "?" + mask_query(match[1]), text)
+
+
+def redact_url(text: str) -> str:
+    """``text`` with every query value, every userinfo and every secret path segment masked, wherever a URL or a
+    relative path sits in it: a hub path carries the SignalR connection token as a query value; an MCP server URL can
+    carry credentials in either; a skill preview resource link carries its import token. When a word's path (up to its
+    first ``?``) still shows a secret segment once ``loose_segments`` reads it (``%73kills/…``, ``skills%2Fimport…``,
+    ``skills/./import/…``, ``skills\\import\\…``), no mask can be trusted and the whole text is a marker; so is a text
+    holding a credential value anywhere."""
+    if SECRET_VALUE.search(text):
+        return omitted(text, "credential value")
+    for word in text.split():
+        head = word.partition("?")[0]
+        # A segment masked already (a logged path recorded again) is no secret.
+        hidden = secret_segments(head) - {"(redacted)"}
+        if hidden & set(loose_segments(SECRET_SEGMENT.sub(r"\1/(redacted)", head))):
+            return omitted(text, "unmaskable secret path")
+    return mask_url(text)
+
+
+def loose_segments(path: str) -> list[str]:
+    """``path``'s segments as the most lenient router could read them: decoded until stable, lowercased, split at
+    slashes and backslashes, empty and dot segments dropped, ``..`` resolved."""
+    decoded = path
+    while (once := urllib.parse.unquote(decoded)) != decoded:
+        decoded = once
+    segments: list[str] = []
+    for segment in re.split(r"[/\\]+", decoded.lower()):
+        if segment == "..":
+            segments = segments[:-1]
+        elif segment not in ("", "."):
+            segments.append(segment)
+    return segments
+
+
+def secret_segments(path: str) -> set[str]:
+    """Every segment of ``loose_segments(path)`` that follows a ``SECRET_SEGMENT_PREFIXES`` prefix."""
+    segments = loose_segments(path)
+    return {
+        segments[index + len(prefix)]
+        for prefix in (prefix.split("/") for prefix in SECRET_SEGMENT_PREFIXES)
+        for index in range(len(segments) - len(prefix))
+        if segments[index : index + len(prefix)] == prefix
+    }
+
+
+def redact_path(path: str) -> str:
+    """A logged request path or URL: everything after its first ``?`` is one query, whatever whitespace it holds. A
+    secret segment in a spelling ``redact_url`` misses (``%73kills/…``, ``skills/./import/…``), or a credential value
+    anywhere, masks the whole path."""
+    if SECRET_VALUE.search(path):
+        return "(redacted)"
+    head, mark, query = path.partition("?")
+    masked = mask_url(head)
+    if secret_segments(head) & set(loose_segments(masked)):
+        masked = "(redacted)"
+    return masked + (mark + mask_query(query) if mark else "")
+
+
+# Route families (paths under /api/local/v1, from LocalApiRoutes) whose request or response bodies carry credentials.
+# Their bodies are never recorded: a field-name rule cannot see a credential under an arbitrary map key.
+CREDENTIAL_ROUTES = (
+    "auth",  # login, refresh, setup, change-password, sessions, vault confirm/unlock/unlock-recovery
+    "mcp",  # MCP server registrations (url, headers, env) and the inbound MCP server key
+    "cloud-settings",  # API key, Entra client secret, secret headers, Entra device-code and auth-code sign-in
+    "cloud/codex",  # Codex sign-in
+    "external-providers",  # connection API keys and headers
+    "external-apps/instances",  # install, update and variable maps
+    "custom-tools",  # secret headers and environment variables
+    "scheduler/jobs",  # parameter JSON, stored encrypted
+    "integrations/keys",  # the plaintext key on create
+    "proxy/key",  # the proxy API key
+    "model-fit/hf-token",  # the Hugging Face token
+)
+
+
+def is_credential_route(path: str, origin: str | None = None) -> bool:
+    """Whether ``path`` (``/api/local/v1/…`` or relative to it, or a full URL to ``origin``, any query) is a credential
+    route.
+
+    Only a plain path, or an http(s) URL whose scheme and authority are ``origin``'s, is classified, as the node routes
+    it: percent-decoded once, dot segments resolved, empty segments dropped, case ignored. Anything else counts as a
+    credential route: a scheme-relative ``//…``, any other scheme or authority (``http:mcp/…``), a control or format
+    character (the URL parser drops some), an encoded slash, backslash or percent sign, a ``..`` above the root, a
+    segment ``secret_segments`` finds."""
+    text = path.strip()
+    # A path carrying a credential segment is one too: an answer can echo it in a spelling no mask predicts.
+    if any(unicodedata.category(char) in ("Cc", "Cf") for char in text) or secret_segments(text):
+        return True
+    parts = urllib.parse.urlsplit(text)
+    own = urllib.parse.urlsplit(origin or "")
+    if (parts.scheme or parts.netloc or text.startswith("//")) and not (
+        own.netloc
+        and parts.scheme in ("http", "https")
+        and (parts.scheme, parts.netloc.lower()) == (own.scheme, own.netloc.lower())
+    ):
+        return True
+    raw = parts.path
+    decoded = urllib.parse.unquote(raw)
+    if decoded.count("/") != raw.count("/") or "\\" in decoded or "%" in decoded:
+        return True
+    segments: list[str] = []
+    for segment in decoded.lower().split("/"):
+        if segment == "..":
+            if not segments:
+                return True
+            segments.pop()
+        elif segment not in ("", "."):
+            segments.append(segment)
+    route = "/".join(segments).removeprefix(API.strip("/") + "/")
+    # A SignalR negotiate answers the connection token.
+    return route.endswith("/negotiate") or any(route == f or route.startswith(f + "/") for f in CREDENTIAL_ROUTES)
+
+
+OMISSION_MARKER = re.compile(r"\[body omitted: [a-z -]+, \d+ bytes\]")
+
+
+def omitted(text: str, reason: str) -> str:
+    return f"[body omitted: {reason}, {len(text.encode('utf-8'))} bytes]"
+
+
+def redact(text: str, path: str | None = None, origin: str | None = None) -> str:
+    """Scrub a JSON body's credential-like fields, a SignalR body frame by frame; other text has its URLs masked.
+    The body of a credential route (``path``, see ``is_credential_route``), a JSON-shaped body that does not parse, a
+    body that is not text and one holding a credential value outside a JSON string are replaced by a marker."""
+    if path is not None and text.strip() and is_credential_route(path, origin):
+        return omitted(text, "credential-bearing route")
+    if RECORD_SEPARATOR in text:
+        # The trailing separator makes the whole body invalid JSON, so each frame is parsed on its own.
+        return RECORD_SEPARATOR.join(redact(frame) for frame in text.split(RECORD_SEPARATOR))
+    visible = visible_start(text)
+    try:
+        scrubbed = json.dumps(scrub(json.loads(visible)))
+    except json.JSONDecodeError:
+        # A transfer cut after a complete credential leaves JSON no field rule can parse.
+        if visible[:1] in ("{", "["):
+            return omitted(text, "unparseable JSON")
+        # A decoder's replacement character stands for bytes that were not UTF-8.
+        if "\ufffd" in text or any(unicodedata.category(c) == "Cc" and c not in "\t\n\r" for c in text):
+            return omitted(text, "not text")
+        return redact_url(text)
+    # scrub redacts every credential value and name it holds, so a match left means a rule missed one.
+    return omitted(text, "credential value") if SECRET_VALUE.search(scrubbed) else scrubbed
+
+
+class RecordingNodeClient(NodeClient):
+    """NodeClient that appends every REST call (hub long polls excepted) to ``http_log()`` at call time, requests and
+    responses scrubbed. ``exchange`` is the one unrecorded call; a subclass overrides it to retry."""
+
+    def http_log(self) -> Path:
+        raise NotImplementedError
+
+    def exchange(
+        self,
+        method: str,
+        path: str,
+        body: bytes | str | None = None,
+        content_type: str = "application/json",
+        expect_binary: bool = False,
+        allowed_status: tuple[int, ...] = (),
+    ) -> tuple[int, object]:
+        return super().request(method, path, body, content_type, expect_binary, allowed_status)
+
+    def request(
+        self,
+        method: str,
+        path: str,
+        body: bytes | str | None = None,
+        content_type: str = "application/json",
+        expect_binary: bool = False,
+        allowed_status: tuple[int, ...] = (),
+    ) -> tuple[int, object]:
+        poll = "/hub?id=" in path and method in ("GET", "DELETE")
+        record: dict = {"t": now(), "method": method, "path": redact_path(path)}
+        if body is not None and not poll:
+            text = body.decode("utf-8", "replace") if isinstance(body, bytes) else body
+            record["request"] = redact(text, path, self.base_url)[:20000]
+        started = time.monotonic()
+        try:
+            status, payload = self.exchange(method, path, body, content_type, expect_binary, allowed_status)
+        except DriverError as error:
+            message = redact_url(str(error))
+            record.update(ms=int((time.monotonic() - started) * 1000), error=message[:4000])
+            append_jsonl(self.http_log(), record)
+            if message == str(error):
+                raise
+            # An exchange override can raise its own error; the original stays out of the chain.
+            raise DriverError(message) from None
+        if not poll:
+            # Responses are scrubbed too: auth/login (token renewal) answers with the access token.
+            if isinstance(payload, bytes):
+                shown: object = redact(payload.decode("utf-8", "replace"), path, self.base_url)[:2000]
+            elif payload is not None and is_credential_route(path, self.base_url):
+                # The size is the re-serialised JSON's: the transport hands back the parsed body.
+                shown = omitted(json.dumps(payload), "credential-bearing route")
+            else:
+                shown = scrub(payload)
+            record.update(ms=int((time.monotonic() - started) * 1000), status=status, response=shown)
+            append_jsonl(self.http_log(), record)
+        return status, payload
+
+
+# Download phases that mean "still going".
+DOWNLOAD_ACTIVE = ("running", "queued", "pending", "starting", "verifying", "finalizing")
+
+
+def poll_download(
+    get: Callable[[str], dict],
+    operation_id: object,
+    timeout: float,
+    retry: Callable[[DriverError], bool] = lambda _error: False,
+) -> str:
+    """Poll a model-fit download every 5 s until its phase is terminal or ``timeout`` passes; the last phase seen ("" if
+    none). A failed poll raises unless ``retry(error)`` asks for another poll."""
+    path = f"/model-fit/gguf/downloads/operations/{urllib.parse.quote(str(operation_id))}"
+    deadline, phase = time.monotonic() + timeout, ""
+    while time.monotonic() < deadline:
+        try:
+            phase = str(get(path).get("phase") or "")
+        except DriverError as error:
+            if not retry(error):
+                raise
+            continue
+        if phase.lower() not in DOWNLOAD_ACTIVE:
+            break
+        time.sleep(5)
+    return phase
 
 
 def command_auth(args: argparse.Namespace) -> int:

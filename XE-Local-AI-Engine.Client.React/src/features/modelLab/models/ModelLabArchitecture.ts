@@ -7,6 +7,7 @@ import type {
 	XeLocalAiEngineClientServicesModelLabModelLabArchitectureTemplate as ArchitectureTemplate,
 	XeLocalAiEngineClientEndpointsModelLabV1ModelLabTraceRecordResponse as TraceRecord,
 } from "@/core/api/generated/types.gen";
+import { formatNumber } from "@/core/formatting/NumberFormatting";
 import { type BlockKind, blockKindColors } from "@/core/models/inspect/GgufInspectInsights";
 
 export type { ArchitectureBlock, ArchitectureGroup, ArchitectureTemplate, ArchitectureTensor };
@@ -126,16 +127,8 @@ export function formatBlockRanges(indices: Iterable<number>): string {
 }
 
 // A measured value in the page's language, not the browser's: "3.86" on an English page, "3,86" on a German one.
-export function formatTraceValue(value: number | null, language: string | undefined): string {
-	if (value === null) {
-		return "–";
-	}
-	try {
-		return value.toLocaleString(language, { maximumFractionDigits: 2 });
-	} catch {
-		// A malformed stored tag (`en_US`) is a RangeError; the environment's default is a worse number, not a broken page.
-		return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
-	}
+export function formatTraceValue(value: number | null): string {
+	return value === null ? "–" : formatNumber(value, { maximumFractionDigits: 2 });
 }
 
 // Enough of a trace's prompt to tell two traces of one model apart in a picker.

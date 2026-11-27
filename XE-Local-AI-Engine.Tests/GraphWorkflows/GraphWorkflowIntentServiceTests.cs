@@ -359,35 +359,6 @@ public sealed class GraphWorkflowIntentServiceTests
             NodeRuns = []
         };
 
-    /// <summary>A clock that moves forward by each timer's due time and fires it at once, so a polling wait never sleeps.</summary>
-    private sealed class SteppingClock : TimeProvider
-    {
-        private long _nowTicks = Now.UtcTicks;
-
-        public override DateTimeOffset GetUtcNow() =>
-            new(Interlocked.Read(ref _nowTicks), TimeSpan.Zero);
-
-        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
-        {
-            Interlocked.Add(ref _nowTicks, dueTime.Ticks);
-            _ = Task.Run(() => callback(state));
-            return new InertTimer();
-        }
-
-        private sealed class InertTimer : ITimer
-        {
-            public bool Change(TimeSpan dueTime, TimeSpan period) =>
-                true;
-
-            public void Dispose()
-            {
-            }
-
-            public ValueTask DisposeAsync() =>
-                ValueTask.CompletedTask;
-        }
-    }
-
     private sealed class Harness
     {
         private readonly List<GraphWorkflowDefinitionSummary> _summaries = [];
@@ -406,7 +377,7 @@ public sealed class GraphWorkflowIntentServiceTests
                 {
                     IntentRouterTimeoutSeconds = routerTimeoutSeconds
                 }),
-                new SteppingClock());
+                new ImmediateTimerTimeProvider(Now));
         }
 
         public IGraphWorkflowDefinitionService Definitions { get; } = Substitute.For<IGraphWorkflowDefinitionService>();

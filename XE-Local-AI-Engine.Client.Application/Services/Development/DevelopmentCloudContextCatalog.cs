@@ -3,13 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Development;
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 
-public interface IDevelopmentCloudContextCatalog
-{
-    void Register(DevelopmentCloudContextBundle bundle);
-    bool TryGet(string bundleId, [NotNullWhen(true)] out DevelopmentCloudContextBundle? bundle);
-}
-
-public sealed class DevelopmentCloudContextCatalog : IDevelopmentCloudContextCatalog
+public sealed class DevelopmentCloudContextCatalog
 {
     private readonly ConcurrentDictionary<string, DevelopmentCloudContextBundle> _bundles = new(StringComparer.Ordinal);
 

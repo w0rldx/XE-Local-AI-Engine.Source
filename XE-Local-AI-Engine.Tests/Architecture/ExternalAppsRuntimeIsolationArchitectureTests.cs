@@ -163,26 +163,6 @@ public sealed class ExternalAppsRuntimeIsolationArchitectureTests
 
     private static string GuardedDirectory()
     {
-        return Path.Combine(FindRepositoryRoot(), "XE-Local-AI-Engine.Client.Application", "Services", "ExternalApps");
-    }
-
-    private static string FindRepositoryRoot()
-    {
-        foreach (var seed in new[]
-                 {
-                     Directory.GetCurrentDirectory(),
-                     AppContext.BaseDirectory
-                 })
-        {
-            for (var directory = new DirectoryInfo(seed); directory is not null; directory = directory.Parent)
-            {
-                if (File.Exists(Path.Combine(directory.FullName, "XE-Local-AI-Engine.slnx")))
-                {
-                    return directory.FullName;
-                }
-            }
-        }
-
-        throw new DirectoryNotFoundException("The repository root containing XE-Local-AI-Engine.slnx was not found.");
+        return RepositoryPaths.Combine("XE-Local-AI-Engine.Client.Application", "Services", "ExternalApps");
     }
 }

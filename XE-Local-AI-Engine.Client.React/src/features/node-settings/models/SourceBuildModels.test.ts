@@ -6,20 +6,20 @@ import {
 	sourceBuildLogEntries,
 	sourceBuildPrerequisiteDiagnostic,
 	sourceBuildRequest,
-	sourceBuildValidationError,
+	sourceBuildValidationIssue,
 } from "@/features/node-settings/models/SourceBuildModels";
 
 describe("source build models", () => {
 	it("requires explicit trust for custom repositories", () => {
 		expect(
-			sourceBuildValidationError({
+			sourceBuildValidationIssue({
 				backend: "vulkan",
 				source: "custom",
 				repository: "https://github.com/example/fork",
 				commit: "",
 				acknowledgeCustomSourceRisk: false,
 			}),
-		).toContain("Acknowledge");
+		).toBe("acknowledgement");
 	});
 
 	it("creates the exact normalized request body", () => {
@@ -72,14 +72,14 @@ describe("source build models", () => {
 
 	it("flags a malformed commit for the official source", () => {
 		expect(
-			sourceBuildValidationError({
+			sourceBuildValidationIssue({
 				backend: "cpu",
 				source: "official",
 				repository: "",
 				commit: "abc123",
 				acknowledgeCustomSourceRisk: false,
 			}),
-		).toContain("40-character");
+		).toBe("commit");
 	});
 
 	it("reconciles a 400-line server ring with a 2000-line live buffer by sequence", () => {

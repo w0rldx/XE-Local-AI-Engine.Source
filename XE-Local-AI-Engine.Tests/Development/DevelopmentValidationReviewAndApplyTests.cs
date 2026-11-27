@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
@@ -27,6 +26,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
+using static DevelopmentTestDoubles;
 
 [Category(TestCategories.Integration)]
 public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
@@ -1818,40 +1818,6 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         return repository;
     }
 
-    private static async Task<CommandResult> RunProcessAsync(string workingDirectory, string executable, params string[] arguments)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = executable,
-            WorkingDirectory = workingDirectory,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false
-        };
-        foreach (var argument in arguments)
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
-
-        using var process = new Process
-        {
-            StartInfo = startInfo
-        };
-        process.Start();
-        var output = process.StandardOutput.ReadToEndAsync();
-        var error = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
-        return new CommandResult
-        {
-            ExitCode = process.ExitCode,
-            StandardOutput = await output,
-            StandardError = await error
-        };
-    }
-
-    private static void EnsureSuccess(CommandResult result) =>
-        AssertEx.Equal(expected: 0, result.ExitCode, result.StandardError);
-
     private static ILocalModelProviderResolver LocalModelResolver(params LocalModelDescriptor[] models) =>
         LocalModelResolver(servedContextTokens: null, models);
 
@@ -1880,15 +1846,6 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         var resolver = Substitute.For<ILocalModelProviderResolver>();
         resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(provider);
         return resolver;
-    }
-
-    private sealed record CommandResult
-    {
-        public required int ExitCode { get; init; }
-
-        public required string StandardOutput { get; init; }
-
-        public required string StandardError { get; init; }
     }
 
     /// <summary>
@@ -1981,15 +1938,6 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             _fixture._sandboxEvents.Add("export");
             return _inner.ListChangedPathsAsync(session, cancellationToken);
         }
-    }
-
-    private sealed class UnexpectedCloudContextService : IDevelopmentCloudAttemptContextService
-    {
-        public Task<DevelopmentCloudAttemptContext> CreateAsync(DevelopmentExecutionSnapshot snapshot,
-            IReadOnlyList<DevelopmentCloudContextExcerpt> excerpts,
-            IReadOnlyList<Guid>? inputArtifactIds = null,
-            CancellationToken cancellationToken = default) =>
-            throw new InvalidOperationException("The local-only workflow fixture must not build a cloud context.");
     }
 
     private sealed class WritingCoderModel : IDevelopmentCoderModel

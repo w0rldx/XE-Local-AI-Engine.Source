@@ -33,7 +33,7 @@ vi.mock("@/core/ui/hooks/useConfirm", () => ({ useConfirm: () => ({ confirm: con
 vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastMock }));
 
 import { LoadedModelsPage } from "@/features/loaded-models/pages/LoadedModelsPage";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 
 function makeQuery<T>(data: T, overrides: Record<string, unknown> = {}) {
 	return { data, isLoading: false, error: null, ...overrides };
@@ -46,30 +46,6 @@ function makeEjectMutation(overrides: Record<string, unknown> = {}) {
 		variables: undefined,
 		...overrides,
 	};
-}
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
 }
 
 function renderPage() {

@@ -629,7 +629,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
             foreach (var relativePath in block.TargetRelativePaths)
             {
                 var candidate = Path.GetFullPath(Path.Combine(resolvedRoot, relativePath));
-                if (!HostPathSafety.IsPathWithinRoot(resolvedRoot, candidate))
+                if (!PathContainment.IsRootOrUnderCanonical(candidate, resolvedRoot))
                 {
                     rejections.Add(AliasRejection(alias, "a target path escapes the folder root.", relativePath));
                     return null;
@@ -674,7 +674,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         // Walk from the candidate's nearest existing ancestor up to the root; a reparse point that resolves outside the
         // root is an escape. The root itself was already canonicalized (symlinks followed) by ResolveTrustedRootOrNull.
         var current = new DirectoryInfo(Path.GetDirectoryName(candidate) ?? resolvedRoot);
-        while (current is not null && current.Exists && HostPathSafety.IsPathWithinRoot(resolvedRoot, Path.TrimEndingDirectorySeparator(current.FullName)))
+        while (current is not null && current.Exists && PathContainment.IsRootOrUnderCanonical(Path.TrimEndingDirectorySeparator(current.FullName), resolvedRoot))
         {
             if (string.Equals(Path.TrimEndingDirectorySeparator(current.FullName), resolvedRoot, StringComparison.Ordinal))
             {

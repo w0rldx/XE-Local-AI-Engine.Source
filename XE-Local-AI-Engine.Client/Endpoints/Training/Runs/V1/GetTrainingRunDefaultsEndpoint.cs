@@ -13,10 +13,10 @@ using XE_Local_AI_Engine.Client.Services.Training.Runs;
 public sealed class GetTrainingRunDefaultsEndpoint : Endpoint<TrainingRunDefaultsRequest, TrainingRunDefaultsResponse>
 {
     private readonly ITrainingOptionDefaultsCalculator _defaults;
-    private readonly ILicenseGateService _licenseGate;
+    private readonly LicenseGateService _licenseGate;
     private readonly IInstalledBaseModelLinker _linker;
 
-    public GetTrainingRunDefaultsEndpoint(ITrainingOptionDefaultsCalculator defaults, ILicenseGateService licenseGate, IInstalledBaseModelLinker linker)
+    public GetTrainingRunDefaultsEndpoint(ITrainingOptionDefaultsCalculator defaults, LicenseGateService licenseGate, IInstalledBaseModelLinker linker)
     {
         ArgumentNullException.ThrowIfNull(defaults);
         ArgumentNullException.ThrowIfNull(licenseGate);

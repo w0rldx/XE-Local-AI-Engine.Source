@@ -38,7 +38,7 @@ public sealed class CodexAuthServiceTests : IDisposable
     [Test]
     public async Task BeginLogin_DoesNotLaunchSystemBrowser()
     {
-        var source = await File.ReadAllTextAsync(GetProviderPath("Auth", "CodexAuthService.cs"));
+        var source = await File.ReadAllTextAsync(RepositoryPaths.Combine("XE-Local-AI-Engine.Providers.CodexOAuth", "Auth", "CodexAuthService.cs"));
 
         AssertEx.False(source.Contains("Process.Start", StringComparison.Ordinal),
             "Codex OAuth login must return the authorize URL to the React client without launching the system browser.");
@@ -250,26 +250,5 @@ public sealed class CodexAuthServiceTests : IDisposable
     {
         using var document = JsonDocument.Parse(json);
         return document.RootElement.GetProperty(propertyName).GetString()!;
-    }
-
-    private static string GetProviderPath(params string[] relativePath)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine(new[]
-            {
-                directory.FullName,
-                "XE-Local-AI-Engine.Providers.CodexOAuth"
-            }.Concat(relativePath).ToArray());
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate XE-Local-AI-Engine.Providers.CodexOAuth.");
     }
 }

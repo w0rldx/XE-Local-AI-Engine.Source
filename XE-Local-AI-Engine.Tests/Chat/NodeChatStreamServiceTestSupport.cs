@@ -484,10 +484,9 @@ internal static partial class NodeChatStreamServiceTestSupport
     }
 
     // A real fence-seed provider over a fixed test key so any attachment-composing test gets a valid (non-null) seed.
-    // The holder owns no unmanaged resource (its Dispose is a no-op over a fixed byte array), so a process-lifetime
-    // static instance needs no cleanup method.
+    // Nothing disposes this process-lifetime instance; a scope whose provider disposes its holder builds its own.
 #pragma warning disable TUnit0023
-    internal static readonly INodeSqliteKeyHolder FenceKeyHolder = new StaticFenceKeyHolder();
+    internal static readonly INodeSqliteKeyHolder FenceKeyHolder = new FixedNodeSqliteKeyHolder(new byte[32]);
 
 #pragma warning restore TUnit0023
 
@@ -641,15 +640,6 @@ internal static partial class NodeChatStreamServiceTestSupport
     /// <summary>An extra uploaded file for the attachment-egress harness: its name, extraction status and extracted size.</summary>
     internal readonly record struct ExtraUploadedFile(string Name, DocumentExtractionStatus Status, int? ExtractedChars);
 
-    internal sealed class StaticFenceKeyHolder : INodeSqliteKeyHolder
-    {
-        public ReadOnlyMemory<byte> Key { get; } = new byte[32];
-
-        public void Dispose()
-        {
-        }
-    }
-
     internal sealed class TrackingAgentHomeExecutionLease : IAgentHomeExecutionLease
     {
         private readonly IAgentHomeExecutionLease? _inner;
@@ -697,27 +687,6 @@ internal static partial class NodeChatStreamServiceTestSupport
             {
                 Interlocked.Exchange(ref _callback, null)?.Invoke();
             }
-        }
-    }
-
-    internal sealed class StubAgentHomeIdentityProvider : IAgentHomeIdentityProvider
-    {
-        private readonly string _owner;
-        private readonly string _node;
-
-        public StubAgentHomeIdentityProvider(string owner, string node)
-        {
-            _owner = owner;
-            _node = node;
-        }
-
-        public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(new AgentHomeOwnerIdentity
-            {
-                OwnerUserId = _owner,
-                NodeId = _node
-            });
         }
     }
 
@@ -1317,7 +1286,7 @@ internal static partial class NodeChatStreamServiceTestSupport
         };
     }
 
-    internal sealed class StreamingUntilCancelledInvocationRunner : IInvocationRunner
+    internal sealed class StreamingUntilCancelledInvocationRunner : InvocationRunnerStub
     {
         private readonly RecordingWorkerEventDispatcher _dispatcher;
 
@@ -1326,45 +1295,14 @@ internal static partial class NodeChatStreamServiceTestSupport
             _dispatcher = dispatcher;
         }
 
-        public int ActiveInvocationCount => 0;
-
-        public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
+        public override async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
             await _dispatcher.ReportInvocationThinkingChunkAsync(context.Package.InvocationId, "thinking");
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
         }
-
-        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(true);
-        }
-
-        public void Cancel(Guid invocationId)
-        {
-        }
-
-        public void CancelDetached(Guid invocationId)
-        {
-        }
-
-        public void CancelAll()
-        {
-        }
-
-        public void CleanupStaleToolCalls(TimeSpan maxAge)
-        {
-        }
-
-        public void ResolveApprovalResult(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
-        {
-        }
-
-        public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
-        {
-        }
     }
 
-    internal sealed class GatedCompletingInvocationRunner : IInvocationRunner
+    internal sealed class GatedCompletingInvocationRunner : InvocationRunnerStub
     {
         private readonly RecordingWorkerEventDispatcher _dispatcher;
         private readonly Task _release;
@@ -1375,9 +1313,7 @@ internal static partial class NodeChatStreamServiceTestSupport
             _release = release;
         }
 
-        public int ActiveInvocationCount => 0;
-
-        public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
+        public override async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
             // Emit a delta so the consumer can disconnect, then block until released to report the real Completed
             // terminal. This reproduces a client disconnecting while the shared runner is still working.
@@ -1385,38 +1321,9 @@ internal static partial class NodeChatStreamServiceTestSupport
             await _release;
             await _dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1);
         }
-
-        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(true);
-        }
-
-        public void Cancel(Guid invocationId)
-        {
-        }
-
-        public void CancelDetached(Guid invocationId)
-        {
-        }
-
-        public void CancelAll()
-        {
-        }
-
-        public void CleanupStaleToolCalls(TimeSpan maxAge)
-        {
-        }
-
-        public void ResolveApprovalResult(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
-        {
-        }
-
-        public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
-        {
-        }
     }
 
-    internal sealed class ContextCapturingInvocationRunner : IInvocationRunner
+    internal sealed class ContextCapturingInvocationRunner : InvocationRunnerStub
     {
         private readonly RecordingWorkerEventDispatcher _dispatcher;
 
@@ -1440,12 +1347,10 @@ internal static partial class NodeChatStreamServiceTestSupport
         // Hits the run records the way search_knowledge_base does inside the tool loop, so a test sees the tool path's sources.
         public IReadOnlyList<KnowledgeSearchHit> ToolHits { get; init; } = [];
 
-        public int ActiveInvocationCount => 0;
-
         // The collection the knowledge-base tools were fixed to while the run executed.
         public string? PinnedCollectionInRun { get; private set; }
 
-        public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
+        public override async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
             CapturedContext = context.Package.ConversationContext;
             CaptureObserved = true;
@@ -1458,38 +1363,9 @@ internal static partial class NodeChatStreamServiceTestSupport
             await _dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer");
             await _dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1);
         }
-
-        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(true);
-        }
-
-        public void Cancel(Guid invocationId)
-        {
-        }
-
-        public void CancelDetached(Guid invocationId)
-        {
-        }
-
-        public void CancelAll()
-        {
-        }
-
-        public void CleanupStaleToolCalls(TimeSpan maxAge)
-        {
-        }
-
-        public void ResolveApprovalResult(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
-        {
-        }
-
-        public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
-        {
-        }
     }
 
-    internal sealed class CompletingInvocationRunner : IInvocationRunner
+    internal sealed class CompletingInvocationRunner : InvocationRunnerStub
     {
         private readonly RecordingWorkerEventDispatcher _dispatcher;
 
@@ -1498,46 +1374,15 @@ internal static partial class NodeChatStreamServiceTestSupport
             _dispatcher = dispatcher;
         }
 
-        public int ActiveInvocationCount => 0;
-
-        public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
+        public override async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
             await _dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer");
             await _dispatcher.ReportInvocationThinkingChunkAsync(context.Package.InvocationId, "thinking");
             await _dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1);
         }
-
-        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(true);
-        }
-
-        public void Cancel(Guid invocationId)
-        {
-        }
-
-        public void CancelDetached(Guid invocationId)
-        {
-        }
-
-        public void CancelAll()
-        {
-        }
-
-        public void CleanupStaleToolCalls(TimeSpan maxAge)
-        {
-        }
-
-        public void ResolveApprovalResult(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
-        {
-        }
-
-        public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
-        {
-        }
     }
 
-    internal sealed class AwaitingCoderReadInvocationRunner : IInvocationRunner
+    internal sealed class AwaitingCoderReadInvocationRunner : InvocationRunnerStub
     {
         private readonly RecordingWorkerEventDispatcher _dispatcher;
         private readonly ICoderWorkspaceReader _reader;
@@ -1549,11 +1394,9 @@ internal static partial class NodeChatStreamServiceTestSupport
             _reader = reader;
         }
 
-        public int ActiveInvocationCount => 0;
-
         public string ReadResult { get; private set; } = string.Empty;
 
-        public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
+        public override async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
             await Task.Yield();
             ReadResult = await _reader.ReadFileAsync(new ReadFileToolRequest
@@ -1564,36 +1407,9 @@ internal static partial class NodeChatStreamServiceTestSupport
             await _dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, ReadResult);
             await _dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId);
         }
-
-        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default) =>
-            Task.FromResult(true);
-
-        public void Cancel(Guid invocationId)
-        {
-        }
-
-        public void CancelDetached(Guid invocationId)
-        {
-        }
-
-        public void CancelAll()
-        {
-        }
-
-        public void CleanupStaleToolCalls(TimeSpan maxAge)
-        {
-        }
-
-        public void ResolveApprovalResult(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
-        {
-        }
-
-        public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
-        {
-        }
     }
 
-    internal sealed class PackageCapturingInvocationRunner : IInvocationRunner
+    internal sealed class PackageCapturingInvocationRunner : InvocationRunnerStub
     {
         private readonly RecordingWorkerEventDispatcher _dispatcher;
 
@@ -1617,9 +1433,8 @@ internal static partial class NodeChatStreamServiceTestSupport
 
         // The whole package, for assertions on fields the named captures above do not cover (skills, omitted prompt).
         public RuntimePackage? LastPackage { get; private set; }
-        public int ActiveInvocationCount => 0;
 
-        public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
+        public override async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
             LastPackage = context.Package;
             LastSystemPrompt = context.Package.ResolvedSystemPrompt;
@@ -1632,38 +1447,9 @@ internal static partial class NodeChatStreamServiceTestSupport
             await _dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer");
             await _dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1);
         }
-
-        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(true);
-        }
-
-        public void Cancel(Guid invocationId)
-        {
-        }
-
-        public void CancelDetached(Guid invocationId)
-        {
-        }
-
-        public void CancelAll()
-        {
-        }
-
-        public void CleanupStaleToolCalls(TimeSpan maxAge)
-        {
-        }
-
-        public void ResolveApprovalResult(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
-        {
-        }
-
-        public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
-        {
-        }
     }
 
-    internal sealed class ReasoningCapturingInvocationRunner : IInvocationRunner
+    internal sealed class ReasoningCapturingInvocationRunner : InvocationRunnerStub
     {
         private readonly RecordingWorkerEventDispatcher _dispatcher;
 
@@ -1691,9 +1477,8 @@ internal static partial class NodeChatStreamServiceTestSupport
         public bool LastAutoAcceptWebContent { get; private set; }
 
         public bool CaptureObserved { get; private set; }
-        public int ActiveInvocationCount => 0;
 
-        public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
+        public override async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
             LastReasoningEffort = context.Package.ReasoningEffort;
             LastAllowedTools = context.Package.AllowedTools;
@@ -1704,38 +1489,9 @@ internal static partial class NodeChatStreamServiceTestSupport
             await _dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer");
             await _dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1);
         }
-
-        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(true);
-        }
-
-        public void Cancel(Guid invocationId)
-        {
-        }
-
-        public void CancelDetached(Guid invocationId)
-        {
-        }
-
-        public void CancelAll()
-        {
-        }
-
-        public void CleanupStaleToolCalls(TimeSpan maxAge)
-        {
-        }
-
-        public void ResolveApprovalResult(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
-        {
-        }
-
-        public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
-        {
-        }
     }
 
-    internal sealed class ToolEmittingInvocationRunner : IInvocationRunner
+    internal sealed class ToolEmittingInvocationRunner : InvocationRunnerStub
     {
         private readonly RecordingWorkerEventDispatcher _dispatcher;
 
@@ -1744,9 +1500,7 @@ internal static partial class NodeChatStreamServiceTestSupport
             _dispatcher = dispatcher;
         }
 
-        public int ActiveInvocationCount => 0;
-
-        public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
+        public override async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
             await _dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
             {
@@ -1769,35 +1523,6 @@ internal static partial class NodeChatStreamServiceTestSupport
             await _dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer");
             await _dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1);
         }
-
-        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(true);
-        }
-
-        public void Cancel(Guid invocationId)
-        {
-        }
-
-        public void CancelDetached(Guid invocationId)
-        {
-        }
-
-        public void CancelAll()
-        {
-        }
-
-        public void CleanupStaleToolCalls(TimeSpan maxAge)
-        {
-        }
-
-        public void ResolveApprovalResult(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
-        {
-        }
-
-        public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
-        {
-        }
     }
 
     internal sealed class RecordingWorkerEventDispatcher : IWorkerEventDispatcher
@@ -1813,6 +1538,10 @@ internal static partial class NodeChatStreamServiceTestSupport
         public event EventHandler<ApprovalRequestedChangedEventArgs>? ApprovalRequestedChanged;
 
         public event EventHandler<UserQuestionRequestedChangedEventArgs>? UserQuestionRequestedChanged;
+
+        // The dispatcher is a SINGLETON in the app, so a handler left attached leaks for the process lifetime and
+        // keeps firing into a stream nobody reads. Tests assert this is false on every exit path.
+        public bool HasApprovalSubscribers => ApprovalRequestedChanged is not null;
 
         private Guid? _slotHolderId;
 
@@ -1858,7 +1587,10 @@ internal static partial class NodeChatStreamServiceTestSupport
             return Task.CompletedTask;
         }
 
-        public Task<IAsyncDisposable> ReportInvocationAssignedAsync(RuntimePackage package, CancellationToken cancellationToken = default)
+        /// <summary>Runs once the lease is granted, before the service marks the row streaming: the race window under test.</summary>
+        public Func<Task>? OnAssigned { get; init; }
+
+        public async Task<IAsyncDisposable> ReportInvocationAssignedAsync(RuntimePackage package, CancellationToken cancellationToken = default)
         {
             _slotHolderId = package.InvocationId;
             CurrentInvocation = new InvocationState
@@ -1870,7 +1602,12 @@ internal static partial class NodeChatStreamServiceTestSupport
                 LastUpdatedAt = DateTimeOffset.UtcNow
             };
             RaiseChanged();
-            return Task.FromResult<IAsyncDisposable>(NoopLease.Instance);
+            if (OnAssigned is not null)
+            {
+                await OnAssigned();
+            }
+
+            return NoopLease.Instance;
         }
 
         public Task ReportInvocationStreamChunkAsync(Guid invocationId, string chunk)

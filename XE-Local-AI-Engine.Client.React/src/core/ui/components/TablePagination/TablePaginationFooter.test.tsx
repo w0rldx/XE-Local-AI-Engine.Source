@@ -2,21 +2,11 @@
 
 import "@/i18n";
 
-import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TablePaginationFooter } from "@/core/ui/components/TablePagination/TablePaginationFooter";
-import { testMantineTheme } from "@/test/MantineTestRender";
-
-function renderWithProviders(ui: ReactElement) {
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			{ui}
-		</MantineProvider>,
-	);
-}
+import { renderWithMantine } from "@/test/MantineTestRender";
 
 const baseProps = {
 	page: 1,
@@ -63,7 +53,7 @@ describe("TablePaginationFooter", () => {
 	});
 
 	it("renders the visible row range", () => {
-		renderWithProviders(<TablePaginationFooter {...baseProps} />);
+		renderWithMantine(<TablePaginationFooter {...baseProps} />);
 
 		const range = screen.getByTestId("table-pagination-range").textContent ?? "";
 		expect(range).toContain("1");
@@ -73,7 +63,7 @@ describe("TablePaginationFooter", () => {
 
 	it("emits onPageChange when a page control is clicked", () => {
 		const onPageChange = vi.fn();
-		renderWithProviders(<TablePaginationFooter {...baseProps} onPageChange={onPageChange} />);
+		renderWithMantine(<TablePaginationFooter {...baseProps} onPageChange={onPageChange} />);
 
 		fireEvent.click(screen.getByText("2"));
 
@@ -82,7 +72,7 @@ describe("TablePaginationFooter", () => {
 
 	it("emits onPageSizeChange when a new size is picked", async () => {
 		const onPageSizeChange = vi.fn();
-		renderWithProviders(<TablePaginationFooter {...baseProps} onPageSizeChange={onPageSizeChange} />);
+		renderWithMantine(<TablePaginationFooter {...baseProps} onPageSizeChange={onPageSizeChange} />);
 
 		// Mantine Select forwards data-testid onto the inner input element; click it to open the dropdown.
 		fireEvent.click(screen.getByTestId("table-pagination-size"));
@@ -92,7 +82,7 @@ describe("TablePaginationFooter", () => {
 	});
 
 	it("hides the page navigator when there is a single page", () => {
-		renderWithProviders(<TablePaginationFooter {...baseProps} pageCount={1} totalItems={8} lastItemIndex={8} />);
+		renderWithMantine(<TablePaginationFooter {...baseProps} pageCount={1} totalItems={8} lastItemIndex={8} />);
 
 		expect(screen.queryByTestId("table-pagination-controls")).toBeNull();
 		// The size selector and range label remain available on a single-page table.
@@ -101,7 +91,7 @@ describe("TablePaginationFooter", () => {
 	});
 
 	it("uses a custom data-testid prefix", () => {
-		renderWithProviders(<TablePaginationFooter {...baseProps} data-testid="runs-pager" />);
+		renderWithMantine(<TablePaginationFooter {...baseProps} data-testid="runs-pager" />);
 
 		expect(screen.getByTestId("runs-pager")).toBeTruthy();
 		expect(screen.getByTestId("runs-pager-range")).toBeTruthy();

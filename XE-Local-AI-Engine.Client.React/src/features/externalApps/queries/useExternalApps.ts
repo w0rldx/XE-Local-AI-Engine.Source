@@ -10,7 +10,6 @@ import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tansta
 
 import {
 	cancelExternalAppOperationMutation,
-	getExternalAppCatalogApplicationOptions,
 	getExternalAppInstallPreviewOptions,
 	getExternalAppInstanceLogsOptions,
 	getExternalAppInstanceOptions,
@@ -37,7 +36,6 @@ import { isExternalAppBusy, toExternalAppStatus } from "@/features/externalApps/
 export const externalAppQueryIds = {
 	runtime: "getExternalAppRuntime",
 	catalog: "listExternalAppCatalog",
-	application: "getExternalAppCatalogApplication",
 	installPreview: "getExternalAppInstallPreview",
 	instances: "listExternalAppInstances",
 	instance: "getExternalAppInstance",
@@ -93,22 +91,14 @@ export function useExternalAppCatalog() {
 	return useQuery({ ...listExternalAppCatalogOptions() });
 }
 
-/** A refresh can change every application's manifest, so it drops the catalog AND every single-application entry. */
+/** A refresh can change every application's manifest, so it drops the catalog. */
 export function useRefreshExternalAppCatalog() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		...refreshExternalAppCatalogMutation(),
 		onSuccess: async () => {
 			await queryClient.invalidateQueries({ queryKey: externalAppInvalidationKey(externalAppQueryIds.catalog) });
-			await queryClient.invalidateQueries({ queryKey: externalAppInvalidationKey(externalAppQueryIds.application) });
 		},
-	});
-}
-
-export function useExternalAppApplication(applicationId: string | undefined) {
-	return useQuery({
-		...getExternalAppCatalogApplicationOptions({ path: { applicationId: applicationId ?? "" } }),
-		enabled: Boolean(applicationId),
 	});
 }
 

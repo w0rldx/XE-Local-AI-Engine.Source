@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import responsiveTableClasses from "@/core/ui/components/ResponsiveTable/ResponsiveTable.module.css";
 import { ScheduledJobList } from "@/features/scheduler/components/ScheduledJobList";
 import type { ScheduledJob } from "@/features/scheduler/models/SchedulerModels";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({
@@ -46,30 +46,6 @@ const cronJob: ScheduledJob = {
 	disabledAtUtc: null,
 	deletedAtUtc: null,
 };
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-}
 
 function renderList(props: Partial<Parameters<typeof ScheduledJobList>[0]> = {}) {
 	const handlers = {

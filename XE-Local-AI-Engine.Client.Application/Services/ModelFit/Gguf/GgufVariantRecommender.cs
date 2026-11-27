@@ -8,8 +8,8 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Default <see cref="IGgufVariantRecommender" />: grades each file's quality tier and fit verdict and flags a
-///     single recommended variant. Stateless (singletons only), so registered as a singleton.
+///     Grades each GGUF file's quality tier and fit verdict and flags exactly one recommended variant, so the download
+///     picker leads with a sensible default, not the smallest file. Read-time only, never persists; stateless.
 /// </summary>
 /// <remarks>
 ///     Resolves the active llama.cpp backend the same way the inference profiler does
@@ -18,7 +18,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     graded against the profile's <see cref="MemoryFitEstimator.ResolveFitBudgetBytes" />; with neither, or on a probe
 ///     failure, the verdict degrades to "unknown" rather than throwing.
 /// </remarks>
-public sealed class GgufVariantRecommender : IGgufVariantRecommender
+public sealed class GgufVariantRecommender
 {
     // The inspect path skips the per-file header read, so only the on-disk size (≈ weights) is known while resident VRAM
     // also needs the KV cache and runtime overhead: mirror MemoryFitEstimator's ~12% margin + ~0.75 GiB overhead, rounded up.
@@ -52,7 +52,15 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
         _logger = logger;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    ///     Returns one <see cref="GgufVariantAnnotation" /> per input file, in the same order; an empty list for an
+    ///     empty input.
+    /// </summary>
+    /// <remarks>
+    ///     Probes free VRAM once for the active backend; when it is unknown every verdict is
+    ///     <see cref="GgufFitVerdict.Unknown" /> and the recommended variant falls back to the quality sweet-spot.
+    ///     Never throws except on <paramref name="ct" /> cancellation.
+    /// </remarks>
     public async Task<IReadOnlyList<GgufVariantAnnotation>> AnnotateAsync(IReadOnlyList<GgufRepoFile> files, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(files);
@@ -91,7 +99,13 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
         return annotations;
     }
 
-    /// <inheritdoc />
+    /// <summary>Returns one fit verdict per size, in the same order, graded against the memoized effective hardware profile.</summary>
+    /// <remarks>
+    ///     The advisor's budget (free VRAM less the knowledge companions' reserve, or available RAM in CPU mode) with the same headroom
+    ///     rule as <see cref="AnnotateAsync" />. Never computes the device audit: no process start, no network. Every verdict is
+    ///     <see cref="GgufFitVerdict.Unknown" /> until a determinate audit is cached, or for unknown hardware. Never throws except on
+    ///     <paramref name="ct" /> cancellation.
+    /// </remarks>
     public async Task<IReadOnlyList<GgufFitVerdict>> ClassifyAgainstProfileAsync(IReadOnlyList<long> sizesBytes, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(sizesBytes);

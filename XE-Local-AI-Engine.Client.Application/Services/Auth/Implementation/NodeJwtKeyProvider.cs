@@ -4,7 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration;
-using XE_Local_AI_Engine.Client.Services.Persistence;
+using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 
 /// <summary>
 ///     Provider implementation for node jwt key behavior.
@@ -16,7 +16,7 @@ public sealed class NodeJwtKeyProvider : INodeJwtKeyProvider
 
     private byte[]? _signingKey;
 
-    public NodeJwtKeyProvider(IOptions<WorkerNodeOptions> workerNodeOptions, INodeOperatorSecretProvider operatorSecretProvider)
+    public NodeJwtKeyProvider(IOptions<WorkerNodeOptions> workerNodeOptions, NodeOperatorSecretProvider operatorSecretProvider)
     {
         ArgumentNullException.ThrowIfNull(workerNodeOptions);
         ArgumentNullException.ThrowIfNull(operatorSecretProvider);

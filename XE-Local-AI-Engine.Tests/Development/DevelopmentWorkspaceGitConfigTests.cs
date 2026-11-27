@@ -191,7 +191,7 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
         // result above is evidence the rewrite worked rather than evidence the payload was never reachable.
         var fixture = await CreatePoisonedWorkspaceAsync();
 
-        await DevelopmentMountBrokerTests.RunGitAsync(fixture.Session.HostWorktreePath,
+        await TestGit.RunAsync(fixture.Session.HostWorktreePath,
             [.. HardenedArguments(), "add", "-A", "--", "."]);
 
         AssertEx.True(File.Exists(fixture.FilterSentinel),
@@ -269,14 +269,14 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
         Directory.CreateDirectory(workspace);
         Directory.CreateDirectory(runtime);
 
-        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "init", "--initial-branch=main", ".");
-        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "config", "user.email", "gitconfig@example.invalid");
-        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "config", "user.name", "Git Config Test");
+        await TestGit.RunAsync(workspace, "init", "--initial-branch=main", ".");
+        await TestGit.RunAsync(workspace, "config", "user.email", "gitconfig@example.invalid");
+        await TestGit.RunAsync(workspace, "config", "user.name", "Git Config Test");
         await File.WriteAllTextAsync(Path.Combine(workspace, "README.md"), "base\n");
-        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "add", "README.md");
-        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "commit", "-m", "base");
-        var baseCommit = await ReadHeadAsync(workspace);
-        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "checkout", "--detach", baseCommit);
+        await TestGit.RunAsync(workspace, "add", "README.md");
+        await TestGit.RunAsync(workspace, "commit", "-m", "base");
+        var baseCommit = (await TestGit.RunAsync(workspace, "rev-parse", "HEAD")).Trim();
+        await TestGit.RunAsync(workspace, "checkout", "--detach", baseCommit);
 
         var filterSentinel = Path.Combine(_root, "SENTINEL-FILTER-" + Guid.NewGuid().ToString("N"));
         var fsmonitorSentinel = Path.Combine(_root, "SENTINEL-FSMONITOR-" + Guid.NewGuid().ToString("N"));
@@ -339,29 +339,6 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
             FsmonitorSentinel = fsmonitorSentinel,
             Payload = payload
         };
-    }
-
-    private static async Task<string> ReadHeadAsync(string workspace)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "git",
-            WorkingDirectory = workspace,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false
-        };
-        startInfo.ArgumentList.Add("rev-parse");
-        startInfo.ArgumentList.Add("HEAD");
-
-        using var process = new Process
-        {
-            StartInfo = startInfo
-        };
-        process.Start();
-        var output = await process.StandardOutput.ReadToEndAsync();
-        await process.WaitForExitAsync();
-        return output.Trim();
     }
 
     private static DevelopmentOptions OptionsValue() =>

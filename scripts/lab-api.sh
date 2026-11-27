@@ -5,20 +5,28 @@
 #   scripts/lab-api.sh [--profile NAME] METHOD PATH [JSON]
 #   scripts/lab-api.sh [--profile NAME] settle CONVERSATION_ID [TIMEOUT_SEC]
 #
-#   PATH is relative to /api/local/v1 (e.g. `chat/conversations`). The base URL comes from
+#   PATH is relative to /api/local/v1 (e.g. `chat/conversations`); one holding curl glob syntax ({ } [ ]) is refused,
+#   so the route the log classifies is the one sent (percent-encode those characters). The base URL comes from
 #   .tmp/lab/<profile>/manifest.json, the token from .tmp/lab/<profile>/token. On HTTP 401 it logs in once more
 #   (LAB_EMAIL / LAB_PASSWORD, default admin@localhost.test / !Demo1234567), rewrites the token and retries once.
-#   Prints the response body, then `[HTTP <code>]`. Every call is appended to .tmp/lab/<profile>/evidence/http.log
-#   with passwords, tokens and keys redacted.
+#   Prints the response body, then `[HTTP <code>]`. Every call is appended to .tmp/lab/<profile>/evidence/http.log:
+#   a credential route's bodies (auth, MCP, cloud settings, …: scripts/gpu-smoke-driver.py) are replaced by a marker,
+#   other bodies have passwords, tokens and keys redacted, every query value (path and bodies), every URL userinfo and
+#   every credential path segment (a skill import preview token) is masked, and a JSON-shaped body or nested string
+#   that does not parse, or a string holding a link whose spelling hides a credential segment, is replaced by a marker.
+#   So is a body that is not text (an image) and a non-JSON body holding a credential value (an MCP, integration or
+#   proxy key, a PEM block) anywhere; a JSON string holding one is redacted.
 #
 #   settle polls GET chat/conversations/<id> every 3 s until the last message's status is terminal
 #   (Completed, Failed, Cancelled, Interrupted) and prints `status | role | error | content`; default timeout 600 s.
 #   Only the last poll is logged.
 #
-#   TLS verification is disabled, so a base URL that is not loopback is refused.
+#   TLS verification is disabled, so a base URL that is not loopback is refused. Proxy variables (http_proxy,
+#   https_proxy, all_proxy) are ignored: every call, its token and the re-login password go straight to the node.
 #
 # Exit codes: 0 — a response was received (any HTTP status) or the conversation settled; 1 — transport failure,
-# re-login failure or settle timeout; 2 — usage error, or no lab manifest/token.
+# re-login failure or settle timeout; 2 — usage error (a METHOD other than letters, a PATH with glob syntax), or no
+# lab manifest/token.
 
 set -euo pipefail
 
@@ -54,27 +62,36 @@ RESP="$(mktemp "${LAB}/.resp.XXXXXX")"
 HDR="$(mktemp "${LAB}/.hdr.XXXXXX")"
 trap 'rm -f -- "${RESP}" "${HDR}"' EXIT
 
-# JSON-aware: the driver's scrubber parses the body and blanks credential-like fields at any depth (a regex over
-# quoted strings stops at an escaped quote and leaks the rest). A non-JSON body passes through unchanged.
+# redact FUNCTION [ARG...]: stdin through the driver's FUNCTION(text, ARG...), so the shell and the Python recorder share
+# one rule. `redact redact PATH` replaces the whole body of a credential route (auth, MCP, cloud settings, …) by a
+# marker; any other JSON body has its credential-like fields blanked at any depth (a regex over quoted strings stops at
+# an escaped quote and leaks the rest), and a non-JSON body keeps its text with every query value and userinfo masked,
+# unless it is not text or holds a credential value (a key, a PEM block) anywhere: then it is a marker.
+# redact_path masks everything after the logged path's first `?` (a hub path carries the SignalR connection token).
 redact() {
-  # The program goes in -c so stdin stays the body being redacted.
+  # The program goes in -c so stdin stays the text being redacted. Bytes that are not UTF-8 (an image) decode to
+  # replacement characters, which the driver omits as a body that is not text, whatever the locale.
   python3 -c '
 import importlib.util, sys
 spec = importlib.util.spec_from_file_location("lab_driver", sys.argv[1])
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
-sys.stdout.write(module.redact(sys.stdin.read()))
-' "${SCRIPT_DIR}/lab-driver.py"
+text = sys.stdin.buffer.read().decode("utf-8", "replace")
+sys.stdout.buffer.write(getattr(module, sys.argv[2])(text, *sys.argv[3:]).encode("utf-8"))
+' "${SCRIPT_DIR}/lab-driver.py" "$@"
 }
 
 # call METHOD PATH [BODY] [MAX_TIME_SEC]: writes the body to ${RESP} and prints the HTTP code, 000 on a transport
 # failure — including one curl reports AFTER the status line (a truncated or reset body), so a 200 with an incomplete
 # body is never a success. Every request is bounded (connect 10 s, total MAX_TIME, default 120 s). The token goes
 # through a 0600 header file, never argv; Content-Type only with a body (a GET carrying it gets a 400).
+# curl sends exactly what log_call records: no .curlrc (-q), one literal URL (--globoff), the body as given, never a
+# file named by a leading @ (--data-raw), straight to the loopback node whatever proxy variables are set (--noproxy).
 call() {
   local code rc=0
-  local args=(-sk -o "${RESP}" -w '%{http_code}' --connect-timeout 10 --max-time "${4:-120}" -X "$1" "${BASE_URL}/api/local/v1/${2#/}")
-  [[ -z "${3:-}" ]] || args+=(-H 'Content-Type: application/json' --data-binary "$3")
+  local args=(-q -sk --globoff -o "${RESP}" -w '%{http_code}' --connect-timeout 10 --max-time "${4:-120}" -X "$1"
+    --noproxy '*' "${BASE_URL}/api/local/v1/${2#/}")
+  [[ -z "${3:-}" ]] || args+=(-H 'Content-Type: application/json' --data-raw "$3")
   printf 'Authorization: Bearer %s\n' "$(<"${TOKEN_FILE}")" >"${HDR}"
   : >"${RESP}"  # never let a previous response survive a failed transfer
   code="$(curl "${args[@]}" -H "@${HDR}")" || rc=$?
@@ -118,18 +135,27 @@ call_authed() {
   printf '%s' "${code}"
 }
 
+# Every logged part is redacted on its own: the path by redact_path, each body by redact (which masks the query values
+# of a body that echoes a hub URL).
 log_call() {
   {
-    echo "=== $(date -u +%Y-%m-%dT%H:%M:%SZ) $1 $2"
-    [[ -z "${3:-}" ]] || printf '>> %s\n' "$(redact <<<"$3")"  # redact first: the prefix would make it non-JSON
-    redact <"${RESP}"
+    echo "=== $(date -u +%Y-%m-%dT%H:%M:%SZ) $1 $(printf '%s' "$2" | redact redact_path)"
+    [[ -z "${3:-}" ]] || printf '>> %s\n' "$(redact redact "$2" <<<"$3")"  # redact first: the prefix makes it non-JSON
+    redact redact "$2" <"${RESP}"
     echo
     echo "[HTTP $4]"
   } >>"${HTTP_LOG}"
 }
 
+# literal_path PATH: refuses (exit 2, before anything is sent or logged) a path holding curl glob syntax. --globoff
+# already sends it literally; the refusal also keeps one invocation to one route whatever curl's globbing default.
+literal_path() {
+  [[ "$1" != *[][{}]* ]] || die 2 "PATH holds curl glob syntax ({ } [ ]); percent-encode it (%7B %7D %5B %5D)."
+}
+
 if [[ "$1" == "settle" ]]; then
   conversation="$2"
+  literal_path "${conversation}"
   timeout_sec="${3:-600}"
   [[ "${timeout_sec}" =~ ^[0-9]+$ ]] || die 2 "TIMEOUT_SEC must be an integer"
   deadline=$((SECONDS + timeout_sec))
@@ -177,6 +203,9 @@ fi
 method="${1^^}"
 path="$2"
 body="${3:-}"
+# The method goes on the log line as is: a token, never whitespace or a line break.
+[[ "${method}" =~ ^[A-Z]+$ ]] || die 2 "METHOD must be letters only."
+literal_path "${path}"
 code="$(call_authed "${method}" "${path}" "${body}")"
 log_call "${method}" "${path}" "${body}" "${code}"
 cat "${RESP}"

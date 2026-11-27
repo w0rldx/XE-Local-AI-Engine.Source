@@ -24,7 +24,7 @@ public sealed class OverrideBinaryManagerTests
     [UnsupportedOSPlatform("windows")]
     public async Task EnsureBinary_WhenOverrideValid_ReturnsItWithoutDownload()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDirectory("xe-llama-override", unixMode: TempDirectory.NotWorldWritable);
         var serverPath = WriteExecutableStub(dir.Path, GpuStub);
         var options = ActiveOverride(serverPath, GpuVariant.Cpu);
 
@@ -48,7 +48,7 @@ public sealed class OverrideBinaryManagerTests
     {
         // The caller passes Cpu, but the override is configured as Cuda → the returned variant is Cuda.
         // The GPU stub enumerates a device so the Cuda backend check passes.
-        using var dir = new TempDir();
+        using var dir = new TempDirectory("xe-llama-override", unixMode: TempDirectory.NotWorldWritable);
         var serverPath = WriteExecutableStub(dir.Path, GpuStub);
         var options = ActiveOverride(serverPath, GpuVariant.Cuda);
 
@@ -65,7 +65,7 @@ public sealed class OverrideBinaryManagerTests
     [Test]
     public async Task EnsureBinary_WhenOverrideMissingFile_ThrowsSanitized()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDirectory("xe-llama-override", unixMode: TempDirectory.NotWorldWritable);
         var missing = Path.Combine(dir.Path, "does-not-exist", "llama-server");
         var options = ActiveOverride(missing, GpuVariant.Cpu);
 
@@ -81,7 +81,7 @@ public sealed class OverrideBinaryManagerTests
     [Test]
     public async Task EnsureBinary_WhenOverrideRelativeOrNonRegularFile_Throws()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDirectory("xe-llama-override", unixMode: TempDirectory.NotWorldWritable);
 
         using var handler = NoNetworkHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
@@ -106,7 +106,7 @@ public sealed class OverrideBinaryManagerTests
     {
         // A world-writable binary is rejected (TOCTOU swap hardening). (Foreign-uid ownership cannot be
         // arranged in CI without root, so the world-writable arm is the testable compensating control.)
-        using var dir = new TempDir();
+        using var dir = new TempDirectory("xe-llama-override", unixMode: TempDirectory.NotWorldWritable);
         var serverPath = WriteExecutableStub(dir.Path, GpuStub);
         // Make the binary world-writable (o+w) — anyone could swap it.
         File.SetUnixFileMode(serverPath,
@@ -128,7 +128,7 @@ public sealed class OverrideBinaryManagerTests
     [UnsupportedOSPlatform("windows")]
     public async Task EnsureBinary_WhenOverrideSmokeFails_Throws()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDirectory("xe-llama-override", unixMode: TempDirectory.NotWorldWritable);
         var serverPath = WriteExecutableStub(dir.Path, SmokeFailStub);
         var options = ActiveOverride(serverPath, GpuVariant.Cpu);
 
@@ -146,7 +146,7 @@ public sealed class OverrideBinaryManagerTests
     [UnsupportedOSPlatform("windows")]
     public async Task EnsureBinary_WhenTheSelfCheckCannotLaunch_LogsTheException()
     {
-        using var dir = new TempDir();
+        using var dir = new TempDirectory("xe-llama-override", unixMode: TempDirectory.NotWorldWritable);
         var serverPath = WriteExecutableStub(dir.Path, "#!/nonexistent/interpreter\n");
         var options = ActiveOverride(serverPath, GpuVariant.Cpu);
         var logger = new ExceptionCapturingLogger();
@@ -167,7 +167,7 @@ public sealed class OverrideBinaryManagerTests
     public async Task EnsureBinary_WhenOverrideVariantCudaButNoGpuDevice_Throws()
     {
         // A binary that passes --version but enumerates no GPU device cannot be served as Cuda.
-        using var dir = new TempDir();
+        using var dir = new TempDirectory("xe-llama-override", unixMode: TempDirectory.NotWorldWritable);
         var serverPath = WriteExecutableStub(dir.Path, NoGpuStub);
         var options = ActiveOverride(serverPath, GpuVariant.Cuda);
 
@@ -185,7 +185,7 @@ public sealed class OverrideBinaryManagerTests
     public async Task EnsureBinary_WhenOverrideVariantCpu_SkipsGpuDeviceCheck()
     {
         // variant=cpu skips the GPU-device requirement: the stub FAILS --list-devices, but a Cpu override never runs it.
-        using var dir = new TempDir();
+        using var dir = new TempDirectory("xe-llama-override", unixMode: TempDirectory.NotWorldWritable);
         var serverPath = WriteExecutableStub(dir.Path, DeviceCheckWouldFailStub);
         var options = ActiveOverride(serverPath, GpuVariant.Cpu);
 
@@ -205,7 +205,7 @@ public sealed class OverrideBinaryManagerTests
     {
         // An inactive override (no path) leaves the 3-tier acquisition intact: a pre-seeded pinned binary is reused
         // offline with zero downloads, exactly as without the override feature.
-        using var cache = new TempDir();
+        using var cache = new TempDirectory("xe-llama-override", unixMode: TempDirectory.NotWorldWritable);
         var pin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)!;
         var serverPath = Path.Combine(cache.Path, "llama.cpp", LlamaCppReleasePins.PinnedTag, "cpu", pin.ServerRelativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(serverPath)!);
@@ -260,40 +260,6 @@ public sealed class OverrideBinaryManagerTests
 
     private static ThrowingHttpMessageHandler NoNetworkHandler() =>
         new(new InvalidOperationException("No network call expected: an active override must never download."));
-
-    private sealed class TempDir : IDisposable
-    {
-        public TempDir()
-        {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "xe-llama-override-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path);
-            // 0755 dir: NOT world-writable, so the parent-dir security check passes regardless of the CI umask.
-            if (!OperatingSystem.IsWindows())
-            {
-                File.SetUnixFileMode(Path,
-                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
-                    | UnixFileMode.GroupRead | UnixFileMode.GroupExecute
-                    | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
-            }
-        }
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            try
-            {
-                if (Directory.Exists(Path))
-                {
-                    Directory.Delete(Path, recursive: true);
-                }
-            }
-            catch (IOException)
-            {
-                // Best-effort temp cleanup.
-            }
-        }
-    }
 
     private sealed class ExceptionCapturingLogger : ILogger<LlamaCppBinaryManager>
     {

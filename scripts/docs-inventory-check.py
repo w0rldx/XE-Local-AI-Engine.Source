@@ -6,11 +6,14 @@ nested route family in `LocalApiRoutes`, one section per React feature area, one
 project. Those claims rot silently: adding a hub or a feature directory is a one-line change that
 nobody thinks of as a documentation change, and the wiki page still reads as complete afterwards.
 
-This guard re-derives each inventory from the code and asserts every member is named in the page
-that claims to list it. It is deliberately a *mention* check, not a structural one: the wiki pages
-spell these names verbatim, so a substring match is enough to catch the failure that actually
-happens (a brand-new name nobody wrote down) without dictating how a page is laid out. The same holds for
-`scripts/README.md`: every top-level `scripts/*.sh|*.py` needs a row there, and, because that index is generated
+This guard re-derives each inventory from the code and asserts every member is named in the page that claims to list
+it. A page whose lookup tables moved to `docs/wiki/reference/` is read together with those reference pages (wiki 09
+with its endpoint inventory and hub pages), and a missing name is reported against the reference page that holds the
+table. It is deliberately a *mention* check, not a structural one: the wiki pages spell these names verbatim, so a
+substring match is enough to catch the failure that actually happens (a brand-new name nobody wrote down) without
+dictating how a page is laid out. React features are the one exception: each needs its own row, named in the first
+column of the feature-folder table, because a parent-page mention would hide a deleted row. `scripts/README.md` is
+checked by mention too: every top-level `scripts/*.sh|*.py` needs a row there, and, because that index is generated
 (`scripts/generate-scripts-readme.py`), a row naming a script that no longer exists fails too, as does any other
 difference from the bytes that generator would write (a changed header line, a subfolder file list).
 
@@ -48,6 +51,14 @@ narrowed by path, never by word:
 - plan-references exempts CHANGELOG.md, the vendored agent templates and the benchmark corpus, and `docs/audits/`
   (dated reports) may number phases. The lifecycle word `phase` passes: only `phase <digit>` matches.
 
+Three ratchets read one shrink-only data file, `scripts/docs-inventory-ratchet.txt` (`check|key|limit|reason`):
+`wiki-page-size` (a wiki or reference page stays under 60 KiB or its listed byte ceiling), `history-prose` (a page
+holds no more `**Gone.**`, "no longer exists" or dated-change lines than listed) and `path-references` (a backticked
+repo path in the wiki or agent-knowledge names a tracked path, the tail of one, or a git-ignored runtime path; a path
+under the React project's own `src/`, `config/` or `openapi/` resolves inside that project only; a listed path, such
+as an upstream source file, may stay cited as often as listed). A row whose key no longer needs it
+fails as stale, so a limit can only go down.
+
 Exit codes: 0 clean, 1 something is missing from a page or over a cap, 2 a check could not run at all.
 """
 
@@ -66,9 +77,13 @@ from pathlib import Path
 from urllib.parse import unquote
 
 WIKI_DIR = Path("docs/wiki")
-API_AND_HUBS_PAGE = WIKI_DIR / "09-api-and-hubs.md"
+WIKI_REFERENCE_DIR = WIKI_DIR / "reference"
 HOME_PAGE = WIKI_DIR / "Home.md"
-REACT_CLIENT_PAGE = WIKI_DIR / "10-react-client.md"
+ENDPOINT_INVENTORY_PAGE = WIKI_REFERENCE_DIR / "09-endpoint-inventory.md"
+SIGNALR_HUBS_PAGE = WIKI_REFERENCE_DIR / "09-signalr-hubs.md"
+FEATURE_FOLDERS_PAGE = WIKI_REFERENCE_DIR / "10-feature-folders.md"
+# Each inventory is read from its parent page plus the reference pages its tables moved to; every page must exist.
+API_AND_HUBS_PAGES = (WIKI_DIR / "09-api-and-hubs.md", ENDPOINT_INVENTORY_PAGE, SIGNALR_HUBS_PAGE)
 PROJECT_LAYOUT_PAGE = WIKI_DIR / "02-project-layout.md"
 
 CLIENT_PROJECT_DIR = Path("XE-Local-AI-Engine.Client")
@@ -76,6 +91,8 @@ LOCAL_API_ROUTES = CLIENT_PROJECT_DIR / "Endpoints" / "Common" / "LocalApiRoutes
 # `LocalApiRoutes` is partial: the shell above plus one LocalApiRoutes.<Family>.cs per route family beside it.
 LOCAL_API_ROUTE_FAMILIES_GLOB = "LocalApiRoutes.*.cs"
 REACT_FEATURES_DIR = Path("XE-Local-AI-Engine.Client.React/src/features")
+# The identifying first column of a feature-folder table row: | `chat` | ...
+FEATURE_ROW_RE = re.compile(r"^\|\s*`(?P<name>[^`]+)`\s*\|", re.MULTILINE)
 SOLUTION_FILE = Path("XE-Local-AI-Engine.slnx")
 
 # `app.MapHub<SchedulerHub>(...)` — the registration call site is the hub inventory (see the note in
@@ -112,6 +129,15 @@ AGENT_KNOWLEDGE_SECTIONS = range(8)
 MARKDOWN_HEADING_RE = re.compile(r"^#{1,6}\s", re.MULTILINE)
 ENTRY_HEADING_RE = re.compile(r"^###\s+(?P<title>.*)$", re.MULTILINE)
 BUILD_OUTPUT_DIRS = frozenset({"bin", "obj"})
+
+# The ratchets' one data file: `check|key|limit|reason` rows, limits only go down (see its header).
+DOCS_RATCHET = SCRIPTS_DIR / "docs-inventory-ratchet.txt"
+# The checks that read it; a row naming any other check is malformed.
+RATCHET_CHECKS = ("wiki-page-size", "history-prose", "path-references")
+# A wiki or reference page above this is a long read; lookup tables belong on a reference page.
+WIKI_PAGE_MAX_BYTES = 61440
+# Ceilings are seeded at the measured size rounded up to this step.
+WIKI_PAGE_CEILING_STEP = 50
 
 # Vendored, generated or corpus Markdown whose links point into trees that are not part of this repository.
 MARKDOWN_LINK_EXCLUDED_PREFIXES = ("XE-Local-AI-Engine.Client.Application/Services/Agents/Templates/",)
@@ -270,18 +296,43 @@ PLAN_REFERENCE_ADVICE = (
     "state the decision or evidence inline"
 )
 
-# Variables that make git select another repository, work tree, index or object store than `cwd` (the same list as
-# scripts/lib/git-env.sh). An agent's exported private GIT_INDEX_FILE would otherwise answer `git ls-files` from a
-# stale index and hide a newly tracked secret. Discovery bounds (GIT_CEILING_DIRECTORIES, ...) and GIT_CONFIG* stay.
-GIT_REPO_ENV_VARS = (
-    "GIT_DIR",
-    "GIT_WORK_TREE",
-    "GIT_INDEX_FILE",
-    "GIT_COMMON_DIR",
-    "GIT_OBJECT_DIRECTORY",
-    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-    "GIT_NAMESPACE",
+# `history-prose`: pages describe current behaviour; removed features, earlier designs and dated changes live in git
+# and the ADRs. A dated measurement ("measured 2026-10-02") is provenance and passes: only a change verb before the
+# date counts.
+HISTORY_PROSE_PATTERNS = tuple(
+    re.compile(pattern)
+    for pattern in (
+        r"\*\*Gone\.\*\*",
+        r"(?i)\bno longer exists?\b",
+        r"(?i)\b(?:since|until|as of|amended|renamed|removed|dropped|replaced|introduced|added|changed|moved|deleted"
+        r"|retired)\b[^.|\n]{0,30}\b\d{4}-\d{2}-\d{2}\b",
+    )
 )
+
+# `path-references`: a backticked repo path in the wiki or agent-knowledge resolves to a tracked file or directory
+# (from the root, or as the tail of one: `scripts/X.mjs` inside the React project) or to a git-ignored runtime path.
+PATH_REFERENCE_PATHSPECS = ("docs/wiki/*.md", "docs/agent-knowledge*.md")
+# The first word of a code span. A path's first segment must be a tracked top-level directory or a project-relative
+# root, and its last segment must carry an extension or a trailing `/`, so route names (`skills/import`) and MCP
+# methods (`tools/list`) pass.
+PATH_REFERENCE_TOKEN_RE = re.compile(r"^[\w.-]+(?:/[\w.@+-]+)*/?$")
+# The React project's own top-level directories, cited relative to it (`src/core/api/...`, `config/...`): such a
+# path resolves inside that project only, never as the tail of some other tracked path.
+PATH_REFERENCE_PROJECT_ROOTS = {
+    root: f"XE-Local-AI-Engine.Client.React/{root}" for root in ("src", "config", "openapi")
+}
+
+# Variables that make git select another repository, work tree, index or object store than `cwd`
+# (scripts/lib/git_env.py). An agent's exported private GIT_INDEX_FILE would otherwise answer `git ls-files` from a
+# stale index and hide a newly tracked secret. Discovery bounds (GIT_CEILING_DIRECTORIES, ...) and GIT_CONFIG* stay.
+_GIT_ENV_SPEC = importlib.util.spec_from_file_location(
+    "git_env", Path(__file__).resolve().parent / "lib" / "git_env.py"
+)
+if _GIT_ENV_SPEC is None or _GIT_ENV_SPEC.loader is None:
+    raise ImportError("scripts/lib/git_env.py")
+_GIT_ENV = importlib.util.module_from_spec(_GIT_ENV_SPEC)
+_GIT_ENV_SPEC.loader.exec_module(_GIT_ENV)
+GIT_REPO_ENV_VARS = _GIT_ENV.REPO_ENV_VARS
 
 
 class InventoryError(Exception):
@@ -328,6 +379,11 @@ def require_non_empty(check: str, source: str, names: Iterable[str]) -> tuple[st
     return inventory
 
 
+def read_pages(root: Path, pages: Iterable[Path]) -> str:
+    """Concatenate a parent page and its reference pages; a missing page raises like a missing single page."""
+    return "\n".join(read_text(root, page) for page in pages)
+
+
 def mentions(doc_text: str, name: str) -> bool:
     return name in doc_text
 
@@ -338,7 +394,9 @@ def build_result(check: str, doc: Path, doc_text: str, inventory: tuple[str, ...
 
 
 def check_signalr_hubs(root: Path) -> CheckResult:
-    """Every hub registered with `MapHub<>` under the Client project is named in 09-api-and-hubs.md.
+    """Every hub registered with `MapHub<>` under the Client project is named in 09-api-and-hubs.md or its references.
+
+    The hub table lives in reference/09-signalr-hubs.md, so a missing hub is reported there.
 
     Home.md is deliberately not checked: it is an index page whose row for 09 delegates the hub
     enumeration ("the local SignalR hubs registered by the `MapHub<>` block") rather than repeating
@@ -356,22 +414,29 @@ def check_signalr_hubs(root: Path) -> CheckResult:
         hubs.extend(match.group("hub") for match in MAP_HUB_RE.finditer(path.read_text(encoding="utf-8")))
 
     inventory = require_non_empty(check, f"MapHub<> calls under {CLIENT_PROJECT_DIR.as_posix()}", hubs)
-    return build_result(check, API_AND_HUBS_PAGE, read_text(root, API_AND_HUBS_PAGE), inventory)
+    return build_result(check, SIGNALR_HUBS_PAGE, read_pages(root, API_AND_HUBS_PAGES), inventory)
 
 
 def check_local_api_route_families(root: Path) -> CheckResult:
-    """Every route class nested in the partial LocalApiRoutes has its row in 09-api-and-hubs.md."""
+    """Every route class nested in the partial LocalApiRoutes is named in 09-api-and-hubs.md or its reference pages.
+
+    The one-row-per-family table lives in reference/09-endpoint-inventory.md, so a missing family is reported there.
+    """
     check = "local-api-routes"
     families = sorted((root / LOCAL_API_ROUTES.parent).glob(LOCAL_API_ROUTE_FAMILIES_GLOB))
     sources = [LOCAL_API_ROUTES, *(path.relative_to(root) for path in families)]
     source = "\n".join(read_text(root, relative) for relative in sources)
     names = (match.group("name") for match in NESTED_ROUTE_CLASS_RE.finditer(source))
     inventory = require_non_empty(check, LOCAL_API_ROUTES.as_posix(), names)
-    return build_result(check, API_AND_HUBS_PAGE, read_text(root, API_AND_HUBS_PAGE), inventory)
+    return build_result(check, ENDPOINT_INVENTORY_PAGE, read_pages(root, API_AND_HUBS_PAGES), inventory)
 
 
 def check_react_features(root: Path) -> CheckResult:
-    """Every directory under the React client's features/ root is named in 10-react-client.md."""
+    """Every directory under the React client's features/ root has its own row in reference/10-feature-folders.md.
+
+    Only the table's first column counts: a mention elsewhere (the parent page, another row's prose) is not the row
+    wiki 10 promises, so a deleted row fails even while the name is still written down somewhere.
+    """
     check = "react-features"
     features_dir = root / REACT_FEATURES_DIR
     if not features_dir.is_dir():
@@ -381,7 +446,9 @@ def check_react_features(root: Path) -> CheckResult:
     # feature; skip them so a local, git-ignored artefact does not fail the guard on a developer machine.
     names = (entry.name for entry in features_dir.iterdir() if entry.is_dir() and not entry.name.startswith("."))
     inventory = require_non_empty(check, REACT_FEATURES_DIR.as_posix(), names)
-    return build_result(check, REACT_CLIENT_PAGE, read_text(root, REACT_CLIENT_PAGE), inventory)
+    rows = set(FEATURE_ROW_RE.findall(read_text(root, FEATURE_FOLDERS_PAGE)))
+    missing = tuple(Missing(check, name, FEATURE_FOLDERS_PAGE) for name in inventory if name not in rows)
+    return CheckResult(check=check, doc=FEATURE_FOLDERS_PAGE, inventory=inventory, missing=missing)
 
 
 def check_wiki_pages_linked(root: Path) -> CheckResult:
@@ -588,9 +655,14 @@ def markdown_link_targets(text: str) -> Iterable[str]:
             yield match.group("target").strip("<>")
 
 
+def git_env() -> dict[str, str]:
+    """The environment without the variables that would point git at another repository or index than `cwd`."""
+    return {key: value for key, value in os.environ.items() if key not in GIT_REPO_ENV_VARS}
+
+
 def git_ls_files(root: Path, check: str, *pathspecs: str) -> list[str]:
     """Tracked paths (posix, repo-relative) matching `pathspecs`; git's `*` also matches `/`."""
-    env = {key: value for key, value in os.environ.items() if key not in GIT_REPO_ENV_VARS}
+    env = git_env()
     try:
         listed = subprocess.run(
             ["git", "ls-files", "-z", "--", *pathspecs], cwd=root, env=env, capture_output=True, check=True, text=True
@@ -750,6 +822,179 @@ def check_plan_references(root: Path) -> CheckResult:
     return CheckResult(check, Path("."), citations.inventory, citations.missing + phases.missing)
 
 
+def read_ratchet(root: Path, check: str) -> dict[str, int]:
+    """The `key -> limit` rows of the ratchet file that belong to `check`; a malformed row stops every ratchet."""
+    entries: dict[str, int] = {}
+    for number, line in enumerate(read_text(root, DOCS_RATCHET).splitlines(), start=1):
+        if not line.strip() or line.startswith("#"):
+            continue
+        fields = line.split("|", 3)
+        if len(fields) != 4 or fields[0] not in RATCHET_CHECKS or not fields[2].isdigit() or not fields[3].strip():
+            raise InventoryError(f"{DOCS_RATCHET.as_posix()} line {number}: expected check|key|limit|reason: {line!r}")
+        if fields[0] != check:
+            continue
+        if fields[1] in entries:
+            raise InventoryError(f"{DOCS_RATCHET.as_posix()} line {number}: {check}|{fields[1]} is listed twice")
+        entries[fields[1]] = int(fields[2])
+    return entries
+
+
+def apply_ratchet(
+    root: Path,
+    check: str,
+    measured: dict[str, int],
+    docs: dict[str, Path],
+    default: int,
+    exact: bool,
+    label: str,
+    over: Callable[[str, int, int], str],
+) -> tuple[Missing, ...]:
+    """Fail every key above its ratchet limit (`default` when unlisted) and every entry that no longer earns its row.
+
+    An entry is stale when its key measures at or under `default` (a page gone or under the cap, a count of zero) or,
+    when `exact`, below its limit: a count that dropped must be written down, so it can never grow back.
+    """
+    entries = read_ratchet(root, check)
+    missing = [
+        Missing(check, key, docs[key], over(key, value, entries.get(key, default)), label)
+        for key, value in sorted(measured.items())
+        if value > entries.get(key, default)
+    ]
+    for key, limit in sorted(entries.items()):
+        value = measured.get(key, 0)
+        if value <= default or (exact and value < limit):
+            problem = f"entry {check}|{key}|{limit} is stale (now {value}); lower or delete it"
+            missing.append(Missing(check, key, DOCS_RATCHET, problem, "STALE"))
+    return tuple(missing)
+
+
+def wiki_pages(root: Path, check: str) -> dict[str, Path]:
+    """Every wiki and reference page, keyed by its repo-relative posix path."""
+    wiki_dir = root / WIKI_DIR
+    if not wiki_dir.is_dir():
+        raise InventoryError(f"{WIKI_DIR.as_posix()} does not exist under {root}")
+    pages = {page.relative_to(root).as_posix(): page.relative_to(root) for page in sorted(wiki_dir.rglob("*.md"))}
+    require_non_empty(check, WIKI_DIR.as_posix(), pages)
+    return pages
+
+
+def check_wiki_page_sizes(root: Path) -> CheckResult:
+    """Every wiki and reference page stays under the page cap, or under its own ceiling in the ratchet file."""
+    check = "wiki-page-size"
+    pages = wiki_pages(root, check)
+    sizes = {key: (root / page).stat().st_size for key, page in pages.items()}
+    advice = f"move lookup material to {WIKI_REFERENCE_DIR.as_posix()}/ or delete history"
+    missing = apply_ratchet(
+        root,
+        check,
+        sizes,
+        pages,
+        WIKI_PAGE_MAX_BYTES,
+        exact=False,
+        label="OVER-CAP",
+        over=lambda key, size, limit: f"page is {size} bytes, ceiling {limit}; {advice}",
+    )
+    return CheckResult(check=check, doc=WIKI_DIR, inventory=tuple(pages), missing=missing)
+
+
+def check_history_prose(root: Path) -> CheckResult:
+    """No wiki or reference page gains a `**Gone.**`, "no longer exists" or dated-change line."""
+    check = "history-prose"
+    pages = wiki_pages(root, check)
+    hits: dict[str, list[int]] = {}
+    for key, page in pages.items():
+        for number, line in enumerate((root / page).read_text(encoding="utf-8").splitlines(), start=1):
+            if any(pattern.search(line) for pattern in HISTORY_PROSE_PATTERNS):
+                hits.setdefault(key, []).append(number)
+    missing = apply_ratchet(
+        root,
+        check,
+        {key: len(lines) for key, lines in hits.items()},
+        pages,
+        0,
+        exact=True,
+        label="HISTORY",
+        over=lambda key, count, limit: (
+            f"{count} history-prose lines (lines {', '.join(map(str, hits[key]))}), allowed {limit}; "
+            "describe current behaviour, history lives in git and the ADRs"
+        ),
+    )
+    return CheckResult(check=check, doc=WIKI_DIR, inventory=tuple(pages), missing=missing)
+
+
+def git_ignored(root: Path, check: str, paths: list[str]) -> set[str]:
+    """The subset of `paths` a .gitignore rule matches, whether or not the path exists."""
+    if not paths:
+        return set()
+    try:
+        completed = subprocess.run(
+            ["git", "check-ignore", "--no-index", "--stdin", "-z"],
+            cwd=root,
+            env=git_env(),
+            input="\0".join(paths) + "\0",
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as error:
+        raise InventoryError(f"{check}: git check-ignore failed under {root}: {error}") from error
+    if completed.returncode not in (0, 1):  # 1 = nothing ignored
+        raise InventoryError(f"{check}: git check-ignore failed under {root}: {completed.stderr.strip()}")
+    return {path for path in completed.stdout.split("\0") if path}
+
+
+def check_path_references(root: Path) -> CheckResult:
+    """Every backticked repo path in the wiki and agent-knowledge names a tracked or git-ignored path."""
+    check = "path-references"
+    tracked = git_ls_files(root, check)
+    top_dirs = {name.split("/", 1)[0] for name in tracked if "/" in name}
+    # Every run of consecutive segments of a tracked path: the path itself, its directories and their tails.
+    known: set[str] = set()
+    for name in tracked:
+        parts = name.split("/")
+        known.update("/".join(parts[i:j]) for i in range(len(parts)) for j in range(i + 1, len(parts) + 1))
+
+    citations: dict[str, list[str]] = {}
+    for name in git_ls_files(root, check, *PATH_REFERENCE_PATHSPECS):
+        path = root / name
+        if not path.is_file():
+            continue
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            for span in CODE_SPAN_RE.finditer(line):
+                words = span.group(0).strip("`").split()
+                token = words[0].split("#", 1)[0] if words else ""
+                first = token.split("/", 1)[0]
+                if (
+                    PATH_REFERENCE_TOKEN_RE.match(token)
+                    and (first in top_dirs or (first in PATH_REFERENCE_PROJECT_ROOTS and "/" in token))
+                    and (token.endswith("/") or "." in token.rsplit("/", 1)[-1])
+                ):
+                    citations.setdefault(token, []).append(f"{name}:{number}")
+    inventory = require_non_empty(check, "backticked repo paths in the wiki and agent-knowledge", citations)
+
+    def repo_path(token: str) -> str:
+        first, _, rest = token.partition("/")
+        return f"{PATH_REFERENCE_PROJECT_ROOTS[first]}/{rest}" if first in PATH_REFERENCE_PROJECT_ROOTS else token
+
+    unresolved = {token: repo_path(token) for token in inventory if repo_path(token).rstrip("/") not in known}
+    ignored = git_ignored(root, check, list(unresolved.values()))
+    measured = {token: len(citations[token]) for token, path in unresolved.items() if path not in ignored}
+    missing = apply_ratchet(
+        root,
+        check,
+        measured,
+        {token: Path(citations[token][0].rsplit(":", 1)[0]) for token in measured},
+        0,
+        exact=True,
+        label="UNRESOLVED",
+        over=lambda token, count, limit: (
+            f"`{token}` names no tracked or git-ignored path, cited {count} times (allowed {limit}) at "
+            f"{', '.join(citations[token])}; fix the citation"
+        ),
+    )
+    return CheckResult(check=check, doc=Path("."), inventory=inventory, missing=missing)
+
+
 CHECKS: tuple[Callable[[Path], CheckResult], ...] = (
     check_signalr_hubs,
     check_local_api_route_families,
@@ -765,6 +1010,9 @@ CHECKS: tuple[Callable[[Path], CheckResult], ...] = (
     check_tool_names,
     check_host_phrasing,
     check_plan_references,
+    check_wiki_page_sizes,
+    check_history_prose,
+    check_path_references,
 )
 
 

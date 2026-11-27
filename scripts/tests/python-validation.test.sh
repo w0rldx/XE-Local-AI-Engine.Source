@@ -24,6 +24,7 @@ cat >"$TMP/bin/uv" <<'FAKE_UV'
 # Fake uv: logs its arguments, fails when they contain FAKE_UV_FAIL. With FAKE_UV_FIFO set, pytest and bandit
 # meet on that FIFO, which only completes when both run at once.
 echo "$*" >>"$FAKE_UV_LOG"
+[[ -z "${FAKE_UV_ENV_LOG:-}" ]] || env | grep '^GIT_' >>"$FAKE_UV_ENV_LOG"
 if [[ -n "${FAKE_UV_FAIL:-}" && "$*" == *"$FAKE_UV_FAIL"* ]]; then
   echo "fake uv failing: $*"
   exit 3
@@ -38,13 +39,14 @@ exit 0
 FAKE_UV
 chmod +x "$TMP/bin/uv"
 
-ROOTS="tools/training scripts catalog/external-apps/tools"
+ROOTS="tools/training scripts catalog/external-apps/tools XE-Local-AI-Engine.Client.Application/Services/Benchmarks/PythonTests"
 DEPS="sync --locked --all-groups"
 STYLE_FORMAT="run ruff format --check $ROOTS"
 STYLE_CHECK="run ruff check $ROOTS"
 TYPES="run pyrefly check"
 TESTS="run pytest"
 SECURITY="run bandit -c pyproject.toml -r $ROOTS"
+SKILL_LINT="run python scripts/skill-lint.py"
 FOUR_TREES="$(printf '%s\n' "$STYLE_FORMAT" "$STYLE_CHECK" "$TYPES" "$TESTS" "$SECURITY" | LC_ALL=C sort)"
 
 failures=0
@@ -54,8 +56,9 @@ section() { [[ "$failures" -eq "$1" ]] && echo "PASS $2"; }
 # Sets REPO to a fresh repository: develop holds the script and the tooling config, HEAD is a feature branch.
 fixture() {
   REPO="$TMP/$1"
-  mkdir -p "$REPO/scripts" "$REPO/docs"
+  mkdir -p "$REPO/scripts/lib" "$REPO/docs"
   cp "$SOURCE_SCRIPT" "$REPO/scripts/python-validation.sh"
+  cp "$ROOT/scripts/lib/git-env.sh" "$REPO/scripts/lib/git-env.sh"
   echo '[project]' >"$REPO/pyproject.toml"
   echo '.tmp/' >"$REPO/.gitignore"
   echo '# docs' >"$REPO/docs/README.md"
@@ -168,12 +171,14 @@ validate env
 grep -q 'No Python validation needed.' "$TMP/out" || fail "g: docs-only change not reported"
 section "$before" "g changed, nothing to run"
 
-# (h) changed scope: a committed nested script, a catalog data file or the catalog seed runs the four trees
-# without deps.
+# (h) changed scope: a committed nested script, a catalog data file, the catalog seed or a benchmark harness script
+# runs the four trees without deps.
 before=$failures
 for path in scripts/sub/tool.py tools/training/pkg/mod.py catalog/app/compose.yml \
-  XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Catalog/external-apps-catalog.seed.json; do
-  fixture "h-${path//\//_}"
+  XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Catalog/external-apps-catalog.seed.json \
+  XE-Local-AI-Engine.Client.Application/Services/Benchmarks/PythonTests/xe-pythontests-parent.py \
+  scripts/Größe/tool.py "tools/training/tab"$'\t'"and"$'\n'"line.py"; do
+  fixture "h-${path//[\/$'\t\n']/_}"
   mkdir -p "$REPO/$(dirname "$path")"
   echo 'changed' >"$REPO/$path"
   fg -C "$REPO" add -A
@@ -183,6 +188,14 @@ for path in scripts/sub/tool.py tools/training/pkg/mod.py catalog/app/compose.ym
   [[ "$status" -eq 0 ]] || fail "h: $path exited $status"
   [[ "$(sorted_calls)" == "$FOUR_TREES" ]] || fail "h: $path called: $(calls | tr '\n' ';')"
 done
+# An untracked script whose name git would quote counts as well.
+fixture h-untracked
+mkdir -p "$REPO/scripts/Größe"
+echo 'changed' >"$REPO/scripts/Größe/new.py"
+ARGS=(--scope changed)
+validate env
+[[ "$status" -eq 0 ]] || fail "h: untracked scripts/Größe/new.py exited $status"
+[[ "$(sorted_calls)" == "$FOUR_TREES" ]] || fail "h: untracked scripts/Größe/new.py called: $(calls | tr '\n' ';')"
 section "$before" "h changed, Python trees"
 
 # (i) changed scope: the tooling config, the lock, this script or .gitignore escalates to full (deps first).
@@ -229,6 +242,67 @@ validate env VALIDATE_LOG_RETENTION=2
   || fail "k: a log within the retention was removed"
 [[ "$(compgen -G "$REPO/.tmp/validate-logs/style-*.log" | wc -l)" -eq 3 ]] || fail "k: wrong log count"
 section "$before" "k log retention"
+
+# (l) full lints every skills/<name>/ directory with skill-lint.py, and a failing skill fails the run.
+before=$failures
+fixture l
+mkdir -p "$REPO/skills/alpha" "$REPO/skills/beta"
+echo 'not a skill directory' >"$REPO/skills/README.md"
+ARGS=(--scope full)
+validate env
+[[ "$status" -eq 0 ]] || fail "l: full exited $status"
+[[ "$(grep skill-lint "$TMP/uv.log")" == "$(printf '%s\n' "$SKILL_LINT skills/alpha --repo-root ." \
+  "$SKILL_LINT skills/beta --repo-root .")" ]] || fail "l: skill-lint calls: $(calls | tr '\n' ';')"
+validate env FAKE_UV_FAIL="skill-lint.py skills/beta"
+[[ "$status" -eq 1 ]] || fail "l: failing skill-lint exited $status, wanted 1"
+grep -q 'FAIL skills (status=3' "$TMP/out" || fail "l: failing skills tree not named"
+section "$before" "l skills"
+
+# (n) an exported repository selector reaches neither the script's own git nor any tree it runs: the changed scope is
+# still judged on the fixture, and the caller's index is left byte for byte.
+before=$failures
+fixture n-caller
+caller="$REPO"
+echo 'staged' >"$caller/staged.txt"
+fg -C "$caller" add staged.txt
+index_before="$(sha256sum "$caller/.git/index")"
+fixture n
+echo 'x = 1' >"$REPO/scripts/new.py"
+ARGS=(--scope changed)
+: >"$TMP/uv-env.log"
+validate env FAKE_UV_ENV_LOG="$TMP/uv-env.log" GIT_DIR="$caller/.git" GIT_INDEX_FILE="$caller/.git/index" \
+  GIT_WORK_TREE="$caller"
+[[ "$status" -eq 0 ]] || fail "n: exited $status with exported selectors"
+[[ "$(sorted_calls)" == "$FOUR_TREES" ]] || fail "n: the change was not judged on the fixture: $(calls | tr '\n' ';')"
+grep -Eq '^GIT_(DIR|INDEX_FILE|WORK_TREE)=' "$TMP/uv-env.log" && { cp "$TMP/uv-env.log" "$TMP/out"; fail "n: a tree saw a selector"; }
+[[ "$(sha256sum "$caller/.git/index")" == "$index_before" ]] || fail "n: the caller's index changed"
+section "$before" "n exported selectors dropped"
+
+# (o) an exported config file or injected setting reaches no tree: a fixture's `git config user.*` would write into
+# that file, an injected hook path or signing agent would run on a fixture commit.
+before=$failures
+fixture o
+echo 'x = 1' >"$REPO/scripts/new.py"
+ARGS=(--scope changed)
+: >"$TMP/uv-env.log"
+validate env FAKE_UV_ENV_LOG="$TMP/uv-env.log" GIT_CONFIG="$TMP/caller.gitconfig" \
+  GIT_CONFIG_PARAMETERS="'core.hooksPath'='$TMP/hooks'" GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgSign \
+  GIT_CONFIG_VALUE_0=true GIT_TEMPLATE_DIR="$TMP/template"
+[[ "$status" -eq 0 ]] || fail "o: exited $status with exported config"
+[[ "$(sorted_calls)" == "$FOUR_TREES" ]] || fail "o: the change was not judged on the fixture: $(calls | tr '\n' ';')"
+grep -Eq '^GIT_(CONFIG|CONFIG_PARAMETERS|CONFIG_COUNT|TEMPLATE_DIR)=' "$TMP/uv-env.log" \
+  && { cp "$TMP/uv-env.log" "$TMP/out"; fail "o: a tree saw an injected config"; }
+section "$before" "o exported config dropped"
+
+# (m) every tracked *.py of this repository lies under a root, so none escapes the trees.
+before=$failures
+outside="$(fg -C "$ROOT" ls-files '*.py' | while IFS= read -r file; do
+  covered=false
+  for root in $ROOTS; do [[ "$file" == "$root/"* ]] && covered=true; done
+  [[ "$covered" == true ]] || echo "$file"
+done)"
+[[ -z "$outside" ]] || { echo "$outside" >"$TMP/out"; fail "m: tracked *.py outside every root"; }
+section "$before" "m every tracked *.py under a root"
 
 if [[ "$failures" -ne 0 ]]; then
   echo "python-validation.test.sh: FAIL ($failures)"

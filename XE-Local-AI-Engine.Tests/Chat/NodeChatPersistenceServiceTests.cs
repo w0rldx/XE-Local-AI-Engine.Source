@@ -3817,25 +3817,8 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
 
     // resetDatabase:false reopens an existing DB file with fresh connections without wiping it — used to model a genuine
     // process restart against a database left behind by a previous provider/service instance.
-    private async Task<ServiceProvider> BuildProviderAsync(string fileName, bool resetDatabase = true)
-    {
-        var databasePath = GetDatabasePath(fileName);
-        var services = new ServiceCollection();
-        services.AddScoped<INodeSqliteKeyHolder, NullNodeSqliteKeyHolder>();
-        services.AddDbContext<NodeChatDbContext>(options => options.UseSqlite(NodeChatTestDatabase.ConnectionString(databasePath)));
-        services.AddSingleton<NodeChatPersistenceWriter>();
-
-        var provider = services.BuildServiceProvider(true);
-        if (resetDatabase)
-        {
-            await using var scope = provider.CreateAsyncScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-            await dbContext.Database.EnsureDeletedAsync();
-            await dbContext.Database.EnsureCreatedAsync();
-        }
-
-        return provider;
-    }
+    private Task<ServiceProvider> BuildProviderAsync(string fileName, bool resetDatabase = true) =>
+        NodeChatTestProvider.BuildAsync(GetDatabasePath(fileName), pooled: false, resetDatabase: resetDatabase);
 
     private static NodeChatPersistenceService CreateService(ServiceProvider provider)
     {

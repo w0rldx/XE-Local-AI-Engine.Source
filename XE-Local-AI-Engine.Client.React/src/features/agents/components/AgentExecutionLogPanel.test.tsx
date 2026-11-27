@@ -28,7 +28,7 @@ vi.mock("@/features/agents/queries/useAgentExecutionLogs", () => hookMock);
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { AgentExecutionLogPanel } from "@/features/agents/components/AgentExecutionLogPanel";
 import type { AgentExecutionLog } from "@/features/agents/models/AgentExecutionLogModels";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 
 function makeLog(overrides: Partial<AgentExecutionLog> = {}): AgentExecutionLog {
 	return {
@@ -46,30 +46,6 @@ function makeLog(overrides: Partial<AgentExecutionLog> = {}): AgentExecutionLog 
 		createdAtUtc: 1748600000000,
 		...overrides,
 	};
-}
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
 }
 
 function renderPanel(ui: ReactElement) {

@@ -12,9 +12,9 @@ using XE_Local_AI_Engine.Client.Services.Training.Comparison;
 /// </summary>
 public sealed class SuggestComparisonEndpoint : Endpoint<SuggestComparisonRequest, ComparisonSuggestionResponse>
 {
-    private readonly IComparisonReportService _comparisons;
+    private readonly ComparisonReportService _comparisons;
 
-    public SuggestComparisonEndpoint(IComparisonReportService comparisons)
+    public SuggestComparisonEndpoint(ComparisonReportService comparisons)
     {
         ArgumentNullException.ThrowIfNull(comparisons);
         _comparisons = comparisons;

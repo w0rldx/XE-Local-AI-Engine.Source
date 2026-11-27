@@ -10,11 +10,11 @@ using XE_Local_AI_Engine.Client.Services.Development.Implementation;
 public sealed class DevelopmentCloudEgressAuthorizer : ICloudEgressAuthorizer
 {
     private readonly IDevelopmentCloudEgressAuditSink _auditSink;
-    private readonly IDevelopmentCloudContextCatalog _contextCatalog;
+    private readonly DevelopmentCloudContextCatalog _contextCatalog;
     private readonly int _maximumBundleBytes;
     private readonly TimeProvider _timeProvider;
 
-    public DevelopmentCloudEgressAuthorizer(IDevelopmentCloudContextCatalog contextCatalog,
+    public DevelopmentCloudEgressAuthorizer(DevelopmentCloudContextCatalog contextCatalog,
         IDevelopmentCloudEgressAuditSink auditSink,
         TimeProvider timeProvider,
         int maximumBundleBytes = DevelopmentCloudContextBuilder.DefaultMaximumBytes)

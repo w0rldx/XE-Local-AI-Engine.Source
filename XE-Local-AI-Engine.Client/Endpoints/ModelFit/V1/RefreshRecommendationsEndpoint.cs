@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Client.Services.ModelFit;
+using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
 
 /// <summary>
@@ -22,9 +22,9 @@ public sealed class RefreshRecommendationsEndpoint : Endpoint<RefreshRecommendat
     /// <summary>The minimum context-window target the advisor's KV-cache fit can be sized against (mirrors the handler schema floor).</summary>
     private const int MinCtxTarget = 256;
 
-    private readonly IModelFitRefreshTrigger _modelFitRefreshTrigger;
+    private readonly ModelFitRefreshTrigger _modelFitRefreshTrigger;
 
-    public RefreshRecommendationsEndpoint(IModelFitRefreshTrigger modelFitRefreshTrigger)
+    public RefreshRecommendationsEndpoint(ModelFitRefreshTrigger modelFitRefreshTrigger)
     {
         ArgumentNullException.ThrowIfNull(modelFitRefreshTrigger);
         _modelFitRefreshTrigger = modelFitRefreshTrigger;

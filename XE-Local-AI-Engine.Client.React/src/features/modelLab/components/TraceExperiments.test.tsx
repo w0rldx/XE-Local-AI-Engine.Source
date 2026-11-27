@@ -3,7 +3,7 @@
 // The Trace tab against stubbed routes (MSW): the other-platform explanation, a refusal before any download, the flow to a saved
 // trace, a refused start, and Cancel on a running job.
 
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import i18next from "i18next";
 import { HttpResponse, http } from "msw";
 import { useState } from "react";
@@ -13,6 +13,7 @@ import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmPro
 import { TraceExperiments } from "@/features/modelLab/components/TraceExperiments";
 import { applyModelLabPatch, type ModelLabUpdate, sameExperimentId } from "@/features/modelLab/models/ModelLabNavigation";
 import { loadModelLabStrings } from "@/features/modelLab/models/ModelLabStrings";
+import { chooseOption } from "@/test/ChooseOption";
 import { acceptConfirm, cancelConfirm, openConfirm } from "@/test/ConfirmFlow";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
@@ -146,19 +147,6 @@ function Experiments({ initial, link, ignoreChanges }: { initial?: string; link?
 			/>
 		</ConfirmProvider>
 	);
-}
-
-async function chooseOption(label: RegExp, option: string): Promise<void> {
-	const select = await screen.findByRole("combobox", { name: label });
-	fireEvent.click(select);
-	const listbox = await waitFor(() => {
-		const element = document.getElementById(select.getAttribute("aria-controls") ?? "");
-		if (element === null) {
-			throw new Error("the dropdown is not open yet");
-		}
-		return element;
-	});
-	fireEvent.click(await within(listbox).findByRole("option", { name: option, hidden: true }));
 }
 
 async function pickCheckpoint(): Promise<void> {

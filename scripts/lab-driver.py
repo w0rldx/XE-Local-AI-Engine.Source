@@ -28,7 +28,6 @@ not load the model, so ``resident false`` after model-ensure is the honest norma
 from __future__ import annotations
 
 import argparse
-import datetime
 import errno
 import hashlib
 import importlib.util
@@ -36,8 +35,6 @@ import json
 import os
 import shutil
 import sys
-import time
-import urllib.parse
 from pathlib import Path
 
 _SPEC = importlib.util.spec_from_file_location("gpu_smoke_driver", Path(__file__).with_name("gpu-smoke-driver.py"))
@@ -48,8 +45,11 @@ _SPEC.loader.exec_module(gsd)
 
 API = gsd.API
 emit = gsd.emit
-# Download phases that mean "still going"; copied from model-matrix-driver.py's command_download.
-DOWNLOAD_ACTIVE = ("running", "queued", "pending", "starting", "verifying", "finalizing")
+now = gsd.now
+append_jsonl = gsd.append_jsonl
+# lab-api.sh loads this module for its redact and redact_path.
+redact = gsd.redact
+redact_path = gsd.redact_path
 
 
 class PrerequisiteError(RuntimeError):
@@ -60,84 +60,15 @@ class NotInSourceError(RuntimeError):
     """model-link: the source models dir has no usable entry for the model (exit 3; lab-up.sh asks for --download)."""
 
 
-def now() -> str:
-    return datetime.datetime.now().isoformat(timespec="milliseconds")
-
-
-def append_jsonl(path: Path, record: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as handle:
-        # codeql[py/clear-text-storage-sensitive-data] scrub() redacts credential-like keys at any depth first.
-        handle.write(json.dumps(scrub(record), ensure_ascii=False, default=str) + "\n")
-
-
-SECRET_KEYS = frozenset({"accesstoken", "refreshtoken", "token", "bearer", "password", "secret", "apikey", "api_key"})
-# Values that are credentials whatever field holds them: PEM blocks and inbound MCP, integration and proxy keys.
-SECRET_VALUE_PREFIXES = ("-----BEGIN", "xemcp_", "xeint_", "xeprx_")
-
-
-def is_secret_key(key: str) -> bool:
-    lowered = key.lower()
-    return lowered in SECRET_KEYS or lowered.endswith(
-        ("password", "secret", "apikey", "api_key", "privatekey", "private_key")
-    )
-
-
-def scrub(value: object) -> object:
-    """Replace credential-like fields (passwords, access/refresh tokens, secrets, API keys) at any depth."""
-    if isinstance(value, dict):
-        # The inbound MCP key create answers its one-time plaintext under a bare "key" beside "apiKey"; a generic
-        # "key" anywhere else (a setting name, a map entry) stays readable.
-        mcp_key = "key" in value and "apiKey" in value
-        return {
-            k: "(redacted)" if is_secret_key(str(k)) or (mcp_key and k == "key") else scrub(v) for k, v in value.items()
-        }
-    if isinstance(value, list):
-        return [scrub(v) for v in value]
-    if isinstance(value, str) and value.lstrip().startswith(SECRET_VALUE_PREFIXES):
-        return "(redacted)"
-    # Tool-call arguments and results arrive as strings holding JSON, so a nested credential would pass through.
-    if isinstance(value, str) and value.strip()[:1] in ("{", "["):
-        try:
-            return json.dumps(scrub(json.loads(value)))
-        except json.JSONDecodeError:
-            return value
-    return value
-
-
-def redact(text: str) -> str:
-    """Scrub a JSON body's credential-like fields; a non-JSON body is returned unchanged."""
-    try:
-        return json.dumps(scrub(json.loads(text)))
-    except json.JSONDecodeError:
-        return text
-
-
-class RecordingClient(gsd.NodeClient):
-    """NodeClient that appends every REST call to ``<evidence>/http.jsonl`` at call time. No retries, no relogin."""
+class RecordingClient(gsd.RecordingNodeClient):
+    """RecordingNodeClient that appends to ``<evidence>/http.jsonl``. No retries, no relogin."""
 
     def __init__(self, base_url: str, token: str, evidence: Path) -> None:
         super().__init__(base_url, token)
         self.log = evidence / "http.jsonl"
 
-    def request(self, method, path, body=None, content_type="application/json", expect_binary=False, allowed_status=()):
-        poll = "/hub?id=" in path and method in ("GET", "DELETE")
-        record: dict = {"t": now(), "method": method, "path": path}
-        if body is not None and not poll:
-            record["request"] = redact(body.decode("utf-8", "replace") if isinstance(body, bytes) else body)[:20000]
-        started = time.monotonic()
-        try:
-            status, payload = super().request(method, path, body, content_type, expect_binary, allowed_status)
-        except gsd.DriverError as error:
-            record.update(ms=int((time.monotonic() - started) * 1000), error=str(error)[:4000])
-            append_jsonl(self.log, record)
-            raise
-        if not poll:
-            # Responses are scrubbed too: auth/login (token renewal) answers with the access token.
-            shown = payload.decode("utf-8", "replace")[:2000] if isinstance(payload, bytes) else scrub(payload)
-            record.update(ms=int((time.monotonic() - started) * 1000), status=status, response=shown)
-            append_jsonl(self.log, record)
-        return status, payload
+    def http_log(self) -> Path:
+        return self.log
 
     def get(self, path: str) -> dict:
         return gsd.require_mapping(self.request("GET", API + path)[1], path)
@@ -257,7 +188,7 @@ def renew_token(client: RecordingClient, email: str, password: str) -> str:
 
 
 def command_download(args: argparse.Namespace) -> int:
-    """Polling copied from model-matrix-driver.py's command_download; a non-completed phase is a verdict here.
+    """Install a GGUF and poll it to a terminal phase; a non-completed phase is a verdict here.
 
     With --email/--password the poll re-logs-in on HTTP 401 (bounded), so a download longer than the access token's
     lifetime is not reported as a failure; the renewed token is emitted for the caller to keep.
@@ -269,20 +200,16 @@ def command_download(args: argparse.Namespace) -> int:
     )
     if not started.get("operationId"):
         raise gsd.DriverError("model-fit/download returned no operationId")
-    operation = urllib.parse.quote(str(started["operationId"]))
-    deadline, phase = time.monotonic() + args.timeout, ""
-    while time.monotonic() < deadline:
-        try:
-            phase = str(client.get(f"/model-fit/gguf/downloads/operations/{operation}").get("phase") or "")
-        except gsd.DriverError as error:
-            if "HTTP 401" not in str(error) or not args.email or renewals >= 5:
-                raise
-            renewals += 1
-            renewed = renew_token(client, args.email, args.password)
-            continue
-        if phase.lower() not in DOWNLOAD_ACTIVE:
-            break
-        time.sleep(5)
+
+    def renew(error: gsd.DriverError) -> bool:
+        nonlocal renewals, renewed
+        if "HTTP 401" not in str(error) or not args.email or renewals >= 5:
+            return False
+        renewals += 1
+        renewed = renew_token(client, args.email, args.password)
+        return True
+
+    phase = gsd.poll_download(client.get, started["operationId"], args.timeout, renew)
     emit("model", args.model)
     if renewed:
         emit("token", renewed)

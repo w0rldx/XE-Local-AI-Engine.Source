@@ -2,6 +2,7 @@
 // import them without tripping the "components-only export" lint rule.
 
 import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
+import { formatCount } from "@/core/formatting/NumberFormatting";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 
 // Badge color for a recommendation fit level. The advisor emits a run-mode fit level of "GPU" (the model fits the
@@ -61,5 +62,5 @@ export function formatContextTokens(tokens: number | null): string {
 	if (tokens === null) {
 		return "—";
 	}
-	return tokens.toLocaleString();
+	return formatCount(tokens);
 }

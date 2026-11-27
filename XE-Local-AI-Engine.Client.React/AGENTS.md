@@ -11,10 +11,11 @@ Run from this directory; `dotnet tool restore --tool-manifest ../dotnet-tools.js
 
 ```bash
 pnpm install --frozen-lockfile
-../scripts/with-build-lock.sh -- pnpm run acceptance   # licenses + OpenAPI breaking-change gate + validate + coverage + tooling tests + production bundle
+../scripts/run-gate-lane.sh frontend   # acceptance: licenses + OpenAPI breaking-change gate + validate + coverage + tooling tests + production bundle
 ```
 
-- Run `acceptance` under the build lock: vitest's timing assertions fail when a backend gate runs beside it.
+- The wrapper runs `pnpm run acceptance` under the build lock (vitest's timing assertions fail when a backend gate
+  runs beside it) and records a lane row in the gate history, which `scripts/squash-guard.sh` requires.
   Its first step, `node:check` (`scripts/CheckNodeMajor.mjs`, whose header documents the override), fails on a Node
   major other than CI's `client-react` job. Its second, `licenses:check`, regenerates the license manifest (frontend
   and backend packages) and fails when it differs from the index, so a package bump anywhere in the repository reds

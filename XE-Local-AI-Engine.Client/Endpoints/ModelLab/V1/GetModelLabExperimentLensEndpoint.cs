@@ -9,9 +9,9 @@ using XE_Local_AI_Engine.Client.Services.ModelLab;
 /// <summary>404 for a run that recorded no lens (saved before contract 5, or a checkpoint too deep for one) or a steering row; 422 when the stored lines fail their check.</summary>
 public sealed class GetModelLabExperimentLensEndpoint : Endpoint<ModelLabExperimentRouteRequest, ModelLabLensResponse>
 {
-    private readonly ModelLabExperimentService _experiments;
+    private readonly ModelLabExperimentReader _experiments;
 
-    public GetModelLabExperimentLensEndpoint(ModelLabExperimentService experiments)
+    public GetModelLabExperimentLensEndpoint(ModelLabExperimentReader experiments)
     {
         ArgumentNullException.ThrowIfNull(experiments);
         _experiments = experiments;

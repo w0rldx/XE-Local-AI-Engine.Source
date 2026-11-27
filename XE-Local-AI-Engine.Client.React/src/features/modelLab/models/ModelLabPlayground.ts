@@ -1,6 +1,15 @@
+import type { TFunction } from "i18next";
 import { z } from "zod";
 
 import { zXeLocalAiEngineClientEndpointsModelLabV1ModelLabPlaygroundConfigResponse as zConfig } from "@/core/api/generated/zod.gen";
+import { formatNumber } from "@/core/formatting/NumberFormatting";
+
+// Recorded numbers keep every bit; the page shows four significant digits and the full value on hover.
+export function playgroundValue(value: number | null, t: TFunction): string {
+	return value === null
+		? t("pages.modelLab.playground.notFinite", "not finite")
+		: formatNumber(value, { maximumSignificantDigits: 4 });
+}
 
 // A recorded number: the script writes a non-finite value as null.
 const cell = z.number().nullable();

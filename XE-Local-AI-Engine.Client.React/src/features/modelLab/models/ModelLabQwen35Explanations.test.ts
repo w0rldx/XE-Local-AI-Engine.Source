@@ -155,7 +155,7 @@ describe.each([
 		);
 		expect(Object.values(texts)).not.toContain(null);
 		await expect(`${JSON.stringify(texts, null, "\t")}\n`).toMatchFileSnapshot(
-			`__snapshots__/ModelLabQwen35Explanations.${language}.json`,
+			`../test/__snapshots__/ModelLabQwen35Explanations.${language}.json`,
 		);
 	});
 

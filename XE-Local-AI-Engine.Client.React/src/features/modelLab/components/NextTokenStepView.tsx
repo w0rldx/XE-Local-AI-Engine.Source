@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { logprobPercentLabel, logprobTextLabel } from "@/core/directInference/DirectInferenceModels";
+import { formatNumber } from "@/core/formatting/NumberFormatting";
 import { FieldInfo } from "@/core/ui/components/FieldInfo/FieldInfo";
 import { BasisBadge } from "@/features/modelLab/components/ArchitectureExplanation";
 import {
@@ -11,6 +12,9 @@ import {
 	type SamplerSettings,
 	simulateSampling,
 } from "@/features/modelLab/models/NextTokenSampling";
+
+// Two decimals in the UI language, ungrouped.
+const twoDecimals: Intl.NumberFormatOptions = { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false };
 
 interface CandidateBarProps {
 	text?: string | null;
@@ -183,7 +187,7 @@ export function NextTokenStepView({ entry, stepNumber, trace }: NextTokenStepVie
 							<Group justify="space-between" wrap="nowrap" gap="xs">
 								<Text size="xs">
 									{t("pages.modelLab.nextToken.ui.temperature", "Temperature: {{value}}", {
-										value: settings.temperature.toFixed(2),
+										value: formatNumber(settings.temperature, twoDecimals),
 									})}
 								</Text>
 								<FieldInfo
@@ -231,7 +235,9 @@ export function NextTokenStepView({ entry, stepNumber, trace }: NextTokenStepVie
 							<Group justify="space-between" wrap="nowrap" gap="xs">
 								<Text size="xs">
 									{settings.topP < 1
-										? t("pages.modelLab.nextToken.ui.topP", "Top-p: {{value}}", { value: settings.topP.toFixed(2) })
+										? t("pages.modelLab.nextToken.ui.topP", "Top-p: {{value}}", {
+												value: formatNumber(settings.topP, twoDecimals),
+											})
 										: t("pages.modelLab.nextToken.ui.topPOff", "Top-p: off")}
 								</Text>
 								<FieldInfo
@@ -255,7 +261,9 @@ export function NextTokenStepView({ entry, stepNumber, trace }: NextTokenStepVie
 							<Group justify="space-between" wrap="nowrap" gap="xs">
 								<Text size="xs">
 									{settings.minP > 0
-										? t("pages.modelLab.nextToken.ui.minP", "Min-p: {{value}}", { value: settings.minP.toFixed(2) })
+										? t("pages.modelLab.nextToken.ui.minP", "Min-p: {{value}}", {
+												value: formatNumber(settings.minP, twoDecimals),
+											})
 										: t("pages.modelLab.nextToken.ui.minPOff", "Min-p: off")}
 								</Text>
 								<FieldInfo

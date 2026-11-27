@@ -7,7 +7,7 @@ import { createElement, type ReactNode, StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CaptureError, type CaptureChannel } from "@/core/audio/capture/CaptureSource";
-import { FakeCaptureSource } from "@/features/transcription/capture/FakeCaptureSource";
+import { FakeCaptureSource } from "@/test/FakeCaptureSource";
 import {
 	type CaptureSourceFactory,
 	type LiveCaptureRequest,

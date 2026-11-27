@@ -1,14 +1,12 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ImageModelManager } from "@/features/images/components/ImageModelManager";
 import type { ImageModelCatalogEntryView, ImageModelDownloadView } from "@/features/images/models/ImageModelInstallModels";
 import type { ImageModelView } from "@/features/images/models/ImageModels";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { renderWithMantine } from "@/test/MantineTestRender";
 
 const startMutate = vi.fn();
 const cancelMutate = vi.fn();
@@ -60,14 +58,6 @@ const toastError = vi.fn();
 vi.mock("@/core/ui/notifications/Toast", () => ({
 	toast: { success: vi.fn(), error: (message: string) => toastError(message) },
 }));
-
-function renderWithProviders(ui: ReactElement) {
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			{ui}
-		</MantineProvider>,
-	);
-}
 
 function download(overrides: Partial<ImageModelDownloadView> = {}): ImageModelDownloadView {
 	return {
@@ -174,7 +164,7 @@ describe("ImageModelManager", () => {
 	// learn about a failure at all — it polled the installed-models list and waited forever for a model that never arrived.
 	describe("failed download reporting", () => {
 		it("surfaces the sanitized reason and clears the pending state when the download fails", async () => {
-			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);
+			renderWithMantine(<ImageModelManager models={[]} isLoading={false} />);
 
 			fillAndSubmit();
 			resolveLastStart();
@@ -196,7 +186,7 @@ describe("ImageModelManager", () => {
 		});
 
 		it("keeps showing progress while the download is still running", async () => {
-			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);
+			renderWithMantine(<ImageModelManager models={[]} isLoading={false} />);
 
 			downloads = [download({ phase: "Running", completedBytes: 50, totalBytes: 100 })];
 			fillAndSubmit();
@@ -212,7 +202,7 @@ describe("ImageModelManager", () => {
 		// poll has fired even once, leaving the refresh to those polls loses the race often enough that a model can
 		// finish installing and stay invisible until an unrelated refetch happens along.
 		it("refreshes the installed models when a download completes", async () => {
-			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);
+			renderWithMantine(<ImageModelManager models={[]} isLoading={false} />);
 
 			downloads = [download({ phase: "Running", completedBytes: 50, totalBytes: 100 })];
 			fillAndSubmit();
@@ -229,7 +219,7 @@ describe("ImageModelManager", () => {
 		});
 
 		it("does not refresh the installed models when a download fails", async () => {
-			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);
+			renderWithMantine(<ImageModelManager models={[]} isLoading={false} />);
 
 			downloads = [download({ phase: "Running" })];
 			fillAndSubmit();
@@ -249,7 +239,7 @@ describe("ImageModelManager", () => {
 	// other model. The catalog will offer several at once, which makes that a hard blocker rather than a rough edge.
 	describe("concurrent downloads", () => {
 		it("tracks every started download and shows a row for each", async () => {
-			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);
+			renderWithMantine(<ImageModelManager models={[]} isLoading={false} />);
 
 			fillAndSubmit("first-model");
 			resolveLastStart();
@@ -269,7 +259,7 @@ describe("ImageModelManager", () => {
 		});
 
 		it("leaves the Download button usable for a different model while one download runs", async () => {
-			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);
+			renderWithMantine(<ImageModelManager models={[]} isLoading={false} />);
 
 			fillAndSubmit("first-model");
 			resolveLastStart();
@@ -291,7 +281,7 @@ describe("ImageModelManager", () => {
 
 	describe("progress detail", () => {
 		it("shows an aggregate percentage and the part being fetched", async () => {
-			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);
+			renderWithMantine(<ImageModelManager models={[]} isLoading={false} />);
 
 			fillAndSubmit("qwen-image");
 			resolveLastStart();
@@ -317,7 +307,7 @@ describe("ImageModelManager", () => {
 		it("reports advancing bytes without inventing a percentage when the set total is unknown", async () => {
 			// A set total is only computable when EVERY part declared a size. A bar derived from a partial total would
 			// pass 100% and read as broken, so the row must fall back to the bytes actually transferred.
-			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);
+			renderWithMantine(<ImageModelManager models={[]} isLoading={false} />);
 
 			fillAndSubmit("unsized-model");
 			resolveLastStart();
@@ -334,7 +324,7 @@ describe("ImageModelManager", () => {
 
 	describe("cancel", () => {
 		it("cancels the clicked row's download by model name", async () => {
-			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);
+			renderWithMantine(<ImageModelManager models={[]} isLoading={false} />);
 
 			fillAndSubmit("first-model");
 			resolveLastStart();
@@ -356,7 +346,7 @@ describe("ImageModelManager", () => {
 
 	describe("delete", () => {
 		it("asks for confirmation before deleting an installed model", async () => {
-			renderWithProviders(<ImageModelManager models={[model()]} isLoading={false} />);
+			renderWithMantine(<ImageModelManager models={[model()]} isLoading={false} />);
 
 			fireEvent.click(screen.getByTestId("image-model-delete-sd-1.5"));
 
@@ -367,7 +357,7 @@ describe("ImageModelManager", () => {
 
 		it("does not delete when the confirmation is declined", async () => {
 			confirmResult = false;
-			renderWithProviders(<ImageModelManager models={[model()]} isLoading={false} />);
+			renderWithMantine(<ImageModelManager models={[model()]} isLoading={false} />);
 
 			fireEvent.click(screen.getByTestId("image-model-delete-sd-1.5"));
 
@@ -386,7 +376,7 @@ describe("ImageModelManager", () => {
 		}
 
 		it("swaps the single weight-file input for a per-role file list", () => {
-			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);
+			renderWithMantine(<ImageModelManager models={[]} isLoading={false} />);
 			openManualTab();
 			expect(screen.getByTestId("image-model-download-file")).toBeTruthy();
 
@@ -398,7 +388,7 @@ describe("ImageModelManager", () => {
 		});
 
 		it("sends every declared part with its own repository and size", () => {
-			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);
+			renderWithMantine(<ImageModelManager models={[]} isLoading={false} />);
 			enableAdvanced();
 
 			setValue(screen.getByTestId("image-model-download-repo") as HTMLInputElement, "QuantStack/Qwen-Image-GGUF");
@@ -434,7 +424,7 @@ describe("ImageModelManager", () => {
 		});
 
 		it("refuses to submit a file set with no diffusion file", () => {
-			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);
+			renderWithMantine(<ImageModelManager models={[]} isLoading={false} />);
 			enableAdvanced();
 
 			setValue(screen.getByTestId("image-model-download-repo") as HTMLInputElement, "QuantStack/Qwen-Image-GGUF");
@@ -452,7 +442,7 @@ describe("ImageModelManager", () => {
 	describe("curated catalog", () => {
 		it("installs the whole file-set from one click, with nothing typed", () => {
 			catalogEntries = [catalogEntry()];
-			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);
+			renderWithMantine(<ImageModelManager models={[]} isLoading={false} />);
 
 			fireEvent.click(screen.getByTestId("image-model-catalog-install-qwen-image"));
 
@@ -484,7 +474,7 @@ describe("ImageModelManager", () => {
 			// Nothing is running at mount here on purpose: a download the coordinator ALREADY reports as running is
 			// adopted on load (see the reload-recovery test below), which disables the button before it can be clicked.
 			catalogEntries = [catalogEntry({ id: "sdxl-1.0" })];
-			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);
+			renderWithMantine(<ImageModelManager models={[]} isLoading={false} />);
 
 			fireEvent.click(screen.getByTestId("image-model-catalog-install-sdxl-1.0"));
 			downloads = [download({ modelName: "sdxl-1.0", phase: "Running", completedBytes: 10, totalBytes: 100 })];
@@ -501,7 +491,7 @@ describe("ImageModelManager", () => {
 			catalogEntries = [catalogEntry({ id: "sdxl-1.0" })];
 			downloads = [download({ modelName: "sdxl-1.0", phase: "Running", completedBytes: 10, totalBytes: 100 })];
 
-			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);
+			renderWithMantine(<ImageModelManager models={[]} isLoading={false} />);
 
 			await waitFor(() => expect(screen.getByTestId("image-model-download-progress")).toBeTruthy());
 			expect((screen.getByTestId("image-model-catalog-install-sdxl-1.0") as HTMLButtonElement).disabled).toBe(true);
@@ -509,7 +499,7 @@ describe("ImageModelManager", () => {
 
 		it("shows an installed entry as installed instead of offering a second download", () => {
 			catalogEntries = [catalogEntry({ id: "sd-1.5", isInstalled: true })];
-			renderWithProviders(<ImageModelManager models={[model()]} isLoading={false} />);
+			renderWithMantine(<ImageModelManager models={[model()]} isLoading={false} />);
 
 			expect(screen.getByTestId("image-model-catalog-installed-sd-1.5")).toBeTruthy();
 			expect(screen.queryByTestId("image-model-catalog-install-sd-1.5")).toBeNull();
@@ -519,14 +509,14 @@ describe("ImageModelManager", () => {
 			// Unknown is a real answer on a box whose VRAM could not be probed. It must render as its own state, never
 			// silently as a comfortable fit.
 			catalogEntries = [catalogEntry({ fitVerdict: "Unknown" })];
-			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);
+			renderWithMantine(<ImageModelManager models={[]} isLoading={false} />);
 
 			expect(screen.getByTestId("image-model-catalog-fit-qwen-image").textContent).toContain("Fit unknown");
 		});
 
 		it("badges a research-only licence and leaves a permissive one unbadged", () => {
 			catalogEntries = [catalogEntry({ license: "qwen-research" }), catalogEntry({ id: "sd-1.5" })];
-			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);
+			renderWithMantine(<ImageModelManager models={[]} isLoading={false} />);
 
 			expect(screen.getByTestId("image-model-catalog-research-license-qwen-image").textContent).toBe(
 				"Non-commercial research license",
@@ -536,7 +526,7 @@ describe("ImageModelManager", () => {
 
 		it("warns when the download does not fit the free disk", () => {
 			catalogEntries = [catalogEntry({ fitsOnDisk: false })];
-			renderWithProviders(<ImageModelManager models={[]} isLoading={false} />);
+			renderWithMantine(<ImageModelManager models={[]} isLoading={false} />);
 
 			expect(screen.getByTestId("image-model-catalog-disk-qwen-image")).toBeTruthy();
 		});

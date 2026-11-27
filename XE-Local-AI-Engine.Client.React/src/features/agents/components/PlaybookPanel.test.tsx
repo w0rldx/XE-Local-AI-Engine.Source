@@ -49,7 +49,7 @@ import { PlaybookPanel } from "@/features/agents/components/PlaybookPanel";
 import { PromoteConflictError } from "@/features/agents/models/PlaybookActionMappers";
 import type { EvalResult, PlaybookAction } from "@/features/agents/models/PlaybookActionModels";
 import type { PlaybookMonitor, PlaybookMonitorItem } from "@/features/agents/models/PlaybookMonitorModels";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 
 function makeAction(overrides: Partial<PlaybookAction> = {}): PlaybookAction {
 	return {
@@ -141,34 +141,6 @@ function makeMonitorQuery(monitor: PlaybookMonitor = makeMonitor()) {
 // Analyze mutation also exposes isSuccess/data (the empty-result notice reads them).
 function makeAnalyzeMutation(overrides: Record<string, unknown> = {}) {
 	return { mutate: vi.fn(), isPending: false, isSuccess: false, error: null, data: undefined, ...overrides };
-}
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-	Object.defineProperty(document, "fonts", {
-		writable: true,
-		value: { ready: Promise.resolve(), addEventListener: vi.fn(), removeEventListener: vi.fn() },
-	});
 }
 
 function renderPanel(ui: ReactElement) {

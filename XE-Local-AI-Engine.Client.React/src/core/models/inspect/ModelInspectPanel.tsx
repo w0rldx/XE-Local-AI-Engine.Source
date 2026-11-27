@@ -7,6 +7,7 @@ import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import type { XeLocalAiEngineClientEndpointsLocalModelsV1ModelGgufTensorDto } from "@/core/api/generated";
 import { getModelGgufInspectionOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { humanizeBytes } from "@/core/formatting/BytesFormatting";
+import { formatCount } from "@/core/formatting/NumberFormatting";
 import { CodeEditor } from "@/core/ui/components/CodeEditor/CodeEditor";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 
@@ -55,7 +56,7 @@ const tensorTypeColors = [
 ];
 
 function numberLabel(t: TFunction, value: number | null | undefined): string {
-	return value === null || value === undefined ? t("pages.models.details.unknown", "Unknown") : value.toLocaleString();
+	return value === null || value === undefined ? t("pages.models.details.unknown", "Unknown") : formatCount(value);
 }
 
 // The exact count beside the same B/M scale the model list's parameter size uses: "26.9B (26,895,998,464)".
@@ -64,7 +65,7 @@ function parameterLabel(t: TFunction, count: number | null | undefined): string 
 		return t("pages.models.details.unknown", "Unknown");
 	}
 	const compact = count >= 1e9 ? `${(count / 1e9).toFixed(1)}B` : `${(count / 1e6).toFixed(0)}M`;
-	return `${compact} (${count.toLocaleString()})`;
+	return `${compact} (${formatCount(count)})`;
 }
 
 function TensorTable({ tensors, blockIndex }: { tensors: TensorDto[]; blockIndex?: number }) {
@@ -196,7 +197,7 @@ function TensorTypeBytes({ tensors }: { tensors: TensorDto[] }) {
 										{typeLabel(row)}
 									</Group>
 								</Table.Td>
-								<Table.Td>{row.tensorCount.toLocaleString()}</Table.Td>
+								<Table.Td>{formatCount(row.tensorCount)}</Table.Td>
 								<Table.Td>
 									{noneKnown || row.unknownSizeCount === 0
 										? tensorSizeLabel(t, noneKnown ? null : row.bytes)

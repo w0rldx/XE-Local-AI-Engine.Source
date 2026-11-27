@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 
-public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoordinator
+public sealed class GgufImportTransactionCoordinator
 {
     private static readonly TimeSpan PreviewLifetime = TimeSpan.FromMinutes(10);
     private readonly IGgufDownloadEventPublisher _eventPublisher;

@@ -53,7 +53,7 @@ public sealed class NodeDbBackupServiceTests : IDisposable
     public async Task CreateSnapshotAsync_WithNothingPending_WritesAListedSnapshot()
     {
         var databasePath = GetDatabasePath("on-demand.sqlite");
-        var clock = new FixedTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        var clock = new ManualTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
         await using var serviceProvider = BuildServiceProvider(databasePath, timeProvider: clock);
         await using (var scope = serviceProvider.CreateAsyncScope())
         {
@@ -127,7 +127,7 @@ public sealed class NodeDbBackupServiceTests : IDisposable
 
         var oldest = $"{BackupFilePrefix}20250101T000000000Z{BackupFileExtension}";
         await NodeDbRestoreStaging.WriteMarkerAsync(backupDirectory, oldest, DateTimeOffset.UnixEpoch, CancellationToken.None);
-        var clock = new FixedTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        var clock = new ManualTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
         await using var serviceProvider = BuildServiceProvider(databasePath, retainCount: 1, timeProvider: clock);
 
         await serviceProvider.GetRequiredService<INodeDbBackupService>().CreateSnapshotAsync();
@@ -212,7 +212,7 @@ public sealed class NodeDbBackupServiceTests : IDisposable
         var partialTemp = Path.Combine(backupDirectory, $"{BackupFilePrefix}20270102T000000000Z{BackupFileExtension}.tmp");
         await File.WriteAllTextAsync(partialTemp, "partial");
 
-        var clock = new FixedTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        var clock = new ManualTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
         await using var serviceProvider = BuildServiceProvider(databasePath, retainCount: 3, timeProvider: clock);
         var backupService = serviceProvider.GetRequiredService<INodeDbBackupService>();
 
@@ -287,7 +287,7 @@ public sealed class NodeDbBackupServiceTests : IDisposable
         }
 
         // Fixed clock at 2026-01-01T00:00:00Z → the new snapshot's timestamp sorts after all four pre-existing ones.
-        var clock = new FixedTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        var clock = new ManualTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
         await using var serviceProvider = BuildServiceProvider(databasePath, retainCount: 3, timeProvider: clock);
         var backupService = serviceProvider.GetRequiredService<INodeDbBackupService>();
 
@@ -409,21 +409,6 @@ public sealed class NodeDbBackupServiceTests : IDisposable
         command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'probe';";
         var result = await command.ExecuteScalarAsync();
         return Convert.ToInt32(result, CultureInfo.InvariantCulture) > 0;
-    }
-
-    private sealed class FixedTimeProvider : TimeProvider
-    {
-        private readonly DateTimeOffset _now;
-
-        public FixedTimeProvider(DateTimeOffset now)
-        {
-            _now = now;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return _now;
-        }
     }
 
     /// <summary>A fixed clock whose timers fire only when <see cref="FireAll" /> is called, so the snapshot budget runs out on cue.</summary>

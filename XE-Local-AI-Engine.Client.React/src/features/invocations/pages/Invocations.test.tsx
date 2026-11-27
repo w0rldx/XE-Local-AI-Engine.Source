@@ -1,9 +1,6 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import "@/i18n";
@@ -23,16 +20,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 }));
 
 import { Invocations } from "@/features/invocations/pages/Invocations";
-import { testMantineTheme } from "@/test/MantineTestRender";
-
-function renderWithProviders(ui: ReactElement) {
-	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
-		</MantineProvider>,
-	);
-}
+import { renderWithProviders } from "@/test/RenderWithProviders";
 
 describe("Invocations (generated hey-api data layer)", () => {
 	afterEach(() => {

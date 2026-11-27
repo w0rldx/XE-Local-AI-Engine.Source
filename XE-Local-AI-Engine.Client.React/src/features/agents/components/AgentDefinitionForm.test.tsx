@@ -1,10 +1,7 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
-import type { ReactElement } from "react";
 import { useRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -32,9 +29,9 @@ vi.mock("@/core/skills/queries/useSkills", () => ({
 import type { AgentDefinition, AgentDefinitionFormValues } from "@/core/agents/models/AgentDefinitionModels";
 import type { ToolCatalogEntry } from "@/core/tools/models/ToolCatalogModels";
 import { AgentDefinitionForm, type AgentDefinitionFormHandle } from "@/features/agents/components/AgentDefinitionForm";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { installJsdomEnvironmentMocks } from "@/test/MantineTestRender";
 import { localApiPath } from "@/test/msw/Handlers";
-import { createTestQueryClient } from "@/test/RenderWithProviders";
+import { renderWithProviders } from "@/test/RenderWithProviders";
 import { setupMswServer } from "@/test/UseMswServer";
 
 // Only the Default Assistant fetches its server-computed tool offer; each such test declares the route itself.
@@ -88,44 +85,6 @@ const catalogTools: ToolCatalogEntry[] = [
 		isAvailableOnNode: true,
 	},
 ];
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-	Object.defineProperty(document, "fonts", {
-		writable: true,
-		value: { ready: Promise.resolve(), addEventListener: vi.fn(), removeEventListener: vi.fn() },
-	});
-}
-
-function renderWithProviders(ui: ReactElement) {
-	return render(
-		<QueryClientProvider client={createTestQueryClient()}>
-			<MantineProvider env="test" theme={testMantineTheme}>
-				{ui}
-			</MantineProvider>
-		</QueryClientProvider>,
-	);
-}
 
 /** Serves the Default Assistant offer and records the model each request asked for. */
 function defaultOfferRoute(toolNames: string[]) {

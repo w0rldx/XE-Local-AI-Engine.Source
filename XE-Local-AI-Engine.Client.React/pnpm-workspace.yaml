@@ -17,6 +17,9 @@ overrides:
   'fast-uri@<3.1.9': '3.1.9'
   # follow-redirects (prod, via axios) GHSA-mrwp-f3q8-3g9p covers >=1.16.0 <=1.16.1; 1.16.2 is the fixed patch.
   'follow-redirects@>=1.16.0 <1.16.2': '1.16.2'
+  # katex (prod, via rehype-katex and micromark-extension-math, which ask ^0.16) GHSA-238p-pmpm-9mq7 covers >=0.11.0
+  # <0.18.2; 0.18.10 is the newest patch of the first fixed line (0.18.11 is deprecated upstream as breaking).
+  'katex@<0.18.2': '0.18.10'
 
 allowBuilds:
   msgpackr-extract: true

@@ -10,6 +10,10 @@
 //
 // A test file that renders through `renderWithProviders`/`renderWithMantine`/`createProvidersWrapper` has no provider
 // of its own and is therefore nothing to check.
+//
+// It also fails on a test file that declares its own `installJsdomEnvironmentMocks`, `renderWithMantine` or
+// `renderWithProviders`: a local copy drifts from the shared one in src/test (copies lacked its `scrollIntoView` stub)
+// and a same-named wrapper hides which providers the test really gets.
 
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
@@ -84,8 +88,20 @@ export function findUnthemedTestProviders(source) {
 	return findMantineProviders(source).filter((provider) => provider.isTestEnv && !provider.hasTheme);
 }
 
+const sharedHelperDeclaration =
+	/^[\t ]*(?:export\s+)?(?:(?:async\s+)?function\s+|(?:const|let|var)\s+)(installJsdomEnvironmentMocks|renderWithMantine|renderWithProviders)\b/gm;
+
+/** Every local declaration of a shared src/test helper in one file, as `{ line, name }`. */
+export function findSharedHelperCopies(source) {
+	return [...source.matchAll(sharedHelperDeclaration)].map((match) => ({
+		line: source.slice(0, match.index).split("\n").length,
+		name: match[1],
+	}));
+}
+
+const testFile = /\.test\.tsx?$/;
 // The shared wrappers in src/test are held to the same rule: they are where the other 100+ files get the theme from.
-const scanned = [/\.test\.tsx$/, /[\\/]test[\\/][^\\/]+\.tsx$/];
+const scanned = [testFile, /[\\/]test[\\/][^\\/]+\.tsx$/];
 
 function candidateFilesUnder(directory) {
 	return readdirSync(directory, { recursive: true, withFileTypes: true })
@@ -98,8 +114,14 @@ export function checkMantineTestTheme({ sourceRoot = resolve(frontendRoot, "src"
 	const files = candidateFilesUnder(sourceRoot);
 	let providers = 0;
 	const offenders = [];
+	const copies = [];
 	for (const file of files) {
 		const source = readFileSync(file, "utf8");
+		if (testFile.test(file)) {
+			for (const copy of findSharedHelperCopies(source)) {
+				copies.push(`${relative(root, file)}:${copy.line}: ${copy.name}`);
+			}
+		}
 		for (const provider of findMantineProviders(source)) {
 			if (!provider.isTestEnv) {
 				continue;
@@ -110,18 +132,27 @@ export function checkMantineTestTheme({ sourceRoot = resolve(frontendRoot, "src"
 			}
 		}
 	}
-	return { files: files.length, providers, offenders };
+	return { files: files.length, providers, offenders, copies };
 }
 
 const isMain = process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1]);
 if (isMain) {
-	const { files, providers, offenders } = checkMantineTestTheme();
+	const { files, providers, offenders, copies } = checkMantineTestTheme();
 	// A scan that reached nothing would pass for free, and this rule has over a hundred live call sites.
 	if (files === 0 || providers === 0) {
 		process.stderr.write(
 			`CheckMantineTestTheme: ERROR — scanned ${files} file(s) and found ${providers} <${providerName} env="test">; the scan is broken, not the code.\n`,
 		);
 		process.exit(1);
+	}
+	if (copies.length > 0) {
+		process.stderr.write(`CheckMantineTestTheme: ${copies.length} local declaration(s) of a shared src/test helper:\n`);
+		for (const entry of copies) {
+			process.stderr.write(`  ${entry}\n`);
+		}
+		process.stderr.write(
+			`\nFix: import installJsdomEnvironmentMocks/renderWithMantine from "@/test/MantineTestRender" or renderWithProviders/createProvidersWrapper from "@/test/RenderWithProviders"; a wrapper that adds something is named after what it adds.\n`,
+		);
 	}
 	if (offenders.length > 0) {
 		process.stderr.write(
@@ -133,9 +164,11 @@ if (isMain) {
 		process.stderr.write(
 			`\nFix: add ${themeAttribute} (import it from "@/test/MantineTestRender"), or render through renderWithProviders/renderWithMantine instead.\n`,
 		);
+	}
+	if (copies.length > 0 || offenders.length > 0) {
 		process.exit(1);
 	}
 	process.stdout.write(
-		`CheckMantineTestTheme: OK — all ${providers} hand-rolled <${providerName} env="test"> in ${files} files pass ${themeAttribute}.\n`,
+		`CheckMantineTestTheme: OK — all ${providers} hand-rolled <${providerName} env="test"> in ${files} files pass ${themeAttribute}; no test file declares its own shared helper.\n`,
 	);
 }

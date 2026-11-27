@@ -47,7 +47,7 @@ public sealed class DesktopBootstrapTests : IDisposable
     [Test]
     public void DataDirectoryOverride_IsNormalizedAndUsedByBootstrap()
     {
-        using var temp = new TempDirectory();
+        using var temp = new FakeLocalAppData();
         var expected = Path.Combine(temp.DataDirectory, "override");
         var overridden = Path.Combine(expected, "child", "..");
         Environment.SetEnvironmentVariable(DesktopBootstrap.DataDirectoryEnvironmentVariable, overridden);
@@ -80,7 +80,7 @@ public sealed class DesktopBootstrapTests : IDisposable
     [Test]
     public void EnsureLocalDataConfiguration_WhenNeitherEnvSet_PopulatesConnectionStringAndOperatorSecret()
     {
-        using var temp = new TempDirectory();
+        using var temp = new FakeLocalAppData();
         using var configuration = new ConfigurationManager();
 
         DesktopBootstrap.EnsureLocalDataConfiguration(configuration, temp.ResolveFolder);
@@ -104,7 +104,7 @@ public sealed class DesktopBootstrapTests : IDisposable
     [Test]
     public void EnsureLocalDataConfiguration_PointsDefaultChatModelAtTheFirstRunGguf()
     {
-        using var temp = new TempDirectory();
+        using var temp = new FakeLocalAppData();
         using var configuration = new ConfigurationManager();
         configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
         {
@@ -124,7 +124,7 @@ public sealed class DesktopBootstrapTests : IDisposable
     [Test]
     public void EnsureLocalDataConfiguration_LeavesDefaultChatModelUntouched_WhenNoFirstRunModelConfigured()
     {
-        using var temp = new TempDirectory();
+        using var temp = new FakeLocalAppData();
         using var configuration = new ConfigurationManager();
         configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
         {
@@ -140,7 +140,7 @@ public sealed class DesktopBootstrapTests : IDisposable
     [Test]
     public void EnsureLocalDataConfiguration_SetsNodeDataDirectory_InDesktopMode()
     {
-        using var temp = new TempDirectory();
+        using var temp = new FakeLocalAppData();
         using var configuration = new ConfigurationManager();
 
         DesktopBootstrap.EnsureLocalDataConfiguration(configuration, temp.ResolveFolder);
@@ -164,7 +164,7 @@ public sealed class DesktopBootstrapTests : IDisposable
     [Test]
     public void EnsureLocalDataConfiguration_PopulatesModelsDirectoryUnderDataDirectory()
     {
-        using var temp = new TempDirectory();
+        using var temp = new FakeLocalAppData();
         using var configuration = new ConfigurationManager();
 
         DesktopBootstrap.EnsureLocalDataConfiguration(configuration, temp.ResolveFolder);
@@ -181,7 +181,7 @@ public sealed class DesktopBootstrapTests : IDisposable
     [Test]
     public void EnsureLocalDataConfiguration_PopulatesImageModelsDirectoryUnderDataDirectory()
     {
-        using var temp = new TempDirectory();
+        using var temp = new FakeLocalAppData();
         using var configuration = new ConfigurationManager();
 
         DesktopBootstrap.EnsureLocalDataConfiguration(configuration, temp.ResolveFolder);
@@ -194,7 +194,7 @@ public sealed class DesktopBootstrapTests : IDisposable
     [Test]
     public void EnsureLocalDataConfiguration_KeepsAnExplicitImageModelsDirectory()
     {
-        using var temp = new TempDirectory();
+        using var temp = new FakeLocalAppData();
         using var configuration = new ConfigurationManager();
         var explicitDirectory = Path.Combine(temp.DataDirectory, "operator-images");
         configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
@@ -210,7 +210,7 @@ public sealed class DesktopBootstrapTests : IDisposable
     [Test]
     public void EnsureLocalDataConfiguration_IsIdempotent_ReadsBackTheSameKey()
     {
-        using var temp = new TempDirectory();
+        using var temp = new FakeLocalAppData();
 
         using var first = new ConfigurationManager();
         DesktopBootstrap.EnsureLocalDataConfiguration(first, temp.ResolveFolder);
@@ -229,7 +229,7 @@ public sealed class DesktopBootstrapTests : IDisposable
     {
         // The generated key is set via the EXISTING provider config branch (line 24); assert the provider returns the
         // same 32 bytes without any change to NodeOperatorSecretProvider itself.
-        using var temp = new TempDirectory();
+        using var temp = new FakeLocalAppData();
         using var configuration = new ConfigurationManager();
 
         DesktopBootstrap.EnsureLocalDataConfiguration(configuration, temp.ResolveFolder);
@@ -247,7 +247,7 @@ public sealed class DesktopBootstrapTests : IDisposable
         // atomic create-new persist means exactly one wins and every other process must adopt the winner's on-disk
         // secret rather than keep its own freshly-generated one — otherwise concurrent starts would split the
         // DB-encryption key. All resolved secrets must therefore be identical, and must round-trip through the provider.
-        using var temp = new TempDirectory();
+        using var temp = new FakeLocalAppData();
         const int workers = 24;
 
         using var barrier = new Barrier(workers);
@@ -282,7 +282,7 @@ public sealed class DesktopBootstrapTests : IDisposable
     {
         // The key file protects the DB-encryption secret, so on non-Windows it must be 0600 (owner read/write only).
         // Windows relies on the per-user %LOCALAPPDATA% ACL instead (no Unix file mode), so skip there.
-        using var temp = new TempDirectory();
+        using var temp = new FakeLocalAppData();
         using var configuration = new ConfigurationManager();
 
         DesktopBootstrap.EnsureLocalDataConfiguration(configuration, temp.ResolveFolder);
@@ -299,7 +299,7 @@ public sealed class DesktopBootstrapTests : IDisposable
     public void EnsureDirectory_CreatesTheDataDirectoryOwnerOnly()
     {
         Skip.When(OperatingSystem.IsWindows(), "Windows protects the data folder with the per-user profile ACL, not a Unix mode.");
-        using var temp = new TempDirectory();
+        using var temp = new FakeLocalAppData();
 
         AssertEx.Null(DesktopBootstrap.EnsureDirectory(temp.DataDirectory), "a directory created owner-only was not narrowed.");
 
@@ -311,7 +311,7 @@ public sealed class DesktopBootstrapTests : IDisposable
     public void EnsureDirectory_NarrowsAWiderExistingDirectoryAndReportsItsPreviousMode()
     {
         Skip.When(OperatingSystem.IsWindows(), "Windows protects the data folder with the per-user profile ACL, not a Unix mode.");
-        using var temp = new TempDirectory();
+        using var temp = new FakeLocalAppData();
         const UnixFileMode wide = (UnixFileMode)0b111_101_101; // 0755, what a default umask left
         Directory.CreateDirectory(temp.DataDirectory, wide);
         File.SetUnixFileMode(temp.DataDirectory, wide);
@@ -327,7 +327,7 @@ public sealed class DesktopBootstrapTests : IDisposable
     public void EnsureDirectory_NeverWidensTheOwnerBits()
     {
         Skip.When(OperatingSystem.IsWindows(), "Windows protects the data folder with the per-user profile ACL, not a Unix mode.");
-        using var temp = new TempDirectory();
+        using var temp = new FakeLocalAppData();
         const UnixFileMode ownerReadExecute = UnixFileMode.UserRead | UnixFileMode.UserExecute;
         Directory.CreateDirectory(temp.DataDirectory);
         File.SetUnixFileMode(temp.DataDirectory, ownerReadExecute | UnixFileMode.GroupRead);
@@ -340,7 +340,7 @@ public sealed class DesktopBootstrapTests : IDisposable
     [Test]
     public void EnsureLocalDataConfiguration_WhenConnectionStringAlreadySupplied_LeavesItUnchanged()
     {
-        using var temp = new TempDirectory();
+        using var temp = new FakeLocalAppData();
         const string suppliedConnectionString = "Data Source=/already/supplied/node.sqlite";
         using var configuration = new ConfigurationManager();
         configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
@@ -356,7 +356,7 @@ public sealed class DesktopBootstrapTests : IDisposable
     [Test]
     public void EnsureLocalDataConfiguration_WhenOperatorSecretAlreadySupplied_DoesNotGenerateKeyFile()
     {
-        using var temp = new TempDirectory();
+        using var temp = new FakeLocalAppData();
         var suppliedSecret = Convert.ToBase64String(new byte[NodeOperatorSecretProvider.ExpectedSecretLength]);
         using var configuration = new ConfigurationManager();
         configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
@@ -375,7 +375,7 @@ public sealed class DesktopBootstrapTests : IDisposable
     [Test]
     public void EnsureLocalDataConfiguration_FreshDataDirectory_GeneratesKeyAndReportsPendingManagedVault()
     {
-        using var temp = new TempDirectory();
+        using var temp = new FakeLocalAppData();
         using var configuration = new ConfigurationManager();
 
         var state = DesktopBootstrap.EnsureLocalDataConfiguration(configuration, temp.ResolveFolder);
@@ -389,7 +389,7 @@ public sealed class DesktopBootstrapTests : IDisposable
     public async Task EnsureLocalDataConfiguration_WhenTheDatabaseExistsButTheKeyIsMissing_RefusesToGenerateAKey()
     {
         // A fresh key would boot "fine" and then fail every encrypted read, and new writes would mix keys in one database.
-        using var temp = new TempDirectory();
+        using var temp = new FakeLocalAppData();
         Directory.CreateDirectory(temp.DataDirectory);
         await File.WriteAllBytesAsync(Path.Combine(temp.DataDirectory, DesktopBootstrap.DatabaseFileName), [1, 2, 3]);
         using var configuration = new ConfigurationManager();
@@ -409,7 +409,7 @@ public sealed class DesktopBootstrapTests : IDisposable
     public async Task EnsureLocalDataConfiguration_WhenTheDatabaseFileIsEmpty_StillGeneratesAKey()
     {
         // An empty file holds no encrypted rows, so it is a first run, not a lost key.
-        using var temp = new TempDirectory();
+        using var temp = new FakeLocalAppData();
         Directory.CreateDirectory(temp.DataDirectory);
         await File.WriteAllBytesAsync(Path.Combine(temp.DataDirectory, DesktopBootstrap.DatabaseFileName), []);
         using var configuration = new ConfigurationManager();
@@ -423,7 +423,7 @@ public sealed class DesktopBootstrapTests : IDisposable
     [Test]
     public async Task EnsureLocalDataConfiguration_LegacyRawKeyFile_InjectsItsSecretAndReportsPendingManagedVault()
     {
-        using var temp = new TempDirectory();
+        using var temp = new FakeLocalAppData();
         Directory.CreateDirectory(temp.DataDirectory);
         var legacySecret = Convert.ToBase64String(Enumerable.Range(1, NodeOperatorSecretProvider.ExpectedSecretLength).Select(static value => (byte)value).ToArray());
         await File.WriteAllTextAsync(Path.Combine(temp.DataDirectory, DesktopBootstrap.KeyFileName), legacySecret);
@@ -439,7 +439,7 @@ public sealed class DesktopBootstrapTests : IDisposable
     [Test]
     public async Task EnsureLocalDataConfiguration_V2VaultFile_InjectsNoSecretAndReportsLocked()
     {
-        using var temp = new TempDirectory();
+        using var temp = new FakeLocalAppData();
         Directory.CreateDirectory(temp.DataDirectory);
         var keyPath = Path.Combine(temp.DataDirectory, DesktopBootstrap.KeyFileName);
         var (file, _) = VaultFileCodec.Create(new byte[VaultKdf.KeyLength], "correct horse battery", DateTimeOffset.UnixEpoch, VaultKdf.MinimumIterations);
@@ -459,7 +459,7 @@ public sealed class DesktopBootstrapTests : IDisposable
     [Test]
     public void EnsureLocalDataConfiguration_OperatorSuppliedSecret_ReportsExternalAndLeavesTheVaultUnmanaged()
     {
-        using var temp = new TempDirectory();
+        using var temp = new FakeLocalAppData();
         using var configuration = new ConfigurationManager();
         configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
         {
@@ -474,40 +474,22 @@ public sealed class DesktopBootstrapTests : IDisposable
     }
 
     /// <summary>
-    ///     A disposable temp directory that stands in for %LOCALAPPDATA%. The resolver returns its root so the bootstrap
-    ///     builds the per-user data directory underneath it.
+    ///     Stands in for %LOCALAPPDATA%: the resolver returns the root of a temp directory, so the bootstrap builds the
+    ///     per-user data directory underneath it.
     /// </summary>
-    private sealed class TempDirectory : IDisposable
+    private sealed class FakeLocalAppData : IDisposable
     {
-        private readonly string _root;
+        private readonly TempDirectory _root = new("xe-desktop-bootstrap-tests");
 
-        public TempDirectory()
-        {
-            _root = Path.Combine(Path.GetTempPath(), "xe-desktop-bootstrap-tests", Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(_root);
-        }
+        public string DataDirectory => Path.Combine(_root.Path, DesktopBootstrap.ApplicationDataFolderName);
 
-        public string DataDirectory => Path.Combine(_root, DesktopBootstrap.ApplicationDataFolderName);
-
-        public void Dispose()
-        {
-            try
-            {
-                if (Directory.Exists(_root))
-                {
-                    Directory.Delete(_root, recursive: true);
-                }
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-                // Best-effort cleanup of the temp directory.
-            }
-        }
+        public void Dispose() =>
+            _root.Dispose();
 
         public string ResolveFolder(Environment.SpecialFolder folder)
         {
             _ = folder;
-            return _root;
+            return _root.Path;
         }
     }
 }

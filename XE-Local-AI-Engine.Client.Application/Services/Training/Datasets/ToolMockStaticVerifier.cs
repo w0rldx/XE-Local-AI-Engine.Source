@@ -3,20 +3,8 @@ namespace XE_Local_AI_Engine.Client.Services.Training.Datasets;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 
-public interface IToolMockStaticVerifier
-{
-    /// <summary>
-    ///     Statically verifies a mock body against the tool's parameter schema. Static only: no evaluation, no execution,
-    ///     no network. A body that fails cannot be saved active, and there is no fallthrough to real execution.
-    /// </summary>
-    ToolMockVerificationV1 Verify(ToolMockBodyV1 body, string? parameterSchema);
-
-    /// <summary>Parses raw mock JSON, returning a failing verdict instead of throwing on malformed input.</summary>
-    bool TryParse(ReadOnlySpan<byte> mockJson, [NotNullWhen(true)] out ToolMockBodyV1? body, [NotNullWhen(false)] out string? failureReason);
-}
-
-/// <inheritdoc />
-public sealed class ToolMockStaticVerifier : IToolMockStaticVerifier
+/// <summary>Statically checks tool mock bodies; stateless.</summary>
+public static class ToolMockStaticVerifier
 {
     /// <summary>
     ///     Markers of a value that would be interpreted rather than compared: template interpolation, shell or
@@ -28,7 +16,8 @@ public sealed class ToolMockStaticVerifier : IToolMockStaticVerifier
     /// </remarks>
     private static readonly string[] ExpressionMarkers = ["{{", "}}", "${", "$(", "#{", "<%", "%>", "`"];
 
-    public bool TryParse(ReadOnlySpan<byte> mockJson, [NotNullWhen(true)] out ToolMockBodyV1? body, [NotNullWhen(false)] out string? failureReason)
+    /// <summary>Parses raw mock JSON, returning a failing verdict instead of throwing on malformed input.</summary>
+    public static bool TryParse(ReadOnlySpan<byte> mockJson, [NotNullWhen(true)] out ToolMockBodyV1? body, [NotNullWhen(false)] out string? failureReason)
     {
         try
         {
@@ -44,7 +33,11 @@ public sealed class ToolMockStaticVerifier : IToolMockStaticVerifier
         }
     }
 
-    public ToolMockVerificationV1 Verify(ToolMockBodyV1 body, string? parameterSchema)
+    /// <summary>
+    ///     Statically verifies a mock body against the tool's parameter schema. Static only: no evaluation, no execution,
+    ///     no network. A body that fails cannot be saved active, and there is no fallthrough to real execution.
+    /// </summary>
+    public static ToolMockVerificationV1 Verify(ToolMockBodyV1 body, string? parameterSchema)
     {
         ArgumentNullException.ThrowIfNull(body);
         var findings = new List<string>();

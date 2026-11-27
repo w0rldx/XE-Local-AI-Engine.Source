@@ -9,6 +9,7 @@ import type {
 	XeLocalAiEngineClientEndpointsSkillsV1SkillImportCandidateResponse,
 	XeLocalAiEngineClientEndpointsSkillsV1SkillResourceSummaryResponse,
 } from "@/core/api/generated";
+import { formatCount } from "@/core/formatting/NumberFormatting";
 import { SKILL_BODY_GUIDANCE_LINES } from "@/core/skills/models/SkillModels";
 import { CodeEditor } from "@/core/ui/components/CodeEditor/CodeEditor";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
@@ -75,8 +76,8 @@ export function SkillImportCandidateCard({ candidate, token, selected, onToggle 
 
 				<Text size="xs" c={isBodyOverGuidance ? "orange" : "dimmed"} data-testid={`skill-import-size-${candidate.name}`}>
 					{t("pages.skills.import.candidate.size", "{{bytes}} bytes · {{lines}} lines", {
-						bytes: candidate.bodySizeBytes.toLocaleString(),
-						lines: candidate.bodyLineCount.toLocaleString(),
+						bytes: formatCount(candidate.bodySizeBytes),
+						lines: formatCount(candidate.bodyLineCount),
 					})}
 					{isBodyOverGuidance
 						? ` · ${t("pages.skills.import.candidate.overGuidance", "over the {{lines}}-line guidance", {
@@ -239,7 +240,7 @@ function SkillImportResourceRow({ token, skillName, resource }: SkillImportResou
 				</Text>
 				<Group gap="xs" wrap="nowrap">
 					<Text size="xs" c="dimmed">
-						{`${resource.mediaType} · ${resource.sizeBytes.toLocaleString()} B`}
+						{`${resource.mediaType} · ${formatCount(resource.sizeBytes)} B`}
 					</Text>
 					<Button
 						size="compact-xs"

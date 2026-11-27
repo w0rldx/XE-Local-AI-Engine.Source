@@ -28,7 +28,7 @@ public sealed class NodeKeyCheckTests : IDisposable
     public async Task VerifyOrRecord_UnderTheSameKey_PassesOnEveryLaterStart()
     {
         var databasePath = await MigratedDatabaseAsync();
-        using var key = new OtherKeyHolder(fill: 7);
+        using var key = KeyFilledWith(7);
 
         await using (var first = CreateContext(databasePath, key))
         {
@@ -51,7 +51,7 @@ public sealed class NodeKeyCheckTests : IDisposable
             await original.VerifyOrRecordNodeKeyCheckAsync(CancellationToken.None);
         }
 
-        using var otherKey = new OtherKeyHolder(fill: 7);
+        using var otherKey = KeyFilledWith(7);
         await using var mismatched = CreateContext(databasePath, otherKey);
 
         var exception = await AssertEx.ThrowsAsync<NodeKeyCustodyException>(() => mismatched.VerifyOrRecordNodeKeyCheckAsync(CancellationToken.None));
@@ -70,7 +70,7 @@ public sealed class NodeKeyCheckTests : IDisposable
             await original.VerifyOrRecordNodeKeyCheckAsync(CancellationToken.None);
         }
 
-        using var otherKey = new OtherKeyHolder(fill: 7);
+        using var otherKey = KeyFilledWith(7);
         await using var mismatched = CreateContext(databasePath, otherKey);
 
         var exception = await AssertEx.ThrowsAsync<NodeKeyCustodyException>(() => mismatched.VerifyOrRecordNodeKeyCheckAsync(CancellationToken.None));
@@ -83,7 +83,7 @@ public sealed class NodeKeyCheckTests : IDisposable
     {
         // An install that predates the check: encrypted rows under key A, no marker yet.
         var databasePath = await MigratedDatabaseAsync();
-        using var keyA = new OtherKeyHolder(fill: 7);
+        using var keyA = KeyFilledWith(7);
         await using (var seed = CreateContext(databasePath, keyA))
         {
             seed.Conversations.Add(new NodeConversation
@@ -94,7 +94,7 @@ public sealed class NodeKeyCheckTests : IDisposable
             await seed.SaveChangesAsync();
         }
 
-        using var keyB = new OtherKeyHolder(fill: 9);
+        using var keyB = KeyFilledWith(9);
         await using (var wrong = CreateContext(databasePath, keyB))
         {
             _ = await AssertEx.ThrowsAsync<NodeKeyCustodyException>(() => wrong.VerifyOrRecordNodeKeyCheckAsync(CancellationToken.None));
@@ -117,13 +117,13 @@ public sealed class NodeKeyCheckTests : IDisposable
     public async Task VerifyOrRecord_WhenTheOnlyCiphertextIsAnAgentDefinition_RefusesAWrongKey()
     {
         var databasePath = await MigratedDatabaseAsync();
-        using var keyA = new OtherKeyHolder(fill: 7);
+        using var keyA = KeyFilledWith(7);
         await using (var seed = CreateContext(databasePath, keyA))
         {
             _ = await new AgentDefinitionStore(seed, TimeProvider.System).AddAsync(AgentInput());
         }
 
-        using var keyB = new OtherKeyHolder(fill: 9);
+        using var keyB = KeyFilledWith(9);
         await using var wrong = CreateContext(databasePath, keyB);
 
         _ = await AssertEx.ThrowsAsync<NodeKeyCustodyException>(() => wrong.VerifyOrRecordNodeKeyCheckAsync(CancellationToken.None));
@@ -134,7 +134,7 @@ public sealed class NodeKeyCheckTests : IDisposable
     public async Task VerifyOrRecord_WhenOneTitleIsCorruptButAnAgentDecrypts_AcceptsTheRightKey()
     {
         var databasePath = await MigratedDatabaseAsync();
-        using var keyA = new OtherKeyHolder(fill: 7);
+        using var keyA = KeyFilledWith(7);
         var conversationId = Guid.NewGuid();
         await using (var seed = CreateContext(databasePath, keyA))
         {
@@ -193,19 +193,6 @@ public sealed class NodeKeyCheckTests : IDisposable
         return new NodeChatDbContext(options, keyHolder);
     }
 
-    private sealed class OtherKeyHolder : INodeSqliteKeyHolder
-    {
-        private readonly byte[] _key;
-
-        public OtherKeyHolder(byte fill)
-        {
-            _key = Enumerable.Repeat(fill, 32).ToArray();
-        }
-
-        public ReadOnlyMemory<byte> Key => _key;
-
-        public void Dispose()
-        {
-        }
-    }
+    private static FixedNodeSqliteKeyHolder KeyFilledWith(byte fill) =>
+        new(Enumerable.Repeat(fill, 32).ToArray());
 }

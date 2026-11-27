@@ -136,8 +136,8 @@ public sealed class BenchmarkComparisonExecutorTests
     /// <summary>Judges every comparison of a one-item, two-model suite whose runs both stored <paramref name="parts" />; returns each judge prompt's user payload.</summary>
     private static async Task<List<string>> JudgePayloadsAsync(IReadOnlyList<BenchmarkOutputPart> parts)
     {
-        var installed = BenchmarkJudgeExecutorTests.Installed();
-        var snapshot = BenchmarkJudgeExecutorTests.Snapshot(installed);
+        var installed = BenchmarkJudgeTestSupport.Installed();
+        var snapshot = BenchmarkJudgeTestSupport.Snapshot(installed);
         var storedParts = BenchmarkExecutionSerialization.SerializeParts(parts);
         BenchmarkRunRecord[] runs =
         [
@@ -187,7 +187,7 @@ public sealed class BenchmarkComparisonExecutorTests
 
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>())
-                  .Returns(_ => new BenchmarkJudgeExecutorTests.TrackingAsyncDisposable());
+                  .Returns(_ => new BenchmarkJudgeTestSupport.TrackingAsyncDisposable());
         var payloads = new List<string>();
         var runner = Substitute.For<IInvocationRunner>();
         runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
@@ -196,11 +196,11 @@ public sealed class BenchmarkComparisonExecutorTests
                   var package = call.Arg<InvocationExecutionContext>().Package;
                   payloads.Add(package.ConversationContext[0].Content);
                   dispatcher.InvocationStateChanged += Raise.EventWith(dispatcher,
-                      new InvocationStateChangedEventArgs(BenchmarkJudgeExecutorTests.State(package.InvocationId,
+                      new InvocationStateChangedEventArgs(BenchmarkJudgeTestSupport.State(package.InvocationId,
                           """{"schemaVersion":1,"verdict":"a","rationale":"A."}""")));
                   return Task.CompletedTask;
               });
-        await using var lease = new BenchmarkJudgeExecutorTests.FakeLease(installed);
+        await using var lease = new BenchmarkJudgeTestSupport.FakeLease(installed);
         var executor = BenchmarkPairwiseSuiteEndToEndTests.Executor(pairwiseStore, judgeStore, runStore, taskItemStore, snapshot, lease, dispatcher, runner);
 
         foreach (var comparison in comparisons)
@@ -225,8 +225,8 @@ public sealed class BenchmarkComparisonExecutorTests
     /// <summary>Judges one comparison per item of a two-item, two-model suite and returns the reference each judge prompt carried, by item.</summary>
     private static async Task<Dictionary<Guid, string?>> JudgeOnePairPerItemAsync(string? policyReference, string? zeroReference, string? oneReference)
     {
-        var installed = BenchmarkJudgeExecutorTests.Installed();
-        var snapshot = BenchmarkJudgeExecutorTests.Snapshot(installed);
+        var installed = BenchmarkJudgeTestSupport.Installed();
+        var snapshot = BenchmarkJudgeTestSupport.Snapshot(installed);
         BenchmarkRunRecord[] runs =
         [
             BenchmarkPairwiseSuiteEndToEndTests.SuiteRun(snapshot, ItemZero, "cell-27b", "big"),
@@ -271,7 +271,7 @@ public sealed class BenchmarkComparisonExecutorTests
 
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>())
-                  .Returns(_ => new BenchmarkJudgeExecutorTests.TrackingAsyncDisposable());
+                  .Returns(_ => new BenchmarkJudgeTestSupport.TrackingAsyncDisposable());
         var references = new List<string?>();
         var runner = Substitute.For<IInvocationRunner>();
         runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
@@ -282,11 +282,11 @@ public sealed class BenchmarkComparisonExecutorTests
                   var reference = payload.RootElement.GetProperty("referenceAnswer");
                   references.Add(reference.ValueKind == JsonValueKind.Null ? null : reference.GetString());
                   dispatcher.InvocationStateChanged += Raise.EventWith(dispatcher,
-                      new InvocationStateChangedEventArgs(BenchmarkJudgeExecutorTests.State(package.InvocationId,
+                      new InvocationStateChangedEventArgs(BenchmarkJudgeTestSupport.State(package.InvocationId,
                           """{"schemaVersion":1,"verdict":"a","rationale":"A."}""")));
                   return Task.CompletedTask;
               });
-        await using var lease = new BenchmarkJudgeExecutorTests.FakeLease(installed);
+        await using var lease = new BenchmarkJudgeTestSupport.FakeLease(installed);
         var executor = BenchmarkPairwiseSuiteEndToEndTests.Executor(pairwiseStore, judgeStore, runStore, taskItemStore, snapshot, lease, dispatcher, runner);
 
         Dictionary<Guid, string?> seen = [];

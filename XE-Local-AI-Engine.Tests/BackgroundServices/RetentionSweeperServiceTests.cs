@@ -249,7 +249,7 @@ public sealed class RetentionSweeperServiceTests : IDisposable
         // A work session's artifact BYTES live on disk under the session id, so the conversation row purge cannot
         // reach them. Retention must tear them down the same way it tears down upload blobs, or ageing out the
         // conversation leaves the session's content readable on disk forever.
-        await using var factory = WorkSessionServiceTests.NewFactory();
+        await using var factory = WorkSessionTestSupport.NewFactory();
         var sessionId = Guid.NewGuid();
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var artifactDirectory = await WriteArtifactBlobAsync(factory.Services, sessionId);
@@ -267,7 +267,7 @@ public sealed class RetentionSweeperServiceTests : IDisposable
     public async Task InteractivePurge_AlsoDeletesWorkSessionArtifactBlobs()
     {
         // Same footprint, the other entry point: an immediate purge from the chat surface.
-        await using var factory = WorkSessionServiceTests.NewFactory();
+        await using var factory = WorkSessionTestSupport.NewFactory();
         var sessionId = Guid.NewGuid();
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var artifactDirectory = await WriteArtifactBlobAsync(factory.Services, sessionId);
@@ -332,7 +332,7 @@ public sealed class RetentionSweeperServiceTests : IDisposable
     [Test]
     public async Task OrphanResweep_SparesTheArtifactScopeOfALiveSession()
     {
-        await using var factory = WorkSessionServiceTests.NewFactory();
+        await using var factory = WorkSessionTestSupport.NewFactory();
         var sessionId = Guid.NewGuid();
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var artifactDirectory = await WriteArtifactBlobAsync(factory.Services, sessionId);

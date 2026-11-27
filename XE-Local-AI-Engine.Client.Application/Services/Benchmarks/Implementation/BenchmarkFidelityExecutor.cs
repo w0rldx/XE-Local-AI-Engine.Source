@@ -23,7 +23,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     drift a display-only axis must not introduce. And the perplexity window is pinned to 512 while the run's
 ///     placement is replayed — the placement is what differs between compared runs, the window is what makes them comparable.
 /// </remarks>
-public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
+public sealed class BenchmarkFidelityExecutor
 {
     /// <summary>
     ///     Mirrors the quantizer's refusal shape: this runtime cannot do the thing, and the message names the two

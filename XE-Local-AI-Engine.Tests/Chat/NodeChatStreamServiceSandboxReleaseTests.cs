@@ -260,7 +260,7 @@ public sealed class NodeChatStreamServiceSandboxReleaseTests
 
     // Ends the run the way an unanswered approval does: the real runner classifies the sweep's ApprovalExpiredException and
     // reports the failure; the faulting variant covers a run task that escapes with the exception instead.
-    private sealed class ExpiredApprovalInvocationRunner : IInvocationRunner
+    private sealed class ExpiredApprovalInvocationRunner : InvocationRunnerStub
     {
         private readonly IWorkerEventDispatcher _dispatcher;
         private readonly bool _fault;
@@ -271,9 +271,7 @@ public sealed class NodeChatStreamServiceSandboxReleaseTests
             _fault = fault;
         }
 
-        public int ActiveInvocationCount => 0;
-
-        public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
+        public override async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
             var expired = new ApprovalExpiredException("run_in_agent_home");
             if (_fault)
@@ -282,35 +280,6 @@ public sealed class NodeChatStreamServiceSandboxReleaseTests
             }
 
             await _dispatcher.ReportInvocationFailedAsync(context.Package.InvocationId, expired.Message, FailureCategory.Timeout);
-        }
-
-        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(true);
-        }
-
-        public void Cancel(Guid invocationId)
-        {
-        }
-
-        public void CancelDetached(Guid invocationId)
-        {
-        }
-
-        public void CancelAll()
-        {
-        }
-
-        public void CleanupStaleToolCalls(TimeSpan maxAge)
-        {
-        }
-
-        public void ResolveApprovalResult(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
-        {
-        }
-
-        public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
-        {
         }
     }
 }

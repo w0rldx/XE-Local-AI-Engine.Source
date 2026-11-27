@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 
@@ -182,14 +183,8 @@ internal sealed class ImageModelRegistry : IImageModelRegistry, IDisposable
             Models = entries.ToList()
         };
 
-        var tempPath = _manifestPath + ".tmp";
-        await using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
-        {
-            await JsonSerializer.SerializeAsync(stream, document, SerializerOptions, ct).ConfigureAwait(false);
-        }
-
-        // Atomic replace so a crash mid-write never leaves a half-written manifest.
-        File.Move(tempPath, _manifestPath, overwrite: true);
+        // Atomic and owner-only, so a crash mid-write never leaves a half-written manifest.
+        await SecureFilePermissions.WriteJsonAtomicAsync(_manifestPath, document, SerializerOptions, ct).ConfigureAwait(false);
     }
 
     private sealed class ManifestDocument

@@ -10,9 +10,9 @@ using XE_Local_AI_Engine.Client.Services.ModelLab;
 /// <summary>Pins or unpins a finished experiment. A pinned one survives retention's trim; a manual delete still removes it.</summary>
 public sealed class SetModelLabExperimentPinEndpoint : Endpoint<SetModelLabExperimentPinRequest>
 {
-    private readonly ModelLabExperimentService _experiments;
+    private readonly ModelLabExperimentReader _experiments;
 
-    public SetModelLabExperimentPinEndpoint(ModelLabExperimentService experiments)
+    public SetModelLabExperimentPinEndpoint(ModelLabExperimentReader experiments)
     {
         ArgumentNullException.ThrowIfNull(experiments);
         _experiments = experiments;

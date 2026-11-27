@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
-using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
+using XE_Local_AI_Engine.Tests.Testing;
 
 internal enum DevelopmentAttemptStatus
 {
@@ -211,14 +211,14 @@ internal sealed class DevelopmentRestartRecoveryHarness : IAsyncDisposable
         var worktreePath = Path.Combine(rootPath, "worktree");
         Directory.CreateDirectory(repositoryPath);
 
-        await RunGitAsync(repositoryPath, "init", "--initial-branch=main");
-        await RunGitAsync(repositoryPath, "config", "user.email", "development-recovery@localhost.test");
-        await RunGitAsync(repositoryPath, "config", "user.name", "Development Restart Recovery");
+        await TestGit.RunAsync(repositoryPath, "init", "--initial-branch=main");
+        await TestGit.RunAsync(repositoryPath, "config", "user.email", "development-recovery@localhost.test");
+        await TestGit.RunAsync(repositoryPath, "config", "user.name", "Development Restart Recovery");
         await File.WriteAllTextAsync(Path.Combine(repositoryPath, "tracked.txt"), "base\n");
-        await RunGitAsync(repositoryPath, "add", "tracked.txt");
-        await RunGitAsync(repositoryPath, "commit", "-m", "base");
-        var protectedBranchCommit = await RunGitAsync(repositoryPath, "rev-parse", "main");
-        await RunGitAsync(repositoryPath, "worktree", "add", "-b", "development-recovery", worktreePath, "main");
+        await TestGit.RunAsync(repositoryPath, "add", "tracked.txt");
+        await TestGit.RunAsync(repositoryPath, "commit", "-m", "base");
+        var protectedBranchCommit = (await TestGit.RunAsync(repositoryPath, "rev-parse", "main")).TrimEnd('\r', '\n');
+        await TestGit.RunAsync(repositoryPath, "worktree", "add", "-b", "development-recovery", worktreePath, "main");
 
         return new DevelopmentRestartRecoveryHarness(rootPath, repositoryPath, worktreePath, protectedBranchCommit);
     }
@@ -350,15 +350,15 @@ internal sealed class DevelopmentRestartRecoveryHarness : IAsyncDisposable
     public async Task CommitWorkspaceMutationOutsideCoordinatorAsync(string content)
     {
         await MutateWorkspaceOutsideCoordinatorAsync(content);
-        await RunGitAsync(WorktreePath, "add", "tracked.txt");
-        await RunGitAsync(WorktreePath, "commit", "-m", "unexpected base mutation");
+        await TestGit.RunAsync(WorktreePath, "add", "tracked.txt");
+        await TestGit.RunAsync(WorktreePath, "commit", "-m", "unexpected base mutation");
     }
 
     public async Task<WorkspaceSnapshot> CaptureWorkspaceAsync()
     {
-        var baseCommit = await RunGitAsync(WorktreePath, "rev-parse", "HEAD");
-        var patch = await RunGitAsync(WorktreePath, "diff", "--binary", "--full-index", "--no-ext-diff", "HEAD", "--");
-        var status = await RunGitAsync(WorktreePath, "status", "--porcelain=v1", "--untracked-files=all");
+        var baseCommit = (await TestGit.RunAsync(WorktreePath, "rev-parse", "HEAD")).TrimEnd('\r', '\n');
+        var patch = (await TestGit.RunAsync(WorktreePath, "diff", "--binary", "--full-index", "--no-ext-diff", "HEAD", "--")).TrimEnd('\r', '\n');
+        var status = (await TestGit.RunAsync(WorktreePath, "status", "--porcelain=v1", "--untracked-files=all")).TrimEnd('\r', '\n');
         var changedFiles = ParseChangedFiles(status);
         var manifest = await BuildManifestAsync(changedFiles);
         var subjectHash = Hash(patch + "\n--manifest--\n" + manifest);
@@ -374,7 +374,7 @@ internal sealed class DevelopmentRestartRecoveryHarness : IAsyncDisposable
 
     public async Task<string> ReadProtectedBranchCommitAsync()
     {
-        return await RunGitAsync(RepositoryPath, "rev-parse", "main");
+        return (await TestGit.RunAsync(RepositoryPath, "rev-parse", "main")).TrimEnd('\r', '\n');
     }
 
     public ValueTask DisposeAsync()
@@ -483,41 +483,5 @@ internal sealed class DevelopmentRestartRecoveryHarness : IAsyncDisposable
     private static string Hash(string value)
     {
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
-    }
-
-    private static async Task<string> RunGitAsync(string workingDirectory, params string[] arguments)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "git",
-            WorkingDirectory = workingDirectory,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        foreach (var argument in arguments)
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
-
-        using var process = new Process
-        {
-            StartInfo = startInfo
-        };
-        process.Start();
-        var standardOutput = process.StandardOutput.ReadToEndAsync();
-        var standardError = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
-        var output = await standardOutput;
-        var error = await standardError;
-
-        if (process.ExitCode != 0)
-        {
-            throw new InvalidOperationException($"git {string.Join(' ', arguments)} failed with exit code {process.ExitCode}: {error}");
-        }
-
-        return output.TrimEnd('\r', '\n');
     }
 }

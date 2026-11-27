@@ -20,11 +20,11 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 public sealed class InspectGgufRepositoryEndpoint : Endpoint<InspectGgufRepositoryRequest, InspectGgufRepositoryResponse>
 {
     private readonly IHuggingFaceGgufDiscovery _discovery;
-    private readonly IGgufVariantRecommender _recommender;
+    private readonly GgufVariantRecommender _recommender;
     private readonly ILogger<InspectGgufRepositoryEndpoint> _logger;
 
     public InspectGgufRepositoryEndpoint(IHuggingFaceGgufDiscovery discovery,
-        IGgufVariantRecommender recommender,
+        GgufVariantRecommender recommender,
         ILogger<InspectGgufRepositoryEndpoint> logger)
     {
         ArgumentNullException.ThrowIfNull(discovery);

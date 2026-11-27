@@ -15,9 +15,9 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders.Auth;
 /// </remarks>
 public sealed class EntraDeviceCodeSignInEndpoint : EndpointWithoutRequest<EntraDeviceCodeSignInResponse>
 {
-    private readonly IEntraDeviceCodeSignInCoordinator _signInCoordinator;
+    private readonly EntraDeviceCodeSignInCoordinator _signInCoordinator;
 
-    public EntraDeviceCodeSignInEndpoint(IEntraDeviceCodeSignInCoordinator signInCoordinator)
+    public EntraDeviceCodeSignInEndpoint(EntraDeviceCodeSignInCoordinator signInCoordinator)
     {
         ArgumentNullException.ThrowIfNull(signInCoordinator);
         _signInCoordinator = signInCoordinator;

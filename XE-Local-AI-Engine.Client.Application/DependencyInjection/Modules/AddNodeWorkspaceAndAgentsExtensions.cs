@@ -133,7 +133,7 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         builder.Services.AddScoped<ILocalModelAdministrationService, LocalModelAdministrationService>();
         // Unload fan-out for the eject route: every llama-server role. Singleton like the
         // other lifecycle coordinators, since the process supervisor it consumes is one too.
-        builder.Services.AddSingleton<IModelUnloadCoordinator, ModelUnloadCoordinator>();
+        builder.Services.AddSingleton<ModelUnloadCoordinator>();
         builder.Services.AddSingleton<DefaultModelSelectionPolicy>();
         builder.Services.AddHostedService<LocalModelDeletionStartupReconciler>();
         builder.Services.AddScoped<GgufAcquisitionStateProbe>();
@@ -167,7 +167,7 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         builder.Services.AddScoped<IPlaybookActionService, PlaybookActionService>();
         // Agent skill service: validates skill content (MAF-safe Name, NOCASE-unique, length caps) and delegates persistence and
         // versioning to the store; the resolver turns an agent's assigned skills into the runtime package for progressive disclosure.
-        builder.Services.AddScoped<IAgentSkillService, AgentSkillService>();
+        builder.Services.AddScoped<AgentSkillService>();
         // AddMemoryCache is idempotent (TryAdd), so registering it here keeps this module self-contained whatever the module order.
         builder.Services.AddMemoryCache();
         // Third-party skill import: its named client disables redirects, so the github.com → codeload hop is re-validated against the
@@ -184,7 +184,7 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         configuration.GetSection(SkillImportOptions.SectionName).Bind(skillImportOptions);
         builder.Services.AddSingleton(skillImportOptions);
 
-        builder.Services.AddScoped<ISkillImportService>(static sp => new SkillImportService(sp.GetRequiredService<IAgentSkillStore>(),
+        builder.Services.AddScoped(static sp => new SkillImportService(sp.GetRequiredService<IAgentSkillStore>(),
             sp.GetRequiredService<IMemoryCache>(),
             sp.GetRequiredService<TimeProvider>(),
             sp.GetRequiredService<IHttpClientFactory>().CreateClient(GitHubSkillArchiveDownloader.HttpClientName),

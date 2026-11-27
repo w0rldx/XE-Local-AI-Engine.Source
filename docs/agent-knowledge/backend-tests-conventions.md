@@ -101,6 +101,10 @@ the browser E2E host.
 
 **Rule:** a test that builds a provider with `AddNodeScheduler` registers `SchedulerShutdownGuard.AddTo` and disposes it, so every scheduler the provider started is shut down even when the test fails before its own `Shutdown`; production's `UseBackgroundThreads = true` is wiki 06's. **Prevents:** the ADO store's misfire handler, a foreground thread by default since Quartz 4, keeping the host alive after one failed scheduler test, so the run hangs instead of reporting the red. **Authority:** `SchedulerShutdownGuard` (`Client.Persistence.Tests`); `NodeSchedulerServiceCollectionExtensions.AddNodeScheduler`.
 
+### An in-process MCP test tool honours its token and teardown runs under one deadline
+
+**Rule:** a blocking tool served by `InProcMcpServer` awaits its gate with the call's `CancellationToken`, a test releases that gate in `finally`, and the fixture's whole teardown runs under one deadline, recording an expiry in `McpTeardownLog` instead of throwing it. **Prevents:** a test host hanging the backend gate: `McpServer.DisposeAsync` waits for in-flight handlers, so a gated tool that ignores cancellation, left parked by a failed assertion, blocks disposal forever. **Authority:** `InProcMcpServer.DisposeAsync`, `McpTeardownLog`, `InProcMcpServerSmokeTests.Dispose_WithAnUncancellableToolCallInFlight_CompletesWithinTheBound`.
+
 ## Browser E2E host
 
 ### a solution build overwrites the E2E test host, so the flagged build must be the LAST one before a `--no-build` E2E run

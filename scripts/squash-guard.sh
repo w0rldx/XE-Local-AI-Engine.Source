@@ -2,8 +2,9 @@
 # squash-guard.sh — the checks the coordinator runs on develop immediately before `git merge --squash <branch>`.
 #
 # It replaces the hand-run trio (clean tree, on develop, develop is an ancestor of the branch) and adds the
-# one nobody could remember: the branch tip is the tip the backend gate last passed on. It NEVER merges; on
-# success it prints the squash commands to run next.
+# one nobody could remember: the branch tip is the tip the backend gate last passed on, and the tip every
+# required lane (scripts/run-gate-lane.sh) last ran green on. It NEVER merges; on success it prints the squash
+# commands to run next.
 #
 # Usage:
 #   scripts/squash-guard.sh <branch> [--repo <path>] [--gate-log <path>]
@@ -14,6 +15,19 @@
 #             scripts/run-backend-tests.sh: <time> <worktree> <tip> Tests=p/f/s ... scope=<scope> ... exit=<code>.
 #             scope is full, no-build, shard, siblings-only or contracts-skipped; only full is accepted.
 #             A tip suffixed +dirty or +moved never equals a branch tip, so it never authorises a squash.
+#             The backend row is the newest row ending exit=0 with no lane= field. Lane rows are
+#             <time> <worktree> <tip> lane=<name> wall=<s> lane-exit=<code> (scripts/run-gate-lane.sh).
+#
+# Required lanes: openapi always; frontend unless every path of the branch diff against its merge base with
+# develop (renames read as a deletion plus an addition) is under docs/ or tools/training/ or ends in .md:
+# acceptance reads far beyond the SPA (the backend package graph through licenses:check, the CI workflow's
+# Node major, the OpenAPI breaking check). Every lane is required when the merge base or the diff cannot be read. Per
+# required lane the NEWEST row for the worktree counts: it must hold the unsuffixed branch tip and lane-exit=0.
+#
+# Last, scripts/ratchet-baseline-check.py compares every shrink-only allowlist and baseline at the branch tip with
+# the merge base: an added key or a raised limit fails 21, and so does a comparison that cannot run. The operator
+# accepts a reviewed widening by setting XE_RATCHET_WIDEN_REASON=<why> for this run; the reason is printed. A list new
+# on the branch is allowed once and printed as NEW, also when this develop copy of the checker cannot parse it.
 #
 # Exit codes (each failure also prints its numbered reason on stderr):
 #   0  all checks passed            10 main checkout has changes (untracked included)
@@ -28,6 +42,10 @@
 #                                   18 the last exit=0 run recorded failed tests (Tests=p/f/s with f > 0)
 #                                   19 the last exit=0 run was partial (scope= other than full, such
 #                                      as contracts-skipped: the release contract lane was bypassed)
+#                                   20 a required lane's newest row for that worktree is missing, red,
+#                                      for another tip, or suffixed +dirty/+moved
+#                                   21 a shrink-only allowlist or baseline widened against the merge base,
+#                                      or that comparison could not run
 set -uo pipefail
 
 SCRIPT_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
@@ -101,7 +119,7 @@ worktree_real="$(realpath "${worktree}")"
 gated=""
 while IFS= read -r line; do
   IFS=$'\t' read -r -a f <<<"${line}"
-  [[ "${#f[@]}" -ge 4 && "${f[-1]}" == "exit=0" ]] || continue
+  [[ "${#f[@]}" -ge 4 && "${f[-1]}" == "exit=0" && "${f[3]}" != lane=* ]] || continue
   [[ "$(realpath -m "${f[1]}")" == "${worktree_real}" ]] && gated="${line}"
 done <"${gate_log}"
 [[ -n "${gated}" ]] || fail "16: no gated run recorded: ${gate_log} has no exit=0 line for ${worktree}."
@@ -122,7 +140,48 @@ IFS=/ read -r _ failed _ <<<"${tests}"
 [[ "${scope}" == full ]] \
   || fail "19: last green gate of ${worktree} recorded scope=${scope:-<missing>}: only a full run (built, unsharded, every lane, release contract tests not bypassed; contracts-skipped is not full) certifies a squash."
 
-echo "OK: ${branch} @ ${tip} gated ${f[0]}, ancestor of develop, trees clean"
+gated_at="${f[0]}"
+
+required=(openapi)
+if base="$(g merge-base refs/heads/develop "${ref}" 2>/dev/null)"; then
+  # Pathspec * crosses directories, so *.md excludes Markdown at any depth.
+  g diff --quiet --no-renames "${base}" "${ref}" -- . ':(exclude)docs/' ':(exclude)*.md' \
+    ':(exclude)tools/training/' >/dev/null 2>&1
+  case $? in
+    0) ;;
+    1) required+=(frontend) ;;
+    *) required+=(frontend); echo "squash-guard: the branch diff could not be read; every lane is required." >&2 ;;
+  esac
+else
+  required+=(frontend)
+  echo "squash-guard: no merge base of '${branch}' with develop; every lane is required." >&2
+fi
+lanes_ok=""
+for lane in "${required[@]}"; do
+  row=""
+  while IFS= read -r line; do
+    IFS=$'\t' read -r -a f <<<"${line}"
+    [[ "${#f[@]}" -ge 6 && "${f[3]}" == "lane=${lane}" && "${f[-1]}" == lane-exit=* ]] || continue
+    [[ "$(realpath -m "${f[1]}")" == "${worktree_real}" ]] && row="${line}"
+  done <"${gate_log}"
+  [[ -n "${row}" ]] \
+    || fail "20: no ${lane} lane run recorded for ${worktree}: run scripts/run-gate-lane.sh ${lane} on ${tip}."
+  IFS=$'\t' read -r -a f <<<"${row}"
+  if [[ "${f[2]}" == *+* ]]; then
+    fail "20: last ${lane} lane run of ${worktree} recorded tip ${f[2]}: the tree was dirty when it started or HEAD moved during it, so it certifies no commit. Run it on ${tip}."
+  fi
+  [[ "${f[2]}" == "${tip}" ]] \
+    || fail "20: last ${lane} lane run of ${worktree} ran on ${f[2]}, but '${branch}' is at ${tip}: run scripts/run-gate-lane.sh ${lane}."
+  [[ "${f[-1]}" == lane-exit=0 ]] \
+    || fail "20: last ${lane} lane run of ${worktree} on ${tip} recorded ${f[-1]}: it must be green."
+  lanes_ok+="${lanes_ok:+, }${lane} ${f[0]}"
+done
+
+python3 "${SCRIPT_DIR}/ratchet-baseline-check.py" "${ref}" --repo "${main}" --base refs/heads/develop \
+  || fail "21: '${branch}' widens a shrink-only allowlist or baseline, or the comparison could not run (above)."
+
+echo "OK: ${branch} @ ${tip} gated ${gated_at}, ancestor of develop, trees clean"
+echo "Lanes green on this tip: ${lanes_ok}"
 echo "Next (not run by this script):"
 printf '  git -C %q merge --squash %q\n' "${main}" "${ref}"
 printf '  git -C %q commit\n' "${main}"

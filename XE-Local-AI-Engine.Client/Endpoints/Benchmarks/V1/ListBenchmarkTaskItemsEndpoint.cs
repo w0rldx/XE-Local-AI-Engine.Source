@@ -14,10 +14,10 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 /// </remarks>
 public sealed class ListBenchmarkTaskItemsEndpoint : Endpoint<BenchmarkProjectRouteRequest, ListBenchmarkTaskItemsResponse>
 {
-    private readonly IBenchmarkTaskItemService _items;
+    private readonly BenchmarkTaskItemService _items;
     private readonly BenchmarkRecordService _records;
 
-    public ListBenchmarkTaskItemsEndpoint(IBenchmarkTaskItemService items, BenchmarkRecordService records)
+    public ListBenchmarkTaskItemsEndpoint(BenchmarkTaskItemService items, BenchmarkRecordService records)
     {
         ArgumentNullException.ThrowIfNull(items);
         ArgumentNullException.ThrowIfNull(records);

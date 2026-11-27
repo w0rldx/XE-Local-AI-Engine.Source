@@ -13,11 +13,6 @@ using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
-public interface IBenchmarkComparisonExecutor
-{
-    Task ExecuteAsync(BenchmarkClaimedWork work, CancellationToken cancellationToken);
-}
-
 /// <summary>
 ///     Runs one ORDERED judging of one pair: the two runs' answers side by side, in the presentation order the
 ///     comparison row names, under the pairwise prompt and its constrained-decoding schema.
@@ -28,7 +23,7 @@ public interface IBenchmarkComparisonExecutor
 ///     stored, the task-case invariant is re-asserted before anything is leased, and the cohort's fit is re-attempted
 ///     after every success — a no-op until the last comparison of the cohort lands.
 /// </remarks>
-public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
+public sealed class BenchmarkComparisonExecutor
 {
     private const string FingerprintChangedMessage = "The installed judge model changed after the benchmark was created.";
     private const string CapacityRejectedMessage = "The judge could not reserve enough local model capacity.";

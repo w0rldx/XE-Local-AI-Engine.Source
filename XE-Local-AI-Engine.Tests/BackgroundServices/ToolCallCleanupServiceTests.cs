@@ -4,7 +4,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.BackgroundServices;
 using XE_Local_AI_Engine.Client.Configuration;
-using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
@@ -84,7 +83,7 @@ public sealed class ToolCallCleanupServiceTests
             NullLogger<ToolCallCleanupService>.Instance);
     }
 
-    private sealed class MockInvocationRunner : IInvocationRunner, IDisposable
+    private sealed class MockInvocationRunner : InvocationRunnerStub, IDisposable
     {
         private readonly SemaphoreSlim _cleanupSignal = new(0);
 
@@ -99,31 +98,12 @@ public sealed class ToolCallCleanupServiceTests
             _cleanupSignal.Dispose();
         }
 
-        public int ActiveInvocationCount => 0;
-
-        public Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
+        public override Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
         }
 
-        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(true);
-        }
-
-        public void Cancel(Guid invocationId)
-        {
-        }
-
-        public void CancelDetached(Guid invocationId)
-        {
-        }
-
-        public void CancelAll()
-        {
-        }
-
-        public void CleanupStaleToolCalls(TimeSpan maxAge)
+        public override void CleanupStaleToolCalls(TimeSpan maxAge)
         {
             CleanupCallCount++;
             LastCleanupMaxAge = maxAge;
@@ -132,14 +112,6 @@ public sealed class ToolCallCleanupServiceTests
             {
                 throw CleanupException;
             }
-        }
-
-        public void ResolveApprovalResult(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
-        {
-        }
-
-        public void ResolveUserQuestionResult(UserQuestionAnsweredEvent evt)
-        {
         }
 
         public Task<bool> WaitForCleanupAsync(int timeoutMs = 5000)

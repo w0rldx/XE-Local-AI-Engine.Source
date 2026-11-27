@@ -167,7 +167,7 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
             options,
             runtimeSettings,
             new FakeNodeDataDirectory(options.Value.RootPath ?? string.Empty),
-            new StaticIdentityProvider("owner-a", "node-1"),
+            new FixedAgentHomeIdentityProvider("owner-a", "node-1"),
             new AgentHomeRunApplyGuard(),
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             NullLogger<NodePatchApplyService>.Instance);
@@ -234,7 +234,7 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
 
         var service = new AgentHomeService(manifestService,
             provider,
-            new StaticIdentityProvider("owner-a", "node-1"),
+            new FixedAgentHomeIdentityProvider("owner-a", "node-1"),
             leases,
             new AgentHomeRunExecutionRegistry(),
             isolation,
@@ -282,28 +282,6 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
         {
             _manifestService.Dispose();
             _serviceProvider.Dispose();
-        }
-    }
-
-    private sealed class StaticIdentityProvider : IAgentHomeIdentityProvider
-    {
-        public StaticIdentityProvider(string ownerUserId, string nodeId)
-        {
-            OwnerUserId = ownerUserId;
-            NodeId = nodeId;
-        }
-
-        public string OwnerUserId { get; }
-
-        public string NodeId { get; }
-
-        public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(new AgentHomeOwnerIdentity
-            {
-                OwnerUserId = OwnerUserId,
-                NodeId = NodeId
-            });
         }
     }
 

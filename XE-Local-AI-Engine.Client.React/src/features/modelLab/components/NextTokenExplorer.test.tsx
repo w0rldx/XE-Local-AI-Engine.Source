@@ -331,6 +331,31 @@ describe("NextTokenExplorer", () => {
 		);
 	});
 
+	it("makes each step row one Tab stop, on its selected step, else its first, and moves it with focus", async () => {
+		stubModels();
+		hub.state.events = [logprobs, { type: "done" }];
+		renderWithProviders(<Host />);
+		await run();
+		fireEvent.click(screen.getByRole("switch", { name: "Show thinking steps" }));
+		const stops = (row: string) =>
+			within(screen.getByRole("group", { name: row }))
+				.getAllByRole("button")
+				.map((button) => button.getAttribute("tabindex"));
+		expect(stops("Thinking")).toEqual(["0"]);
+		expect(stops("Answer")).toEqual(["0", "-1"]);
+
+		const answer = within(screen.getByRole("group", { name: "Answer" })).getAllByRole("button");
+		fireEvent.click(answer[1] as HTMLElement);
+		expect(stops("Answer")).toEqual(["-1", "0"]);
+		// The selected step is in the other row, so the thinking row keeps its first.
+		expect(stops("Thinking")).toEqual(["0"]);
+
+		answer[1]?.focus();
+		fireEvent.keyDown(answer[1] as HTMLElement, { key: "Home" });
+		expect(document.activeElement).toBe(answer[0]);
+		expect(stops("Answer")).toEqual(["0", "-1"]);
+	});
+
 	it("labels the simulation as over the shown candidates and recomputes it without touching the measured bars", async () => {
 		stubModels();
 		hub.state.events = [logprobs, { type: "done" }];
@@ -566,6 +591,22 @@ describe("NextTokenExplorer prompt tokens", () => {
 		expect(tokenizeBodies).toHaveLength(1);
 		fireEvent.click(screen.getByRole("button", { name: "Run" }));
 		await waitFor(() => expect(tokenizeBodies).toHaveLength(2));
+	});
+
+	it("keeps the chips' one Tab stop where focus left them, so Tab leaves the row from there", async () => {
+		stubModels(["model-a"]);
+		hub.state.events = [{ type: "delta", textDelta: "Hello" }, logprobs, { type: "done" }];
+		renderWithProviders(<Host />);
+		await chooseAndRun("Say hello there.");
+
+		const chips = await within(await screen.findByTestId("model-lab-prompt-tokens")).findAllByTestId("model-lab-prompt-token");
+		expect(chips.map((chip) => chip.tabIndex)).toEqual([0, -1, -1, -1]);
+		chips[0]?.focus();
+		fireEvent.keyDown(chips[0] as HTMLElement, { key: "End" });
+		expect(chips.map((chip) => chip.tabIndex)).toEqual([-1, -1, -1, 0]);
+		fireEvent.keyDown(chips[3] as HTMLElement, { key: "ArrowLeft" });
+		expect(document.activeElement).toBe(chips[2]);
+		expect(chips.map((chip) => chip.tabIndex)).toEqual([-1, -1, 0, -1]);
 	});
 
 	it("says to run again when the model is no longer running, and asks only once", async () => {

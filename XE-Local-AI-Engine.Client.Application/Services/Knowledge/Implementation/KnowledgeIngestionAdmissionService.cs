@@ -1,10 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 
 /// <summary>
-///     Default <see cref="IKnowledgeIngestionAdmissionService" />. Holds the single admission rule the upload endpoint and the
-///     repository importer's per-file loop both apply.
+///     Decides whether a just-stored knowledge document has to be queued for background ingestion, and queues it.
 /// </summary>
-public sealed class KnowledgeIngestionAdmissionService : IKnowledgeIngestionAdmissionService
+/// <remarks>
+///     Owns the (re-)enqueue rule for every store path — the upload endpoint and the repository importer's per-file loop —
+///     so neither has to restate it. SCOPED: it reads the document status through the request-scoped catalog service; the
+///     dispatcher it enqueues onto is the process-wide singleton queue.
+/// </remarks>
+public sealed class KnowledgeIngestionAdmissionService
 {
     private readonly IKnowledgeDocumentCatalogService _catalogService;
     private readonly IKnowledgeIngestionDispatcher _ingestionDispatcher;
@@ -22,6 +26,20 @@ public sealed class KnowledgeIngestionAdmissionService : IKnowledgeIngestionAdmi
         _notifier = notifier;
     }
 
+    /// <summary>
+    ///     Resolves the document's current status, enqueues ingestion when required, and returns that status plus the
+    ///     dispatcher's answer.
+    /// </summary>
+    /// <remarks>
+    ///     Ingestion is enqueued when the store wrote the document and the row is still Pending or in flight, or when it
+    ///     is a dedupe hit in a retryable state. No admission announces Pending: the read may be stale by publication, so
+    ///     each sends a status-free refresh. A row already gone or (when written) already terminal is not enqueued; the
+    ///     answer is then <see langword="null" />.
+    /// </remarks>
+    /// <param name="wasWritten">
+    ///     Whether the store actually wrote this document (<c>WasInserted || WasUpdated</c>) rather than deduplicated
+    ///     onto it.
+    /// </param>
     public async Task<KnowledgeIngestionAdmissionResult> AdmitStoredDocumentAsync(Guid documentId,
         bool wasWritten,
         CancellationToken cancellationToken)

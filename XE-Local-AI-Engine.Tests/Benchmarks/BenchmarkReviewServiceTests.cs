@@ -208,7 +208,7 @@ public sealed class BenchmarkReviewServiceTests
                           Id = RevisionId,
                           ProjectId = ProjectId,
                           Revision = 1,
-                          PolicyJson = BenchmarkJudgeSerialization.SerializePolicy(BenchmarkJudgeExecutorTests.Policy(rubric: rubric ?? Rubric)),
+                          PolicyJson = BenchmarkJudgeSerialization.SerializePolicy(BenchmarkJudgeTestSupport.Policy(rubric: rubric ?? Rubric)),
                           PolicyHash = new string('a', count: 64),
                           ReferenceExecutionKey = null,
                           CohortGeneration = 1,

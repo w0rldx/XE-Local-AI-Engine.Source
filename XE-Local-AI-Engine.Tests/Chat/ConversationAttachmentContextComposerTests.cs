@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
 using XE_Local_AI_Engine.AI.Agent.Tools;
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -132,7 +131,7 @@ public sealed class ConversationAttachmentContextComposerTests
         // compute the fence's closing marker. The real seed is HKDF-derived from the node key (a server secret), so the
         // marker a client would compute from the public conversation id (the old, flawed scheme) cannot close the fence.
         var conversationId = Guid.Parse("11111111-1111-1111-1111-111111111111");
-        using var keyHolder = new FakeKeyHolder();
+        using var keyHolder = new FixedNodeSqliteKeyHolder(FixedNodeSqliteKeyHolder.CreateTestKey());
         var provider = new UntrustedContentFenceSeedProvider(keyHolder);
         var secretSeed = provider.DeriveSeed(conversationId);
 
@@ -150,17 +149,6 @@ public sealed class ConversationAttachmentContextComposerTests
         AssertEx.False(secretFence.Contains(publicEndMarker, StringComparison.Ordinal),
             "a closing marker computed from the public conversation id must not appear in — and so cannot close — the server-secret-seeded fence");
         AssertEx.NotEqual(secretFence, publicFence);
-    }
-
-    // A node key holder with a fixed non-secret test key, so the HKDF derivation is deterministic in tests while still
-    // being distinct from anything a client could compute from the public conversation id.
-    private sealed class FakeKeyHolder : INodeSqliteKeyHolder
-    {
-        public ReadOnlyMemory<byte> Key { get; } = Enumerable.Range(0, 32).Select(static i => (byte)(i + 1)).ToArray();
-
-        public void Dispose()
-        {
-        }
     }
 
     [Test]

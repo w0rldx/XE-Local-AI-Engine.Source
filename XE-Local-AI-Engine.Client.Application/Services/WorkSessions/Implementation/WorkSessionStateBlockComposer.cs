@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 using System.Globalization;
 using System.Text;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
@@ -160,5 +161,5 @@ internal static class WorkSessionStateBlockComposer
     }
 
     private static string Truncate(string value, int maximumLength) =>
-        value.Length <= maximumLength ? value : string.Concat(value.AsSpan(start: 0, maximumLength), "…");
+        value.Length <= maximumLength ? value : TextTruncation.TruncateAtRuneBoundary(value, maximumLength) + "…";
 }

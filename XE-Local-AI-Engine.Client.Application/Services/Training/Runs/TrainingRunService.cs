@@ -45,7 +45,7 @@ public sealed class TrainingRunService : ITrainingRunService
     private readonly ITrainingDatasetStore _datasetStore;
     private readonly ITrainingOptionDefaultsCalculator _defaults;
     private readonly IDatasetExportService _exportService;
-    private readonly ILicenseGateService _licenseGate;
+    private readonly LicenseGateService _licenseGate;
     private readonly ITrainingRunStore _runStore;
     private readonly ITrainingRunQueueSignal _signal;
     private readonly TrainingRunWorkspace _workspace;
@@ -54,7 +54,7 @@ public sealed class TrainingRunService : ITrainingRunService
         ITrainingDatasetStore datasetStore,
         IDatasetExportService exportService,
         ITrainingOptionDefaultsCalculator defaults,
-        ILicenseGateService licenseGate,
+        LicenseGateService licenseGate,
         TrainingRunWorkspace workspace,
         TrainingRunCancellationRegistry cancellations,
         ITrainingRunQueueSignal signal,

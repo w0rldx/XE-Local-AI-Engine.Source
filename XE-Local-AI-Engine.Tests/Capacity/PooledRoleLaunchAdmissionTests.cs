@@ -473,7 +473,7 @@ public sealed class PooledRoleLaunchAdmissionTests
         services.AddSingleton(capacity.Audit);
         services.AddSingleton(settings);
         await using var provider = services.BuildServiceProvider();
-        var admission = new PooledRoleLaunchAdmission(provider.GetRequiredService<IServiceScopeFactory>(), new SteppingTimeProvider(), NullLogger<PooledRoleLaunchAdmission>.Instance);
+        var admission = new PooledRoleLaunchAdmission(provider.GetRequiredService<IServiceScopeFactory>(), new TimerSkippingTimeProvider(), NullLogger<PooledRoleLaunchAdmission>.Instance);
         var evictions = new EvictionRecorder();
 
         using var reservation = await admission.AdmitChatAsync(ChatModel, mayUnloadIdleModels: true, evictions.EvictAsync, CancellationToken.None);
@@ -581,7 +581,7 @@ public sealed class PooledRoleLaunchAdmissionTests
 
         public INodeRuntimeSettings Settings { get; }
 
-        public SteppingTimeProvider Time { get; } = new();
+        public TimerSkippingTimeProvider Time { get; } = new();
 
         public static Host Create(params CapacityDecision[] decisions) =>
             Create(GpuProfile(free: 10 * Gb), decisions);
@@ -690,7 +690,7 @@ public sealed class PooledRoleLaunchAdmissionTests
     }
 
     /// <summary>A clock whose timers fire at once and move the clock by their due time, so a bounded wait runs to its cap without real time passing.</summary>
-    private sealed class SteppingTimeProvider : TimeProvider
+    private sealed class TimerSkippingTimeProvider : TimeProvider
     {
         private long _timestamp;
 

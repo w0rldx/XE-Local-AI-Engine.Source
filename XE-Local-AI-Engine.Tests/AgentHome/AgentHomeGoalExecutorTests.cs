@@ -996,7 +996,7 @@ public sealed class AgentHomeGoalExecutorTests : IDisposable
         configure?.Invoke(options);
 
         var reader = new CoderWorkspaceReader(provider,
-            new StubIdentityProvider(),
+            new FixedAgentHomeIdentityProvider(Owner, Node),
             new AgentHomeExecutionLeaseManager(),
             new SensitiveFileExclusionService(),
             Options.Create(new CoderOptions()),
@@ -1180,18 +1180,6 @@ public sealed class AgentHomeGoalExecutorTests : IDisposable
 
         public void Dispose()
         {
-        }
-    }
-
-    private sealed class StubIdentityProvider : IAgentHomeIdentityProvider
-    {
-        public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(new AgentHomeOwnerIdentity
-            {
-                OwnerUserId = Owner,
-                NodeId = Node
-            });
         }
     }
 }

@@ -8,15 +8,16 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 
 /// <summary>
-///     Default <see cref="IGoldenHarvestService" />, deterministic and model-free: it reads an agent's most-recent
+///     On-demand golden harvester, deterministic and model-free: it reads an agent's most-recent
 ///     thumbs-up sources, dedups against already-harvested messages and stages each fresh candidate inert.
 /// </summary>
 /// <remarks>
 ///     Staging runs through <see cref="IGoldenConversationService.CreateHarvestedAsync" />, so the same validation,
 ///     caps and encryption apply. The seeded rubric is the operator-approved answer, on the judge path, and the input
 ///     turns are the lead-up conversation serialized to match the eval runner's parse. Only counts and ids are logged.
+///     The run is capped server-side, no data leaves the node, and the operator approves a candidate into the active set.
 /// </remarks>
-internal sealed class GoldenHarvestService : IGoldenHarvestService
+public sealed class GoldenHarvestService
 {
     // Title prefix marking a harvested candidate + the rubric seed template (judge path: the approved answer is the scoring
     // signal). The title cap mirrors GoldenConversationService.MaxTitleLength; the rubric cap mirrors MaxRubricLength.
@@ -57,6 +58,10 @@ internal sealed class GoldenHarvestService : IGoldenHarvestService
         _sourceStore = sourceStore;
     }
 
+    /// <summary>
+    ///     Harvests golden candidates for <paramref name="agentId" />, returning a per-run <see cref="GoldenHarvestOutcome" />.
+    /// </summary>
+    /// <exception cref="Agents.AgentDefinitionNotFoundException">No agent definition has <paramref name="agentId" />.</exception>
     public async Task<GoldenHarvestOutcome> HarvestAsync(Guid agentId, CancellationToken cancellationToken = default)
     {
         if (await _agentDefinitionStore.GetByIdAsync(agentId, cancellationToken) is null)

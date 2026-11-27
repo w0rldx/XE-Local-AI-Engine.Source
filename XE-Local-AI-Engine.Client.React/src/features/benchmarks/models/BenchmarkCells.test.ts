@@ -6,7 +6,6 @@ import {
 	canComparePairedDeltas,
 	hasBenchmarkAgentVariants,
 	missingBenchmarkCellItems,
-	scorableCellItems,
 	sortBenchmarkCells,
 	toBenchmarkCell,
 } from "@/features/benchmarks/models/BenchmarkCells";
@@ -152,33 +151,6 @@ describe("missingBenchmarkCellItems", () => {
 		});
 
 		expect(missingBenchmarkCellItems(legacy, items)).toEqual([]);
-	});
-});
-
-describe("scorableCellItems", () => {
-	it("leaves out the answers to items that do not count toward the mean", () => {
-		const cell = benchmarkCellFixture({
-			items: [
-				{
-					runId: "r1",
-					taskItemId: "a",
-					taskItemIndex: 0,
-					qualityScore: 80,
-					primaryStopReason: "stop",
-					rankExclusionReason: null,
-				},
-				{
-					runId: "r2",
-					taskItemId: "case",
-					taskItemIndex: 1,
-					qualityScore: 100,
-					primaryStopReason: "stop",
-					rankExclusionReason: null,
-				},
-			],
-		});
-
-		expect(scorableCellItems(cell, [benchmarkTaskItemFixture({ id: "a" })]).map((item) => item.runId)).toEqual(["r1"]);
 	});
 });
 

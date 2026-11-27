@@ -3,6 +3,7 @@ import { IconPlayerEject, IconServer2 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { formatCount } from "@/core/formatting/NumberFormatting";
 import type { RunningModel } from "@/core/loaded-models/models/RunningModelsModels";
 import { FocusableDisabledButton } from "@/core/ui/components/FocusableDisabledButton/FocusableDisabledButton";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
@@ -29,7 +30,7 @@ interface RunningModelsPanelProps {
 // 2026-08-01, vestigial names from the model-fit advisor page this panel was relocated from (a test asserts it is absent
 // there now).
 export function RunningModelsPanel({ runningModels, isLoading, error, onEject, ejectingModelName }: RunningModelsPanelProps) {
-	const { t, i18n } = useTranslation();
+	const { t } = useTranslation();
 	const rowKeys = runningModels.map((model) => `${model.modelName}-${model.role}`).join("|");
 	const { headingRef, cardFocusHandlers, restoreFocusTo } = useEjectFocusRestore(rowKeys);
 
@@ -91,7 +92,7 @@ export function RunningModelsPanel({ runningModels, isLoading, error, onEject, e
 											<Text size="xs" c="dimmed" data-testid={`loaded-models-llamacpp-context-${model.modelName}`}>
 												{t("pages.loadedModels.llamaCpp.contextWindow", {
 													defaultValue: "Context window: {{tokens}} tokens",
-													tokens: model.effectiveContextTokens.toLocaleString(i18n.language),
+													tokens: formatCount(model.effectiveContextTokens),
 												})}
 											</Text>
 										) : null}

@@ -2,7 +2,6 @@
 
 import { MantineProvider } from "@mantine/core";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import type { ReactElement } from "react";
 import { useRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -85,7 +84,7 @@ vi.mock("@/core/ui/components/CodeEditor/MonacoRuntime", () => ({
 
 import type { SkillFormValues } from "@/core/skills/models/SkillModels";
 import { SkillForm, type SkillFormHandle } from "@/features/skills/components/SkillForm";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { installJsdomEnvironmentMocks, renderWithMantine, testMantineTheme } from "@/test/MantineTestRender";
 
 const baseValues: SkillFormValues = {
 	allowedTools: "",
@@ -99,42 +98,6 @@ const baseValues: SkillFormValues = {
 	metadata: null,
 	name: "",
 };
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-	Object.defineProperty(document, "fonts", {
-		writable: true,
-		value: { ready: Promise.resolve(), addEventListener: vi.fn(), removeEventListener: vi.fn() },
-	});
-}
-
-function renderWithProviders(ui: ReactElement) {
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			{ui}
-		</MantineProvider>,
-	);
-}
 
 interface HarnessProps {
 	initialValues?: Partial<SkillFormValues>;
@@ -167,7 +130,7 @@ function renderForm(props: HarnessProps = {}) {
 		);
 	}
 
-	renderWithProviders(<FormHarness />);
+	renderWithMantine(<FormHarness />);
 	return { onSubmit };
 }
 

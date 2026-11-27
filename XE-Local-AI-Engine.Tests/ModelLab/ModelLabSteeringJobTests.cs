@@ -17,7 +17,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
-using static ModelLabExperimentServiceTests;
+using static ModelLabTestSupport;
 
 /// <summary>
 ///     A steering job on the node's real DI: real gate, lease, ledger, store and blobs. The script, the harness and the arm servers are scripted.
@@ -59,7 +59,7 @@ public sealed class ModelLabSteeringJobTests
         AssertEx.Null(host.Gate.ExclusiveKind);
         AssertEx.False(host.Supervisor.IsKeepWarmSuppressed(), "The lease comes back after the last arm.");
         AssertEx.Equal(expected: 0L, host.Ledger.Reserved.GpuBytes, "The reservation is released once.");
-        var record = AssertEx.NotNull(await host.Service.GetAsync(id, CancellationToken.None));
+        var record = AssertEx.NotNull(await host.Reader.GetAsync(id, CancellationToken.None));
         AssertEx.Equal(ModelLabExperimentKind.Steering, record.Kind);
         AssertEx.Equal(ModelLabExperimentStatus.Succeeded, record.Status);
         var result = ReadResult(record.ResultJson);
@@ -112,7 +112,7 @@ public sealed class ModelLabSteeringJobTests
 
         var blob = Directory.GetFiles(Path.Combine(host.DataRoot, "model-lab", "artifacts", id.ToString("N"))).Single();
         AssertEx.False(Encoding.UTF8.GetString(await File.ReadAllBytesAsync(blob)).Contains(VectorPlaintext, StringComparison.Ordinal), "The vector at rest is ciphertext.");
-        AssertEx.Equal(ModelLabTraceReadStatus.NotFound, (await host.Service.ReadTraceAsync(id, CancellationToken.None)).Status);
+        AssertEx.Equal(ModelLabTraceReadStatus.NotFound, (await host.Reader.ReadTraceAsync(id, CancellationToken.None)).Status);
 
         using var client = host.Factory.CreateClient();
         using var read = host.Authorized(HttpMethod.Get, $"/api/local/v1/model-lab/experiments/{id}");
@@ -144,7 +144,7 @@ public sealed class ModelLabSteeringJobTests
         process.Finish(CompleteRun, exitCode: 0);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
-        var record = AssertEx.NotNull(await host.Service.GetAsync(id, CancellationToken.None));
+        var record = AssertEx.NotNull(await host.Reader.GetAsync(id, CancellationToken.None));
         AssertEx.Equal(ModelLabExperimentStatus.Cancelled, record.Status);
         AssertEx.Equal("baseline", ReadResult(record.ResultJson).Steering!.Arms.Single().Name);
         AssertEx.Equal(expected: 1, harness.BodiesRun);
@@ -163,7 +163,7 @@ public sealed class ModelLabSteeringJobTests
         process.Finish(CompleteRun, exitCode: 0);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
-        var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
+        var record = AssertEx.NotNull(await host.Reader.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
         AssertEx.Equal(ModelLabExperimentStatus.Failed, record.Status);
         AssertEx.Contains(record.ErrorMessage!, "HTTP 500", StringComparison.Ordinal);
         AssertEx.False(record.ErrorMessage!.Contains("Exception", StringComparison.Ordinal), record.ErrorMessage);
@@ -185,7 +185,7 @@ public sealed class ModelLabSteeringJobTests
         process.Finish(CompleteRun, exitCode: 0);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
-        var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
+        var record = AssertEx.NotNull(await host.Reader.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
         AssertEx.Equal(ModelLabExperimentStatus.Failed, record.Status);
         AssertEx.Contains(record.ErrorMessage!, "not seen to exit", StringComparison.Ordinal);
         AssertEx.False(record.ErrorMessage!.Contains("restart", StringComparison.OrdinalIgnoreCase), "Its spawn receipt is gone by now, so no restart would find it.");
@@ -202,7 +202,7 @@ public sealed class ModelLabSteeringJobTests
         process.Finish([Handshake, """{"event":"error","category":"trace","message":"ValueError: no usable length"}"""], exitCode: 1);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
-        var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
+        var record = AssertEx.NotNull(await host.Reader.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
         AssertEx.Equal(ModelLabExperimentStatus.Failed, record.Status);
         AssertEx.Contains(record.ErrorMessage!, "no usable length", StringComparison.Ordinal);
         AssertEx.Equal(expected: 0, harness.BodiesRun);
@@ -221,7 +221,7 @@ public sealed class ModelLabSteeringJobTests
         process.Finish([Handshake, """{"event":"done","cancelled":false}""", """{"event":"done","cancelled":false}"""], exitCode: 0);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
-        var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
+        var record = AssertEx.NotNull(await host.Reader.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
         AssertEx.Equal(ModelLabExperimentStatus.Failed, record.Status);
         AssertEx.Contains(record.ErrorMessage!, "broke its protocol", StringComparison.Ordinal);
         AssertEx.Equal(expected: 0, harness.BodiesRun);
@@ -240,7 +240,7 @@ public sealed class ModelLabSteeringJobTests
         process.Finish([Handshake, """{"event":"done","cancelled":false}"""], exitCode: 1);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
-        var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
+        var record = AssertEx.NotNull(await host.Reader.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
         AssertEx.Equal(ModelLabExperimentStatus.Failed, record.Status);
         AssertEx.Contains(record.ErrorMessage!, "exited after its job before reporting ready", StringComparison.Ordinal);
         AssertEx.Equal(expected: 0, harness.BodiesRun);
@@ -262,7 +262,7 @@ public sealed class ModelLabSteeringJobTests
         process.Finish(CompleteRun, exitCode: 0);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
-        var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
+        var record = AssertEx.NotNull(await host.Reader.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
         AssertEx.True(ModelLabTraceSpec.MaxTraceByteCap > vectorBound, "The store's bound is the trace's, not the vector's.");
         AssertEx.Equal(ModelLabExperimentStatus.Failed, record.Status);
         AssertEx.Contains(record.ErrorMessage!, "usable vector", StringComparison.Ordinal);
@@ -287,7 +287,7 @@ public sealed class ModelLabSteeringJobTests
         AssertEx.Contains(start.RefusalMessage!, "layers 1 to 23", StringComparison.Ordinal);
         AssertEx.Null(process.Request);
         AssertEx.Null(host.Gate.ExclusiveKind);
-        AssertEx.Equal(expected: 0, (await host.Service.ListAsync(CancellationToken.None)).Count);
+        AssertEx.Equal(expected: 0, (await host.Reader.ListAsync(CancellationToken.None)).Count);
     }
 
     [Test]
@@ -467,7 +467,7 @@ public sealed class ModelLabSteeringJobTests
         process.Finish(CompleteRun, exitCode: 0);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
-        var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
+        var record = AssertEx.NotNull(await host.Reader.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
         AssertEx.Equal(ModelLabExperimentStatus.Failed, record.Status);
         AssertEx.Contains(record.ErrorMessage!, "could not be saved", StringComparison.Ordinal);
         AssertEx.False(record.ErrorMessage!.Contains("server", StringComparison.OrdinalIgnoreCase), record.ErrorMessage);
@@ -490,7 +490,7 @@ public sealed class ModelLabSteeringJobTests
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
         var id = start.ExperimentId!.Value;
-        var record = AssertEx.NotNull(await host.Service.GetAsync(id, CancellationToken.None));
+        var record = AssertEx.NotNull(await host.Reader.GetAsync(id, CancellationToken.None));
         AssertEx.Equal(ModelLabExperimentStatus.Failed, record.Status);
         AssertEx.Contains(record.ErrorMessage!, "could not be saved", StringComparison.Ordinal);
         AssertEx.Equal(expected: 0, harness.BodiesRun);
@@ -510,7 +510,7 @@ public sealed class ModelLabSteeringJobTests
         process.Finish([Handshake], exitCode: 1);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
-        AssertEx.False((await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None))!.ResultJson.HasValue);
+        AssertEx.False((await host.Reader.GetAsync(start.ExperimentId!.Value, CancellationToken.None))!.ResultJson.HasValue);
     }
 
     /// <summary>A throw outside the arms ends in the service's own last resort, which must not lose what the row had.</summary>
@@ -526,7 +526,7 @@ public sealed class ModelLabSteeringJobTests
         process.Finish(CompleteRun, exitCode: 0);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
-        var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
+        var record = AssertEx.NotNull(await host.Reader.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
         AssertEx.Equal(ModelLabExperimentStatus.Failed, record.Status);
         AssertEx.Contains(record.ErrorMessage!, "a bug", StringComparison.Ordinal);
         AssertEx.Equal("baseline,vector", string.Join(',', ReadResult(record.ResultJson).Steering!.Arms.Select(static arm => arm.Name)));
@@ -552,7 +552,7 @@ public sealed class ModelLabSteeringJobTests
         AssertEx.True(host.Service.Cancel(id));
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
-        var record = AssertEx.NotNull(await host.Service.GetAsync(id, CancellationToken.None));
+        var record = AssertEx.NotNull(await host.Reader.GetAsync(id, CancellationToken.None));
         AssertEx.Equal(ModelLabExperimentStatus.Cancelled, record.Status);
         AssertEx.Null(process.Request);
         AssertEx.Null(host.Gate.ExclusiveKind);
@@ -569,7 +569,7 @@ public sealed class ModelLabSteeringJobTests
         var start = await host.Service.StartExperimentAsync(Request(host), CancellationToken.None);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
-        var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
+        var record = AssertEx.NotNull(await host.Reader.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
         AssertEx.Equal(ModelLabExperimentStatus.Failed, record.Status);
         AssertEx.Contains(record.ErrorMessage!, "the file went away", StringComparison.Ordinal);
         AssertEx.False(record.ErrorMessage!.Contains("Exception", StringComparison.Ordinal), record.ErrorMessage);
@@ -623,7 +623,7 @@ public sealed class ModelLabSteeringJobTests
         AssertEx.Equal(refusal, refused.RefusalMessage);
         AssertEx.Null(process.Request);
         AssertEx.Null(host.Gate.ExclusiveKind);
-        AssertEx.Equal(expected: 0, (await host.Service.ListAsync(CancellationToken.None)).Count);
+        AssertEx.Equal(expected: 0, (await host.Reader.ListAsync(CancellationToken.None)).Count);
 
         var trace = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
         AssertEx.Null(trace.Refusal);
@@ -672,7 +672,7 @@ public sealed class ModelLabSteeringJobTests
         var start = await host.Service.StartExperimentAsync(Request(host), CancellationToken.None);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
-        var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
+        var record = AssertEx.NotNull(await host.Reader.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
         AssertEx.Equal(ModelLabExperimentStatus.Failed, record.Status);
         AssertEx.Contains(record.ErrorMessage!, "maximum duration", StringComparison.Ordinal);
         AssertEx.Null(process.Request);
@@ -693,7 +693,7 @@ public sealed class ModelLabSteeringJobTests
         var start = await host.Service.StartExperimentAsync(Request(host), CancellationToken.None);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
-        var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
+        var record = AssertEx.NotNull(await host.Reader.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
         AssertEx.Equal(ModelLabExperimentStatus.Failed, record.Status);
         AssertEx.Contains(record.ErrorMessage!, expected, StringComparison.Ordinal);
         AssertEx.Null(process.Request);
@@ -721,7 +721,7 @@ public sealed class ModelLabSteeringJobTests
         process.Finish(CompleteRun, exitCode: 0);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
-        var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
+        var record = AssertEx.NotNull(await host.Reader.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
         AssertEx.Equal(ModelLabExperimentStatus.Failed, record.Status);
         AssertEx.Contains(record.ErrorMessage!, thrown.Message, StringComparison.Ordinal);
         AssertEx.Equal("baseline", ReadResult(record.ResultJson).Steering!.Arms.Single().Name);
@@ -739,7 +739,7 @@ public sealed class ModelLabSteeringJobTests
         process.Finish(CompleteRun, exitCode: 0);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
-        var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
+        var record = AssertEx.NotNull(await host.Reader.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
         AssertEx.Contains(record.ErrorMessage!, "no choices", StringComparison.Ordinal);
         AssertEx.Equal("baseline", ReadResult(record.ResultJson).Steering!.Arms.Single().Name);
     }
@@ -804,7 +804,7 @@ public sealed class ModelLabSteeringJobTests
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
         await using var lease = await ensure.WaitAsync(TestBudgets.Contended);
 
-        AssertEx.Equal(ModelLabExperimentStatus.Succeeded, (await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None))!.Status);
+        AssertEx.Equal(ModelLabExperimentStatus.Succeeded, (await host.Reader.GetAsync(start.ExperimentId!.Value, CancellationToken.None))!.Status);
         AssertEx.Equal("False|False|False", string.Join('|', seenByArms), "No arm saw the queued ensure through.");
         AssertEx.NotNull(lease);
         AssertEx.True(process.EvictRequested, "The derive's worker was evicted before the arms.");

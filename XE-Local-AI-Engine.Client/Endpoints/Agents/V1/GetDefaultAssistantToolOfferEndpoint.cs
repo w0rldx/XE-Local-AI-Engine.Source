@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Agents.V1;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 /// <summary>
 ///     Exposes the tool offer a chat turn hands the seeded Default Assistant on a given model, so the agent form renders
@@ -11,9 +11,9 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 /// </summary>
 public sealed class GetDefaultAssistantToolOfferEndpoint : Endpoint<GetDefaultAssistantToolOfferRequest, DefaultAssistantToolOfferResponse>
 {
-    private readonly IDefaultAssistantToolOfferService _offerService;
+    private readonly DefaultAssistantToolOfferService _offerService;
 
-    public GetDefaultAssistantToolOfferEndpoint(IDefaultAssistantToolOfferService offerService)
+    public GetDefaultAssistantToolOfferEndpoint(DefaultAssistantToolOfferService offerService)
     {
         ArgumentNullException.ThrowIfNull(offerService);
         _offerService = offerService;

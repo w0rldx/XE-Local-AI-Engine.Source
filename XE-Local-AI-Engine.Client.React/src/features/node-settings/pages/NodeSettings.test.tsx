@@ -223,34 +223,7 @@ import { useThemeStore } from "@/core/theme/stores/ThemeStore";
 import type { NodeSettingsSectionId } from "@/features/node-settings/models/NodeSettingsSections";
 import { NodeSettings } from "@/features/node-settings/pages/NodeSettings";
 import { useHfTokenStore } from "@/features/node-settings/stores/HfTokenStore";
-import { testMantineTheme } from "@/test/MantineTestRender";
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-	// jsdom does not implement scrollIntoView; Mantine's Combobox calls it on a timer when a dropdown opens, which
-	// surfaces as an unhandled error AFTER the test that opened it.
-	Element.prototype.scrollIntoView = vi.fn();
-}
+import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 
 // The route owns `?section=`; this harness stands in for it so a test can start in a section and follow the page's
 // own navigation. Returns the client so a test can drive a BACKGROUND refetch (an invalidation), which is a different

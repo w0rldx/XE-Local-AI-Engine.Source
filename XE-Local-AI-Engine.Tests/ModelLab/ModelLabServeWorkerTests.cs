@@ -4,13 +4,13 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.ModelLab;
 using XE_Local_AI_Engine.Tests.Testing;
-using static ModelLabExperimentServiceTests;
+using static ModelLabTestSupport;
 
 /// <summary>One serving worker over a scripted process, with no host or session.</summary>
 [Category(TestCategories.Unit)]
 public sealed class ModelLabServeWorkerTests
 {
-    private static readonly ModelLabScriptRunner.ScriptCommand Script = new()
+    private static readonly ModelLabScriptCommand Script = new()
     {
         Interpreter = "python",
         ScriptPath = "modellab.py"
@@ -22,7 +22,7 @@ public sealed class ModelLabServeWorkerTests
     {
         using var process = new ScriptedProcess();
         using var workRoot = new TempDirectory("modellab-worker");
-        using var worker = ModelLabServeWorker.Spawn(process, new ModelLabScriptRunner.ScriptCommand
+        using var worker = ModelLabServeWorker.Spawn(process, new ModelLabScriptCommand
         {
             Interpreter = "python",
             ScriptPath = "modellab.py"

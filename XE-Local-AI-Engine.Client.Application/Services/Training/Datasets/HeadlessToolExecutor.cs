@@ -47,8 +47,6 @@ internal sealed class HeadlessToolExecutor : IHeadlessToolExecutor
     private static readonly TimeSpan UnboundedBudget = TimeSpan.FromMilliseconds(int.MaxValue);
 
     private readonly IToolApprovalPolicy _approvalPolicy;
-    private readonly IToolMockEngine _mockEngine;
-    private readonly IToolMockStaticVerifier _mockVerifier;
     private readonly ILocalToolOfferProvider _offerProvider;
     private readonly ITrainingDatasetStore _store;
     private readonly IToolInvocationService _toolInvocation;
@@ -56,19 +54,13 @@ internal sealed class HeadlessToolExecutor : IHeadlessToolExecutor
     public HeadlessToolExecutor(ILocalToolOfferProvider offerProvider,
         IToolApprovalPolicy approvalPolicy,
         ITrainingDatasetStore store,
-        IToolMockEngine mockEngine,
-        IToolMockStaticVerifier mockVerifier,
         IToolInvocationService toolInvocation)
     {
         ArgumentNullException.ThrowIfNull(approvalPolicy);
-        ArgumentNullException.ThrowIfNull(mockEngine);
-        ArgumentNullException.ThrowIfNull(mockVerifier);
         ArgumentNullException.ThrowIfNull(offerProvider);
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(toolInvocation);
         _approvalPolicy = approvalPolicy;
-        _mockEngine = mockEngine;
-        _mockVerifier = mockVerifier;
         _offerProvider = offerProvider;
         _store = store;
         _toolInvocation = toolInvocation;
@@ -194,12 +186,12 @@ internal sealed class HeadlessToolExecutor : IHeadlessToolExecutor
         var mocks = await _store.ListUsableMocksAsync(toolName, cancellationToken);
         foreach (var mock in mocks)
         {
-            if (!_mockVerifier.TryParse(mock.MockJson.Span, out var body, out _))
+            if (!ToolMockStaticVerifier.TryParse(mock.MockJson.Span, out var body, out _))
             {
                 continue;
             }
 
-            if (_mockEngine.TryRespond(body, arguments, out var response))
+            if (ToolMockEngine.TryRespond(body, arguments, out var response))
             {
                 return new HeadlessToolOutcome
                 {

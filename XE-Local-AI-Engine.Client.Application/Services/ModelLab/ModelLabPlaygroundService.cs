@@ -109,7 +109,7 @@ public sealed class ModelLabPlaygroundService
                 ResultPath = Path.Combine(workDirectory, "result.json")
             };
             var jobJson = JsonSerializer.SerializeToUtf8Bytes(job, TrainingJson.Options);
-            ModelLabScriptRunner.ScriptRun run;
+            ModelLabScriptRun run;
             ModelLabRuntimeJob? runtimeJob = null;
             try
             {
@@ -118,7 +118,7 @@ public sealed class ModelLabPlaygroundService
                     return Refuse(ModelLabPlaygroundRefusal.RuntimeUnavailable, refusal);
                 }
 
-                run = await _scripts.RunAsync(id, workDirectory, jobJson, new ModelLabScriptRunner.ScriptCommand
+                run = await _scripts.RunAsync(id, workDirectory, jobJson, new ModelLabScriptCommand
                 {
                     Interpreter = runtimeJob.Interpreter,
                     ScriptPath = runtimeJob.ScriptPath,

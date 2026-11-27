@@ -69,9 +69,10 @@
 #   .tmp/gate-history.log (resolved like the build lock, so all worktrees share one file; never truncated):
 #     <ISO time> <worktree real path or -> <tip> Tests=p/f/s Persistence=p/f/s Agent=p/f/s Cli=p/f/s
 #     Contracts=p/f/s|skipped scope=<scope> wall=<seconds> reason=<reason> skips=<slug:n,...> unreported=<n>
-#     failed=<name,...|-> flakes=<name,...|-> ratchets=<Name:n,...> exit=<code>
-#   Seventeen fields, exit= always last (scripts/squash-guard.sh keys on it; it reads the others by name, f[0..2]
-#   by position). Rows before 2026-10-28 have sixteen: no Cli=. Rows before 2026-10-23 have twelve: no
+#     failed=<name,...|-> flakes=<name,...|-> ratchets=<Name:n,...> lanes=<lane:s,...> exit=<code>
+#   Eighteen fields, exit= always last (scripts/squash-guard.sh keys on it; it reads the others by name, f[0..2]
+#   by position). Rows before 2026-11-26 have seventeen: no lanes=. Rows before 2026-10-28 have sixteen: no Cli=.
+#   Rows before 2026-10-23 have twelve: no
 #   unreported=, failed=, flakes= or ratchets=, and skips= carried the unreported count as "unreported:<n>". reason is ok on exit 0;
 #   otherwise lock-timeout (69), contaminated (75), killed (130/143), build (Release build red), fail-fast
 #   (Architecture pre-lane red), tests (a lane red, hollow or without a summary), setup (anything else).
@@ -83,6 +84,8 @@
 #   lines printed, flakes the scripts/known-flakes.txt entries they matched; "-" when none. ratchets counts
 #   the entries of the five shrink-only XE-Local-AI-Engine.Tests/Architecture allowlists (DbContextUser,
 #   PositionalRecord, Tuple, FilePlacement, CommentBudget; "-" for a missing file) in the tree at exit.
+#   lanes holds the wall seconds of every lane that finished (the module name without its XE-Local-AI-Engine.
+#   prefix, release-contract-tests, and architecture for the concurrent pre-lane), sorted by name; empty when none.
 #   tip is HEAD when the lock was taken, before the build ("-" outside git), suffixed "+dirty" when the
 #   tree had changes (untracked included) then and "+moved" when HEAD differed at exit; a suffixed tip
 #   certifies nothing. scope is full only when this invocation built and ran every lane unsharded;
@@ -311,6 +314,19 @@ history_ratchets() {
   done
   echo "$out"
 }
+# "<lane>:<seconds>,..." for every finished lane (see "Gate history").
+history_walls() {
+  local r dur out=""
+  [[ -n "${LANE_DIR:-}" && -d "$LANE_DIR" ]] || return 0
+  for r in "$LANE_DIR"/*.result; do
+    [[ -f "$r" ]] || continue
+    read -r _ _ _ dur _ <"$r"
+    r="$(basename "$r" .result)"
+    out+="${out:+,}${r#XE-Local-AI-Engine.}:$dur"
+  done
+  [[ -f "$LANE_DIR/architecture.wall" ]] && out+="${out:+,}architecture:$(<"$LANE_DIR/architecture.wall")"
+  printf '%s' "$out" | tr ',' '\n' | LC_ALL=C sort | paste -sd, -
+}
 # Set just before the exits that a bare exit code cannot tell apart (all three are 1); see "Gate history".
 GATE_REASON=""
 gate_history_on_exit() {
@@ -341,12 +357,12 @@ gate_history_on_exit() {
       130|143) reason=killed ;;
       *)       reason="${GATE_REASON:-setup}" ;;
     esac
-    mkdir -p "$(dirname "$file")" && printf '%s\t%s\t%s\tTests=%s\tPersistence=%s\tAgent=%s\tCli=%s\tContracts=%s\tscope=%s\twall=%s\treason=%s\tskips=%s\tunreported=%s\tfailed=%s\tflakes=%s\tratchets=%s\texit=%s\n' \
+    mkdir -p "$(dirname "$file")" && printf '%s\t%s\t%s\tTests=%s\tPersistence=%s\tAgent=%s\tCli=%s\tContracts=%s\tscope=%s\twall=%s\treason=%s\tskips=%s\tunreported=%s\tfailed=%s\tflakes=%s\tratchets=%s\tlanes=%s\texit=%s\n' \
       "$(date -Iseconds)" "$worktree" "$sha" "$(history_lane XE-Local-AI-Engine.Tests)" \
       "$(history_lane XE-Local-AI-Engine.Client.Persistence.Tests)" "$(history_lane XE-Local-AI-Engine.AI.Agent.Tests)" \
       "$(history_lane XE-Local-AI-Engine.Cli.Tests)" "$contracts" "$scope" "$((EPOCHSECONDS - GATE_T0))" "$reason" "$(history_skips)" "$(history_unreported)" \
       "$(history_names ${GATE_FAILED[@]+"${GATE_FAILED[@]}"})" "$(history_names ${GATE_FLAKES[@]+"${GATE_FLAKES[@]}"})" \
-      "$(history_ratchets)" "$rc" >>"$file" \
+      "$(history_ratchets)" "$(history_walls)" "$rc" >>"$file" \
       || echo "WARN: could not append to $file" >&2
   fi
   [[ -z "$LANE_DIR" ]] || rm -rf "$LANE_DIR"
@@ -658,13 +674,13 @@ list_architecture() {
 }
 # Guarded by the batched module's own bin only: see "Contamination guard" in the header.
 run_architecture() {
-  local rc
+  local rc t0=$EPOCHSECONDS
   env -u XE_BUILD_LOCK_HELD TUNIT_DISABLE_HTML_REPORTER=1 "$REPO/scripts/assembly-guard.sh" guard \
     --root "$(dirname "$ARCH_EXE")" -- "$ARCH_EXE" --treenode-filter "$ARCH_FILTER" \
     --maximum-parallel-tests "${PAR:-1}" >>"$ARCH_LOG" 2>&1
   rc=$?
   # Concurrent run only: finish_cancel reads it, so a void that lands before the verdict outranks a cancel.
-  [[ -z "$LANE_DIR" ]] || echo "$rc" >"$LANE_DIR/architecture.rc"
+  [[ -z "$LANE_DIR" ]] || { echo "$rc" >"$LANE_DIR/architecture.rc"; echo "$((EPOCHSECONDS - t0))" >"$LANE_DIR/architecture.wall"; }
   return "$rc"
 }
 # Judges the run that exited <rc>: 0 green, 75 void, 1 red (with FAILED TEST, FAILED CLASS and RULE lines).

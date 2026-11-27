@@ -18,7 +18,7 @@ public sealed class IntegrationTriggerStoreTests
     {
         using var fixture = new IntegrationTestFixture();
         await using var context = await fixture.CreateSchemaAsync();
-        var store = new IntegrationTriggerStore(context, new FixedTimeProvider(FixedNow));
+        var store = new IntegrationTriggerStore(context, new ManualTimeProvider(FixedNow));
 
         var agentId = Guid.NewGuid();
         var created = await store.CreateAsync(new IntegrationTriggerCreateCommand
@@ -39,7 +39,7 @@ public sealed class IntegrationTriggerStoreTests
         AssertEx.Equal(FixedNow.ToUnixTimeMilliseconds(), created.CreatedAtUtc);
 
         await using var readContext = fixture.CreateContext();
-        var readStore = new IntegrationTriggerStore(readContext, new FixedTimeProvider(FixedNow));
+        var readStore = new IntegrationTriggerStore(readContext, new ManualTimeProvider(FixedNow));
 
         var byId = AssertEx.NotNull(await readStore.GetByIdAsync(created.Id));
         var byName = AssertEx.NotNull(await readStore.GetByNameAsync("sensor-ingest"));
@@ -57,17 +57,17 @@ public sealed class IntegrationTriggerStoreTests
         using var fixture = new IntegrationTestFixture();
         await using (var context = await fixture.CreateSchemaAsync())
         {
-            _ = await CreateAsync(new IntegrationTriggerStore(context, new FixedTimeProvider(FixedNow)), "sensor-ingest");
+            _ = await CreateAsync(new IntegrationTriggerStore(context, new ManualTimeProvider(FixedNow)), "sensor-ingest");
         }
 
         await using var raceContext = fixture.CreateContext();
         var conflict = await AssertEx.ThrowsAsync<IntegrationTriggerNameConflictException>(() =>
-            CreateAsync(new IntegrationTriggerStore(raceContext, new FixedTimeProvider(FixedNow)), "sensor-ingest"));
+            CreateAsync(new IntegrationTriggerStore(raceContext, new ManualTimeProvider(FixedNow)), "sensor-ingest"));
 
         AssertEx.True(conflict.InnerException is DbUpdateException { InnerException: SqliteException { SqliteErrorCode: 19 } },
             "The conflict must carry the SQLite unique-constraint violation as its cause.");
         await using var readContext = fixture.CreateContext();
-        AssertEx.Equal(expected: 1, (await new IntegrationTriggerStore(readContext, new FixedTimeProvider(FixedNow)).ListAsync()).Count);
+        AssertEx.Equal(expected: 1, (await new IntegrationTriggerStore(readContext, new ManualTimeProvider(FixedNow)).ListAsync()).Count);
     }
 
     [Test]
@@ -77,10 +77,10 @@ public sealed class IntegrationTriggerStoreTests
         await using var context = await fixture.CreateSchemaAsync();
         var graphId = Guid.NewGuid();
 
-        var created = await new IntegrationTriggerStore(context, new FixedTimeProvider(FixedNow)).CreateAsync(Command("lights-on", IntegrationTargetKind.Graph, agentId: null, graphId));
+        var created = await new IntegrationTriggerStore(context, new ManualTimeProvider(FixedNow)).CreateAsync(Command("lights-on", IntegrationTargetKind.Graph, agentId: null, graphId));
 
         await using var readContext = fixture.CreateContext();
-        var read = AssertEx.NotNull(await new IntegrationTriggerStore(readContext, new FixedTimeProvider(FixedNow)).GetByIdAsync(created.Id));
+        var read = AssertEx.NotNull(await new IntegrationTriggerStore(readContext, new ManualTimeProvider(FixedNow)).GetByIdAsync(created.Id));
         AssertEx.Equal(IntegrationTargetKind.Graph, read.TargetKind);
         AssertEx.Equal(graphId, read.TargetGraphWorkflowDefinitionId);
         AssertEx.Null(read.TargetAgentDefinitionId);
@@ -93,14 +93,14 @@ public sealed class IntegrationTriggerStoreTests
     {
         using var fixture = new IntegrationTestFixture();
         await using var context = await fixture.CreateSchemaAsync();
-        var store = new IntegrationTriggerStore(context, new FixedTimeProvider(FixedNow));
+        var store = new IntegrationTriggerStore(context, new ManualTimeProvider(FixedNow));
 
         var refused = await AssertEx.ThrowsAsync<DbUpdateException>(() =>
             store.CreateAsync(Command("one-target", IntegrationTargetKind.Graph, withAgent ? Guid.NewGuid() : null, withGraph ? Guid.NewGuid() : null)));
 
         AssertEx.True(refused.InnerException is SqliteException { SqliteExtendedErrorCode: 275 }, "the one-target CHECK is what refuses the row.");
         await using var readContext = fixture.CreateContext();
-        AssertEx.Empty(await new IntegrationTriggerStore(readContext, new FixedTimeProvider(FixedNow)).ListAsync());
+        AssertEx.Empty(await new IntegrationTriggerStore(readContext, new ManualTimeProvider(FixedNow)).ListAsync());
     }
 
     private static IntegrationTriggerCreateCommand Command(string name, IntegrationTargetKind kind, Guid? agentId, Guid? graphId) =>
@@ -123,7 +123,7 @@ public sealed class IntegrationTriggerStoreTests
     {
         using var fixture = new IntegrationTestFixture();
         await using var context = await fixture.CreateSchemaAsync();
-        var store = new IntegrationTriggerStore(context, new FixedTimeProvider(FixedNow));
+        var store = new IntegrationTriggerStore(context, new ManualTimeProvider(FixedNow));
         var created = await CreateAsync(store, "sensor-ingest");
 
         var update = new IntegrationTriggerUpdateCommand
@@ -163,7 +163,7 @@ public sealed class IntegrationTriggerStoreTests
     {
         using var fixture = new IntegrationTestFixture();
         await using var context = await fixture.CreateSchemaAsync();
-        var store = new IntegrationTriggerStore(context, new FixedTimeProvider(FixedNow));
+        var store = new IntegrationTriggerStore(context, new ManualTimeProvider(FixedNow));
 
         _ = await CreateAsync(store, "zulu-ingest");
         var alpha = await CreateAsync(store, "alpha-ingest");
@@ -191,17 +191,4 @@ public sealed class IntegrationTriggerStoreTests
             SessionPolicy = IntegrationSessionPolicy.PerInvocation,
             AcceptedInputKinds = IntegrationInputKinds.Text
         });
-
-    private sealed class FixedTimeProvider : TimeProvider
-    {
-        private readonly DateTimeOffset _now;
-
-        public FixedTimeProvider(DateTimeOffset now)
-        {
-            _now = now;
-        }
-
-        public override DateTimeOffset GetUtcNow() =>
-            _now;
-    }
 }

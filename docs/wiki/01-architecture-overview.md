@@ -1,7 +1,5 @@
 # Architecture Overview
 
-> Reviewed: 2026-10-02 · Code-grounded.
-
 **What this page covers.** The map of the whole node: one ASP.NET Core process (`XE-Local-AI-Engine.Client`) hosts the React UI, the loopback-only local API and SignalR hubs, the agent loop and the supervisors for the host `llama-server`, `sd-server` and `whisper-server` child processes. Two invariants carry the rest: dependencies flow one way through the layers, and nothing on the inference path runs in a container.
 
 **Read this if you are** adding a project or a cross-layer dependency, working out where a change belongs, or reviewing whether it crosses the machine boundary. **Skip to** [Architecture invariants](#architecture-invariants) for the rules; **reference tables** (where each concern lives, the locked runtime decisions) are in [What the system is](#what-the-system-is) and [Post-re-architecture runtime model](#post-re-architecture-runtime-model-locked-2026-06-17); **related pages:** [02](02-project-layout.md), [03](03-local-runtime-and-providers.md), [12](12-security-and-privacy.md).
@@ -33,8 +31,7 @@ in the per-topic pages linked throughout.
 ## What the system is
 
 The engine is **one deployable web server** plus a Vite/React SPA it serves. There is no separate worker
-process, no container runtime on the inference path, and (since the 2026-06-17 re-architecture) no
-HostAgent sidecar. Everything — the management UI, the local REST/SignalR surface, the agent execution
+process, no container runtime on the inference path, and no HostAgent sidecar. Everything — the management UI, the local REST/SignalR surface, the agent execution
 loop, and the model runtime supervisor — lives inside the `XE-Local-AI-Engine.Client` host.
 
 > **Scoped exception: Development Mode execution.** [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md)
@@ -84,10 +81,6 @@ is what an operator configured a feature to fetch: a model download, an operator
 OpenAI-compatible provider, an operator-registered MCP server, web search and page fetches once the operator
 turns on Web access, and update checks on the shipped update channel. The full table is in
 [Security & Privacy §1](12-security-and-privacy.md#1-egress-invariant-the-node-has-no-control-plane-channel).
-
-An earlier design paired the node with a central platform over an outbound `WorkerHub` SignalR
-connection, with device binding, a token refresh loop, an auto-connect hosted service and
-end-to-end-encrypted invocation envelopes. None of it was reachable in any shipped build, and it is gone.
 
 **Invariant:** nothing in the node opens an outbound connection to a control plane. Cloud-provider
 credentials and HMAC/endpoint tokens stay **local** — never returned to the browser, never logged.
@@ -355,15 +348,15 @@ The runtime was deliberately re-architected (status: *decisions locked*). The dr
 
 | # | Decision | Reality in code |
 |---|---|---|
-| 2 | **Docker removed entirely** — **amended 2026-07-29 to "no Docker on the inference path"** by [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) | No container sandbox as the inference path; `AppHost.cs` comment confirms the in-Aspire HostAgent/Docker resource was removed. The amendment permits a Docker Engine API client (`Docker.DotNet.Enhanced` — the maintained testcontainers fork, whose assembly/namespace is still `Docker.DotNet`) and a running daemon **for Development Mode build/test/lint execution only**, as a bounded stopgap that leaves the MXC provider seam open. The epic's grep-clean acceptance criterion was amended in the same change. |
+| 2 | **Docker removed entirely** — **amended 2026-07-29 to "no Docker on the inference path"** by [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) | No container sandbox as the inference path; `AppHost.cs` declares no container resource. The amendment permits a Docker Engine API client (`Docker.DotNet.Enhanced` — the maintained testcontainers fork, whose assembly/namespace is still `Docker.DotNet`) and a running daemon **for Development Mode build/test/lint execution only**, as a bounded stopgap that leaves the MXC provider seam open. The epic's grep-clean acceptance criterion was amended in the same change. |
 | 5/6 | Hybrid spawn-per-model lifecycle; app-controlled HF download + local store | `LlamaServerProcessSupervisor`, `LlamaServerLocalModelProvider`, `Providers.HuggingFace`. |
 | 7/8 | Prebuilt llama.cpp, recommended-pinned + user-upgradable; GPU variant selection only | `LlamaCppBinaryManager`, `LlamaCppReleasePins.cs`, `IGpuVariantSelector`, `LlamaCppUpdateCheckService` (notify-only update check). **Amended since the lock:** prebuilt download is still the default and the only *automatic* path, but two opt-in operator paths now sit ahead of it in `EnsureBinaryAsync` — an environment-variable bring-your-own binary override, and an in-app **source build** (`ILlamaCppSourceBuildService`, `LlamaCppSourceBuildService.cs`) that closes the missing-Linux-CUDA-prebuilt gap. Neither ever runs implicitly. See [Local Runtime & Providers §2.6](03-local-runtime-and-providers.md#26-in-app-source-builds-linux). |
 | 14 | **A secondary native runtime** — **withdrawn**: the Ollama runtime was removed | llama.cpp is the only node-managed chat runtime; `AppHost.cs` orchestrates only `app` + Vite + SQLite. |
 | 16 | Embeddings via llama.cpp day one | embedding GGUF on a pooling-enabled llama-server process, lexical ranker as fallback. |
-| 17 | **HostAgent deleted entirely** | The old `XE-Local-AI-Engine.HostAgent.*` projects no longer exist in the solution. The supervisor runs in-app as an unprivileged same-user child (localhost port, Job Object tree-kill on Windows). |
+| 17 | **HostAgent deleted entirely** | The solution has no `HostAgent` project. The supervisor runs in-app as an unprivileged same-user child (localhost port, Job Object tree-kill on Windows). |
 
-> **Discrepancy note (code vs. some older docs/comments):** stale comments still reference "host-agent"
-> enums (e.g. the OpenAPI enum comment in `ConfigureServices.cs`). These are leftover wording, **not** a
+> **Discrepancy note:** some code comments still say "host-agent" (for example the summaries of
+> `ILocalModelProvider` and `JsonStringEnumMemberNameSchemaProcessor`). These are leftover wording, **not** a
 > live HostAgent layer — there is no HostAgent project or gRPC/HMAC socket in the build. Treat HostAgent
 > as **deleted** per decision #17. See [Local Runtime & Providers](03-local-runtime-and-providers.md)
 > for the teardown detail.
@@ -481,7 +474,6 @@ Persistence specifics (selected per-column encryption, the migrations under
 - [Compute Tools](19-compute-tools.md)
 - [Benchmarks](20-benchmarks.md)
 - [Graph Workflows](21-graph-workflows.md)
-- [Workflow Engines Divergence Register](22-workflow-engines-divergence-register.md)
 - [External Apps](23-external-apps.md)
 - [Audio Transcription](24-audio-transcription.md)
 - ADRs: [0001 — Development Mode restart recovery](../adr/0001-development-mode-restart-recovery.md), [0002 — Development cloud-egress carrier](../adr/0002-development-cloud-egress-carrier.md), [0003 — Six-plan implementation scope](../adr/0003-six-plan-operator-decisions.md), [0004 — Development Mode container execution](../adr/0004-development-mode-container-execution-docker-stopgap.md), [0005 — Training runtime Python exclusivity](../adr/0005-training-runtime-python-exclusivity-and-project-placement.md)

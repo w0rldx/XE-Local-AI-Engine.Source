@@ -41,7 +41,7 @@ public sealed class EntraDeviceCodeSignInCoordinatorTests
 
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => first.WaitAsync(HangTimeout));
         AssertEx.Equal("SECOND", second.UserCode);
-        AssertEx.Equal("SECOND", coordinator.GetStatus().UserCode);
+        AssertEx.Equal("SECOND", coordinator.Status.UserCode);
     }
 
     [Test]

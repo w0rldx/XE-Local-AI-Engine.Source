@@ -16,10 +16,10 @@ using XE_Local_AI_Engine.Client.Services.Training.Runs;
 public sealed class TrainingRunHub : Hub
 {
     private readonly ITrainingRunEventBuffer _events;
-    private readonly ModelLabExperimentService _experiments;
+    private readonly ModelLabExperimentReader _experiments;
     private readonly ITrainingRunService _runs;
 
-    public TrainingRunHub(ITrainingRunService runs, ITrainingRunEventBuffer events, ModelLabExperimentService experiments)
+    public TrainingRunHub(ITrainingRunService runs, ITrainingRunEventBuffer events, ModelLabExperimentReader experiments)
     {
         ArgumentNullException.ThrowIfNull(events);
         ArgumentNullException.ThrowIfNull(experiments);

@@ -31,5 +31,8 @@ public enum ImageJobFailureReason
     ChatModelBusy,
 
     /// <summary>An application shutdown interrupted the job; startup reconciliation marked it failed.</summary>
-    Interrupted
+    Interrupted,
+
+    /// <summary>The model's daemon was unloaded twice while the generation was starting; nothing was submitted, so a retry is safe.</summary>
+    ModelUnloadedWhileStarting
 }

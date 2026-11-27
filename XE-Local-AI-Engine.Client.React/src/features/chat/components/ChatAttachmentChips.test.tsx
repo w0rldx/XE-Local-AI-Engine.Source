@@ -1,13 +1,11 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ChatAttachmentChips } from "@/features/chat/components/ChatAttachmentChips";
 import type { ChatAttachment, PendingAttachmentUpload } from "@/features/chat/models/ChatAttachmentModels";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { renderWithMantine } from "@/test/MantineTestRender";
 
 // Mantine's color-scheme provider reads window.matchMedia on mount; jsdom does not implement it.
 Object.defineProperty(window, "matchMedia", {
@@ -21,14 +19,6 @@ Object.defineProperty(window, "matchMedia", {
 		dispatchEvent: vi.fn(),
 	})),
 });
-
-function renderWithProviders(ui: ReactElement) {
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			{ui}
-		</MantineProvider>,
-	);
-}
 
 function attachment(overrides: Partial<ChatAttachment> = {}): ChatAttachment {
 	return {
@@ -49,13 +39,13 @@ describe("ChatAttachmentChips", () => {
 	});
 
 	it("renders nothing when there are no attachments or pending uploads", () => {
-		renderWithProviders(<ChatAttachmentChips attachments={[]} pendingUploads={[]} onRemove={vi.fn()} />);
+		renderWithMantine(<ChatAttachmentChips attachments={[]} pendingUploads={[]} onRemove={vi.fn()} />);
 
 		expect(screen.queryByTestId("chat-attachment-chips")).toBeNull();
 	});
 
 	it("renders one chip per attachment with its name and extraction status", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ChatAttachmentChips
 				attachments={[
 					attachment({ fileId: "file-1", originalFileName: "notes.pdf", status: "extracted" }),
@@ -74,7 +64,7 @@ describe("ChatAttachmentChips", () => {
 	});
 
 	it("labels an extraction that found no text as No text found", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ChatAttachmentChips
 				attachments={[attachment({ status: "extracted", extractedChars: 0 })]}
 				pendingUploads={[]}
@@ -87,7 +77,7 @@ describe("ChatAttachmentChips", () => {
 
 	it("renders an optimistic uploading chip with its percent", () => {
 		const pending: PendingAttachmentUpload = { tempId: "temp-1", name: "uploading.txt", sizeBytes: 10, percent: 42 };
-		renderWithProviders(<ChatAttachmentChips attachments={[]} pendingUploads={[pending]} onRemove={vi.fn()} />);
+		renderWithMantine(<ChatAttachmentChips attachments={[]} pendingUploads={[pending]} onRemove={vi.fn()} />);
 
 		expect(screen.getByTestId("chat-attachment-pending")).toBeTruthy();
 		expect(screen.getByText("uploading.txt")).toBeTruthy();
@@ -96,7 +86,7 @@ describe("ChatAttachmentChips", () => {
 
 	it("fires onRemove with the file id when the remove button is clicked", () => {
 		const onRemove = vi.fn();
-		renderWithProviders(
+		renderWithMantine(
 			<ChatAttachmentChips attachments={[attachment({ fileId: "file-7" })]} pendingUploads={[]} onRemove={onRemove} />,
 		);
 
@@ -106,7 +96,7 @@ describe("ChatAttachmentChips", () => {
 	});
 
 	it("disables the remove button when disabled", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ChatAttachmentChips attachments={[attachment()]} pendingUploads={[]} onRemove={vi.fn()} disabled={true} />,
 		);
 

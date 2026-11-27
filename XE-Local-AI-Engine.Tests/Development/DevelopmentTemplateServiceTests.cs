@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
-using System.Diagnostics;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Development;
@@ -50,27 +49,27 @@ public sealed class DevelopmentTemplateServiceTests : IDisposable
         AssertEx.True(Directory.Exists(Path.Combine(destination, ".git")), "The materialized .git must be a directory.");
         AssertEx.False(File.Exists(Path.Combine(destination, ".git")), "The materialized .git must not be a worktree pointer file.");
 
-        AssertEx.Equal(string.Empty, (await GitAsync(destination, "remote")).Trim(),
+        AssertEx.Equal(string.Empty, (await TestGit.RunAsync(destination, "remote")).Trim(),
             "Dropping .git must remove the inherited origin, so a stray push cannot land in the template.");
 
         // The four workspace invariants, as the engine will later evaluate them.
         AssertEx.Equal(Path.TrimEndingDirectorySeparator(Path.GetFullPath(destination)),
-            Path.TrimEndingDirectorySeparator(Path.GetFullPath((await GitAsync(destination, "rev-parse", "--show-toplevel")).Trim())));
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath((await TestGit.RunAsync(destination, "rev-parse", "--show-toplevel")).Trim())));
         AssertEx.Equal(Path.Combine(Path.TrimEndingDirectorySeparator(Path.GetFullPath(destination)), ".git"),
-            Path.TrimEndingDirectorySeparator(Path.GetFullPath((await GitAsync(destination, "rev-parse", "--git-common-dir")).Trim(), destination)));
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath((await TestGit.RunAsync(destination, "rev-parse", "--git-common-dir")).Trim(), destination)));
 
-        var head = (await GitAsync(destination, "rev-parse", "--verify", "HEAD^{commit}")).Trim();
-        AssertEx.Equal(head, (await GitAsync(destination, "rev-parse", "--verify", "refs/heads/main^{commit}")).Trim(),
+        var head = (await TestGit.RunAsync(destination, "rev-parse", "--verify", "HEAD^{commit}")).Trim();
+        AssertEx.Equal(head, (await TestGit.RunAsync(destination, "rev-parse", "--verify", "refs/heads/main^{commit}")).Trim(),
             "The base branch must resolve to the initial commit, because that is what the managed worktree is created from.");
-        AssertEx.Equal("main", (await GitAsync(destination, "symbolic-ref", "--short", "HEAD")).Trim());
+        AssertEx.Equal("main", (await TestGit.RunAsync(destination, "symbolic-ref", "--short", "HEAD")).Trim());
 
         AssertEx.NotEqual(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(Path.TrimEndingDirectorySeparator(Path.GetFullPath(template))),
             DevelopmentWorkspaceSecurity.RepositoryIdentityHash(Path.TrimEndingDirectorySeparator(Path.GetFullPath(destination))),
             "A project created from a template must not share the template's repository identity.");
 
         // The template's history must not come with it: exactly one commit, naming the template and its commit.
-        AssertEx.Equal("1", (await GitAsync(destination, "rev-list", "--count", "HEAD")).Trim());
-        var message = (await GitAsync(destination, "log", "-1", "--pretty=%s")).Trim();
+        AssertEx.Equal("1", (await TestGit.RunAsync(destination, "rev-list", "--count", "HEAD")).Trim());
+        var message = (await TestGit.RunAsync(destination, "log", "-1", "--pretty=%s")).Trim();
         AssertEx.True(message.StartsWith("Initial commit from template fixture-template @ ", StringComparison.Ordinal), message);
         AssertEx.True(message.EndsWith(result.TemplateCommit, StringComparison.Ordinal), message);
         AssertEx.NotEqual(result.TemplateCommit, head, "The initial commit is a new commit, not the template's.");
@@ -184,43 +183,17 @@ public sealed class DevelopmentTemplateServiceTests : IDisposable
         await File.WriteAllTextAsync(Path.Combine(templateRoot, ".xe-dev", "profile.json"),
             """{"profileId":"dotnet-slnx","buildTarget":"Fixture.slnx"}""");
 
-        _ = await GitAsync(templateRoot, "init", "--initial-branch=main");
-        _ = await GitAsync(templateRoot, "config", "user.email", "template@example.invalid");
-        _ = await GitAsync(templateRoot, "config", "user.name", "Template Fixture");
-        _ = await GitAsync(templateRoot, "add", "-A", "--", ".");
-        _ = await GitAsync(templateRoot, "commit", "-m", "template baseline");
+        _ = await TestGit.RunAsync(templateRoot, "init", "--initial-branch=main");
+        _ = await TestGit.RunAsync(templateRoot, "config", "user.email", "template@example.invalid");
+        _ = await TestGit.RunAsync(templateRoot, "config", "user.name", "Template Fixture");
+        _ = await TestGit.RunAsync(templateRoot, "add", "-A", "--", ".");
+        _ = await TestGit.RunAsync(templateRoot, "commit", "-m", "template baseline");
 
         // A template is a living repository with real history; one more commit makes "the commit sha is the version"
         // observable rather than incidental.
         await File.WriteAllTextAsync(Path.Combine(templateRoot, "README.md"), "template v2");
-        _ = await GitAsync(templateRoot, "commit", "-am", "template second commit");
+        _ = await TestGit.RunAsync(templateRoot, "commit", "-am", "template second commit");
         return templateRoot;
-    }
-
-    private static async Task<string> GitAsync(string workingDirectory, params string[] arguments)
-    {
-#pragma warning disable S4036 // Test-only helper; git resolves through the controlled PATH exactly as the product does.
-        var startInfo = new ProcessStartInfo("git")
-#pragma warning restore S4036
-        {
-            WorkingDirectory = workingDirectory,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-        foreach (var argument in arguments)
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
-
-        using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("git could not be started.");
-        var output = await process.StandardOutput.ReadToEndAsync();
-        var error = await process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
-        return process.ExitCode == 0
-            ? output
-            : throw new InvalidOperationException($"git {string.Join(' ', arguments)} failed: {error}");
     }
 
     private sealed class FakeTemplateStore : IDevelopmentTemplateStore

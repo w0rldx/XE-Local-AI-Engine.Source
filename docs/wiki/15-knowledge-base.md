@@ -46,7 +46,7 @@ The gate keys on the **EFFECTIVE model** — the one that actually runs the turn
 |---|---|
 | Ingestion pipeline driver | `XE-Local-AI-Engine.Client.Application/Services/Knowledge/Implementation/KnowledgeIngestionService.cs` (`IKnowledgeIngestionService`) |
 | Background ingestion worker + dispatcher | `…/Services/Knowledge/Implementation/KnowledgeIngestionWorker.cs`, `KnowledgeIngestionDispatcher.cs` |
-| Header-boundary chunker | `…/Services/Knowledge/Implementation/HeaderBoundaryChunkingService.cs` (`IChunkingService`) |
+| Header-boundary chunker | `…/Services/Knowledge/Implementation/HeaderBoundaryChunkingService.cs` |
 | Chunk embedder | `…/Services/Knowledge/Implementation/KnowledgeChunkEmbedder.cs` (`IKnowledgeChunkEmbedder`) |
 | Exact chunk-embedding reuse | `…/Services/Knowledge/Implementation/KnowledgeChunkEmbeddingCache.cs`, `KnowledgeChunkEmbeddingReuseStore.cs` |
 | Embedding model resolver + prefixer | `…/Services/Knowledge/Implementation/EmbeddingModelResolver.cs`, `KnowledgeEmbeddingPrefixer.cs` |

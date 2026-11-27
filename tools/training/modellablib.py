@@ -102,6 +102,13 @@ def frame_bytes(event, token, fields):
     return line
 
 
+def write_frame(event, fields):
+    """One frame carrying the spawn's XE_TRAINING_RUN_TOKEN, written to fd 1 with os.write."""
+    data = frame_bytes(event, os.environ.get("XE_TRAINING_RUN_TOKEN"), fields)
+    while data:  # a pipe write interrupted by a signal can be partial
+        data = data[os.write(1, data) :]
+
+
 def parse_command(line):
     """One host command line (bytes, as read with a limit of MAX_FRAME_BYTES + 1) as a dict with a known op."""
     if len(line) > MAX_FRAME_BYTES:
@@ -147,7 +154,7 @@ def validate_job(job):
         raise JobError("The job has no usable 'kind'.")
     _require_strings(job, ("checkpointPath", "prompt", "tracePath", "resultPath"))
     layers = job.get("layers")
-    if not isinstance(layers, list) or not layers or not all(_is_int(layer) and layer >= 0 for layer in layers):
+    if not isinstance(layers, list) or not layers or not all(is_int(layer) and layer >= 0 for layer in layers):
         raise JobError("The job has no usable 'layers'.")
     if len(set(layers)) != len(layers):
         raise JobError("The job names a layer twice.")
@@ -155,17 +162,17 @@ def validate_job(job):
     if layers != sorted(layers):
         raise JobError("The job's 'layers' are not in ascending order.")
     tokens = job.get("maxNewTokens")
-    if not _is_int(tokens) or not 1 <= tokens <= MAX_NEW_TOKENS_LIMIT:
+    if not is_int(tokens) or not 1 <= tokens <= MAX_NEW_TOKENS_LIMIT:
         raise JobError("The job has no usable 'maxNewTokens'.")
     cap = job.get("traceByteCap")
-    if not _is_int(cap) or cap <= FOOTER_RESERVE_BYTES:
+    if not is_int(cap) or cap <= FOOTER_RESERVE_BYTES:
         raise JobError("The job has no usable 'traceByteCap'.")
-    if not _is_int(job.get("seed")):
+    if not is_int(job.get("seed")):
         raise JobError("The job has no usable 'seed'.")
     _validate_attention_fields(job)
     _validate_lens_fields(job)
     routing_cap = job.get("routingByteCap")
-    if routing_cap is not None and (not _is_int(routing_cap) or routing_cap <= FOOTER_RESERVE_BYTES):
+    if routing_cap is not None and (not is_int(routing_cap) or routing_cap <= FOOTER_RESERVE_BYTES):
         raise JobError("The job has no usable 'routingByteCap'.")
     return job
 
@@ -186,16 +193,16 @@ def _validate_attention_fields(job):
     usable = (
         isinstance(layers, list)
         and 1 <= len(layers) <= MAX_ATTENTION_LAYERS
-        and all(_is_int(layer) and layer >= 0 for layer in layers)
+        and all(is_int(layer) and layer >= 0 for layer in layers)
         and layers == sorted(set(layers))
     )
     if not usable:
         raise JobError("The job has no usable 'attentionLayers'.")
     keys = job["attentionTopKeys"]
-    if not _is_int(keys) or not 1 <= keys <= MAX_ATTENTION_TOP_KEYS:
+    if not is_int(keys) or not 1 <= keys <= MAX_ATTENTION_TOP_KEYS:
         raise JobError("The job has no usable 'attentionTopKeys'.")
     cap = job["attentionByteCap"]
-    if not _is_int(cap) or cap <= FOOTER_RESERVE_BYTES:
+    if not is_int(cap) or cap <= FOOTER_RESERVE_BYTES:
         raise JobError("The job has no usable 'attentionByteCap'.")
 
 
@@ -203,10 +210,10 @@ def _validate_lens_fields(job):
     if not _given(job, _LENS_FIELDS, "lens", "both or neither"):
         return
     top = job["lensTopTokens"]
-    if not _is_int(top) or not 1 <= top <= MAX_LENS_TOP_TOKENS:
+    if not is_int(top) or not 1 <= top <= MAX_LENS_TOP_TOKENS:
         raise JobError("The job has no usable 'lensTopTokens'.")
     cap = job["lensByteCap"]
-    if not _is_int(cap) or cap <= FOOTER_RESERVE_BYTES:
+    if not is_int(cap) or cap <= FOOTER_RESERVE_BYTES:
         raise JobError("The job has no usable 'lensByteCap'.")
 
 
@@ -240,9 +247,9 @@ def _validated_steering_job(job):
             raise JobError(f"The job has no usable '{name}'.")
     layer = job.get("layer")
     # Block 0 has no direction tensor: llama.cpp's loader rejects index 0.
-    if not _is_int(layer) or layer < 1:
+    if not is_int(layer) or layer < 1:
         raise JobError("The job has no usable 'layer'.")
-    if not _is_int(job.get("seed")):
+    if not is_int(job.get("seed")):
         raise JobError("The job has no usable 'seed'.")
     return job
 
@@ -253,7 +260,7 @@ def _validated_source_job(job):
         raise JobError(f"The source job carries fields it may not: {extra}.")
     _require_strings(job, ("configDirectory", "resultPath"))
     cap = job.get("maxResultBytes")
-    if not _is_int(cap) or cap <= 0:
+    if not is_int(cap) or cap <= 0:
         raise JobError("The job has no usable 'maxResultBytes'.")
     return job
 
@@ -264,7 +271,7 @@ def _require_strings(job, names):
             raise JobError(f"The job has no usable '{name}'.")
 
 
-def _is_int(value: Any) -> TypeGuard[int]:
+def is_int(value: Any) -> TypeGuard[int]:
     return isinstance(value, int) and not isinstance(value, bool)
 
 

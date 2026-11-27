@@ -14,13 +14,13 @@ using XE_Local_AI_Engine.Client.Services.Development;
 /// </summary>
 /// <remarks>
 ///     The one endpoint in this file without the <c>IDevelopmentEndpoint</c> marker, so it stays registered with
-///     Development Mode switched off; <see cref="IDevelopmentCapabilityService" /> is registered either way.
+///     Development Mode switched off; <see cref="DevelopmentCapabilityService" /> is registered either way.
 /// </remarks>
 public sealed class GetDevelopmentCapabilityEndpoint : EndpointWithoutRequest<DevelopmentCapabilityResponse>
 {
-    private readonly IDevelopmentCapabilityService _capabilityService;
+    private readonly DevelopmentCapabilityService _capabilityService;
 
-    public GetDevelopmentCapabilityEndpoint(IDevelopmentCapabilityService capabilityService)
+    public GetDevelopmentCapabilityEndpoint(DevelopmentCapabilityService capabilityService)
     {
         ArgumentNullException.ThrowIfNull(capabilityService);
         _capabilityService = capabilityService;

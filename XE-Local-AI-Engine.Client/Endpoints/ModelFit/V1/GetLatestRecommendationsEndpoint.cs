@@ -4,7 +4,7 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Client.Services.ModelFit;
+using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 
 /// <summary>
 ///     FastEndpoints handler for the latest cached recommendation snapshot (GET model-fit/recommendations/latest),
@@ -20,9 +20,9 @@ public sealed class GetLatestRecommendationsEndpoint : Endpoint<GetLatestRecomme
     /// <summary>The advisor's fixed provider sentinel — the snapshot key the hardware-aware recommendation is cached under.</summary>
     private const string AdvisorProviderName = "llama.cpp";
 
-    private readonly IModelFitQueryService _modelFitQueryService;
+    private readonly ModelFitQueryService _modelFitQueryService;
 
-    public GetLatestRecommendationsEndpoint(IModelFitQueryService modelFitQueryService)
+    public GetLatestRecommendationsEndpoint(ModelFitQueryService modelFitQueryService)
     {
         ArgumentNullException.ThrowIfNull(modelFitQueryService);
         _modelFitQueryService = modelFitQueryService;

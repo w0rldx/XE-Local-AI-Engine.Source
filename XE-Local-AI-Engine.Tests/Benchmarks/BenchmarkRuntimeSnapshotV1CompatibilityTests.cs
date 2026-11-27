@@ -30,7 +30,7 @@ public sealed class BenchmarkRuntimeSnapshotV1CompatibilityTests
     [Test]
     public void Serialize_V1Snapshot_MatchesTheLiteralWireShape()
     {
-        var factory = new BenchmarkRuntimeSnapshotFactory(new BenchmarkEligibilityPolicy());
+        var factory = new BenchmarkRuntimeSnapshotFactory();
 
         var serialized = Encoding.UTF8.GetString(factory.Serialize(factory.Create(Input())));
 
@@ -40,7 +40,7 @@ public sealed class BenchmarkRuntimeSnapshotV1CompatibilityTests
     [Test]
     public void Deserialize_LiteralV1Snapshot_RoundTripsByteIdentically()
     {
-        var factory = new BenchmarkRuntimeSnapshotFactory(new BenchmarkEligibilityPolicy());
+        var factory = new BenchmarkRuntimeSnapshotFactory();
         var payload = Encoding.UTF8.GetBytes(LiteralV1Snapshot);
 
         var snapshot = factory.Deserialize(payload);
@@ -54,7 +54,7 @@ public sealed class BenchmarkRuntimeSnapshotV1CompatibilityTests
     [Test]
     public void Deserialize_LiteralV1Snapshot_LeavesTheAddedSamplingMembersAbsent()
     {
-        var factory = new BenchmarkRuntimeSnapshotFactory(new BenchmarkEligibilityPolicy());
+        var factory = new BenchmarkRuntimeSnapshotFactory();
 
         var snapshot = factory.Deserialize(Encoding.UTF8.GetBytes(LiteralV1Snapshot));
 
@@ -68,7 +68,7 @@ public sealed class BenchmarkRuntimeSnapshotV1CompatibilityTests
         // The rule the whole widening rests on: a member added to the sampling snapshot must be OMITTED when null.
         // The factory validates a stored payload by re-hashing it, so a member that emitted `null` would change the
         // bytes of every row frozen before it existed and every one of those runs would stop replaying.
-        var factory = new BenchmarkRuntimeSnapshotFactory(new BenchmarkEligibilityPolicy());
+        var factory = new BenchmarkRuntimeSnapshotFactory();
         var pinned = Input() with
         {
             PrimarySampling = BenchmarkFrozenPolicies.DeterministicSampling(maxOutputTokens: null,
@@ -93,7 +93,7 @@ public sealed class BenchmarkRuntimeSnapshotV1CompatibilityTests
         // The opt-out is an execution-context bit, not frozen configuration: it is [JsonIgnore]d off this record, so an
         // agent that disabled the tool-relevance filter freezes the same bytes and the same configurationHash as one
         // that did not. Without that, every run frozen before the flag existed would fail hash validation on upgrade.
-        var factory = new BenchmarkRuntimeSnapshotFactory(new BenchmarkEligibilityPolicy());
+        var factory = new BenchmarkRuntimeSnapshotFactory();
         var input = Input();
         var optedOut = input with
         {
@@ -115,7 +115,7 @@ public sealed class BenchmarkRuntimeSnapshotV1CompatibilityTests
     {
         // Runs frozen before the offer carried tool descriptions stored "description":null; newer runs store the text. The hash is a
         // self-integrity check over the stored payload, so both must replay.
-        var factory = new BenchmarkRuntimeSnapshotFactory(new BenchmarkEligibilityPolicy());
+        var factory = new BenchmarkRuntimeSnapshotFactory();
         var bare = new AllowedToolDto
         {
             Id = Guid.Parse("33333333-3333-3333-3333-333333333333"),
@@ -151,7 +151,7 @@ public sealed class BenchmarkRuntimeSnapshotV1CompatibilityTests
         // The companion to the test above: because the flag never reaches the frozen payload, a benchmark generation
         // never honors it. Pinned so the omission stays deliberate rather than becoming a silent divergence between a
         // freshly frozen run and the same run replayed from storage.
-        var factory = new BenchmarkRuntimeSnapshotFactory(new BenchmarkEligibilityPolicy());
+        var factory = new BenchmarkRuntimeSnapshotFactory();
         var input = Input();
         var optedOut = input with
         {

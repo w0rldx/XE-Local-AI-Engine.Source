@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     building an <c>AgentInlineSkill</c>, never by a local regex: a local one can drift from the specification and
 ///     persist names MAF then rejects at agent-construction time, breaking every agent the skill is assigned to.
 /// </remarks>
-internal sealed class AgentSkillService : IAgentSkillService
+public sealed class AgentSkillService
 {
     // Matches the AgentDefinition.Instructions cap so a skill body cannot exceed the per-agent instruction budget.
     // MAF has no body cap of its own, so this one stays local.
@@ -37,6 +37,7 @@ internal sealed class AgentSkillService : IAgentSkillService
         _store = store;
     }
 
+    /// <summary>Validates and persists a new skill, returning the stored record (free text decrypted).</summary>
     public async Task<AgentSkillRecord> CreateAsync(AgentSkillInput input, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -46,6 +47,11 @@ internal sealed class AgentSkillService : IAgentSkillService
         return await _store.CreateAsync(input, cancellationToken);
     }
 
+    /// <summary>
+    ///     Validates and applies <paramref name="input" /> to the skill with <paramref name="id" />. Returns the updated
+    ///     record.
+    /// </summary>
+    /// <exception cref="AgentSkillNotFoundException">No skill has <paramref name="id" />.</exception>
     public async Task<AgentSkillRecord> UpdateAsync(Guid id, AgentSkillInput input, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -55,6 +61,8 @@ internal sealed class AgentSkillService : IAgentSkillService
         return await _store.UpdateAsync(id, input, cancellationToken) ?? throw new AgentSkillNotFoundException(id);
     }
 
+    /// <summary>Removes the skill with <paramref name="id" />.</summary>
+    /// <exception cref="AgentSkillNotFoundException">No skill has <paramref name="id" />.</exception>
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         if (!await _store.DeleteAsync(id, cancellationToken))
@@ -63,11 +71,14 @@ internal sealed class AgentSkillService : IAgentSkillService
         }
     }
 
+    /// <summary>Returns the record for <paramref name="id" />.</summary>
+    /// <exception cref="AgentSkillNotFoundException">No skill has <paramref name="id" />.</exception>
     public async Task<AgentSkillRecord> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         return await _store.GetByIdAsync(id, cancellationToken) ?? throw new AgentSkillNotFoundException(id);
     }
 
+    /// <summary>Returns every skill in the library, ordered by Name (Ordinal).</summary>
     public Task<IReadOnlyList<AgentSkillRecord>> ListAsync(CancellationToken cancellationToken = default)
     {
         return _store.ListAsync(cancellationToken);

@@ -1,8 +1,9 @@
 # Inference runtime: llama.cpp binaries, launch and tool calling
 
-Scope: llama.cpp binary acquisition and launch fallback, the tool-offering gates, GBNF compilation of tool schemas, capability
-detection and the chat-slot seams. Read when: touching `Providers.LlamaServer`, the llama.cpp pin, tool offering or a tool
-schema, chat-template capability detection, or request-body patches. Dev-host scripting: [dev-runtime](dev-runtime.md).
+Scope: llama.cpp binary acquisition and launch fallback, embedding profiles, the tool-offering gates, GBNF compilation of
+tool schemas, capability detection, the chat-slot seams and GPU ownership. Read when: touching `Providers.LlamaServer`, the
+llama.cpp pin, an embedding profile, tool offering or a tool schema, chat-template capability detection, request-body
+patches, or a GPU work gate, load admission or runtime-mutation lease consumer. Dev-host scripting: [dev-runtime](dev-runtime.md).
 
 ## llama.cpp runtime
 
@@ -26,6 +27,10 @@ Writes re-read and merge under the sibling `llama-launch-fallback.json.lock`, ne
 replace fails on Windows). Frozen profiles bypass the fallback; capacity estimates stay f16-conservative.
 **Prevents:** one bad model disabling the optimized launch for every node process. **Authority:**
 `LlamaServerLaunchFallbackStoreTests`, `LlamaServerLaunchPolicy`.
+
+### Embedding profile: chosen by name, part of the vector identity
+
+**Rule:** an embedding model's prompt format and pooling come from `EmbeddingModelProfile.For`, matched on the model segment of the resolved name (after the last `/`, cut at the first `:`), never from GGUF architecture or pooling metadata. The profile's identity tag is part of the stored vector identity, and any change to a profile's prefix or pooling bumps its tag version. **Prevents:** chat Qwen3 and Qwen3-Embedding sharing one profile (one architecture id); the launcher and the knowledge base disagreeing about one shared `(model, Embedding)` process; a format or pooling change mixing old and new vectors under one identity instead of staling only that profile's rows. **Authority:** `EmbeddingModelProfile`, `KnowledgeEmbeddingVectorPolicy`, `EmbeddingModelProfileTests.EveryTag_NamesItsPooling_SoAPoolingChangeCannotKeepItsTag`.
 
 ## Tool calling and inference seams
 
@@ -133,7 +138,23 @@ llama.cpp request field silently vanishing from the wire when a second feature p
 
 ### Qwen3.5-9B puts its answer inside a reasoning part and emits trailing reasoning-only deltas after an approval request
 
-**Rule:** a live round or benchmark on `unsloth/Qwen3.5-9B-GGUF` reads the reasoning part as well as the content part before judging a turn empty or unranked, and tolerates reasoning-only deltas that arrive after `approval-requested`; these are model behaviours, not stream defects, and "repairing" them in the stream service breaks the 27B. **Prevents:** stream bugs filed against the chat runner for the 9B's output shape, and 9B benchmark runs marked unranked because the answer sat in the reasoning part. **Authority:** the reasoning-part handling in `docs/wiki/14-inference-runtime.md`; live-QA 2026-10-16 rounds R4 and R7.
+**Rule:** a live round or benchmark on `unsloth/Qwen3.5-9B-GGUF` reads the reasoning part as well as the content part before judging a turn empty or unranked, and tolerates reasoning-only deltas that arrive after `approval-requested`; these are model behaviours, not stream defects, and "repairing" them in the stream service breaks the 27B. **Prevents:** stream bugs filed against the chat runner for the 9B's output shape, and 9B benchmark runs marked unranked because the answer sat in the reasoning part. **Authority:** the reasoning-part handling in `docs/wiki/05-chat.md` ("Ordered parts"); live-QA 2026-10-16 rounds R4 and R7.
+
+## GPU ownership
+
+Which work gate, load admission and runtime-mutation lease each GPU holder takes, and how it gives the GPU back: [wiki 03, GPU ownership](../wiki/03-local-runtime-and-providers.md#gpu-ownership-what-each-holder-takes). These are the traps the table does not show; the training runtime install's admission rule is in [benchmarks-kb-training-transcription](benchmarks-kb-training-transcription.md) (Training).
+
+### The lease acquisition enters the runtime-mutation gate privately
+
+**Rule:** inside `LlamaServerRuntimeMutationGate`, `AcquireLeaseOrNullAsync` enters through the private `EnterAsync`, never the public `EnterExclusiveAsync` or `EnterSharedAsync`, because the public entries raise idle-holder demand. Demand is raised once, at the top, and only when `raisesDemand` is true. **Prevents:** a lease taken with `raisesDemand: false` (the Model Lab session's own cold start) still raising demand through the nested public entry and evicting its own session. **Authority:** `LlamaServerRuntimeMutationGate.AcquireLeaseOrNullAsync`, `LlamaServerRuntimeMutationGateTests`.
+
+### A GPU queue peeks before it touches the gate
+
+**Rule:** a polling consumer of `IGpuWorkGate` (benchmark, dataset generation, the training run queue) checks for queued work (`HasQueuedWorkAsync`, `PeekNextKindAsync`) before `TryBeginShared` or `TryBeginExclusive`. A refused gate request is GPU demand. **Prevents:** an empty poll every few seconds evicting an idle warm Model Lab worker over nothing. **Authority:** `BenchmarkQueueHostedService`, `DatasetGenerationHostedService`, `GpuWorkGate.TryBeginShared`.
+
+### Whisper bypasses the GPU work gate and the lease
+
+**Rule:** whisper-server takes only `IGpuModelLoadAdmission`, never `IGpuWorkGate` or the llama runtime-mutation lease, so any GPU-wide policy that lives on those two (idle-holder demand, exclusivity) must be wired into `WhisperServerProcessSupervisor` explicitly. **Prevents:** a new GPU holder or exclusivity rule that every other runtime honours while whisper loads beside it. **Authority:** `WhisperServerProcessSupervisor.AdmitGpuLoadAsync`, `WhisperServerSupervisorTests`.
 
 ## Stale beliefs
 

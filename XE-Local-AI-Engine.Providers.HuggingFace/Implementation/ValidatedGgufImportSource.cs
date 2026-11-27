@@ -7,6 +7,7 @@ using System.Runtime.InteropServices.ComTypes;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
@@ -18,11 +19,14 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 /// </remarks>
 internal sealed class ValidatedGgufImportSource : IAsyncDisposable
 {
-    private const int LinuxReadOnlyNoFollowNonBlockingCloseOnExec = 0x0 | 0x800 | 0x20000 | 0x80000;
     internal const uint WindowsOpenReparsePoint = 0x00200000;
     internal const uint WindowsOverlapped = 0x40000000;
     internal const uint WindowsSequentialScan = 0x08000000;
     internal const uint WindowsOpenFlags = WindowsOpenReparsePoint | WindowsOverlapped | WindowsSequentialScan;
+
+    internal static readonly int LinuxReadOnlyNoFollowNonBlockingCloseOnExec =
+        LinuxOpenFlags.ReadOnly | LinuxOpenFlags.NonBlocking | LinuxOpenFlags.NoFollow | LinuxOpenFlags.CloseOnExec;
+
     private readonly string _canonicalPath;
     private readonly SourceIdentity _identity;
     private readonly DateTime _lastWriteUtc;
@@ -195,9 +199,7 @@ internal sealed class ValidatedGgufImportSource : IAsyncDisposable
                 IsAsync: true);
         }
 
-        var pathBytes = new byte[Encoding.UTF8.GetByteCount(path) + 1];
-        Encoding.UTF8.GetBytes(path, pathBytes);
-        var descriptor = open(pathBytes, LinuxReadOnlyNoFollowNonBlockingCloseOnExec);
+        var descriptor = LinuxOpenFlags.Open(path, LinuxReadOnlyNoFollowNonBlockingCloseOnExec);
         if (descriptor < 0)
         {
             throw new UnauthorizedAccessException(string.Create(CultureInfo.InvariantCulture,
@@ -248,7 +250,8 @@ internal sealed class ValidatedGgufImportSource : IAsyncDisposable
                 throw new UnauthorizedAccessException("The selected source handle is not a regular file.");
             }
 
-            var openedPath = GetFinalPath(handle);
+            var openedPath = Path.GetFullPath(OpenedHandleContainment.FinalPathOrNull(handle)
+                                              ?? throw new UnauthorizedAccessException("The selected source handle path could not be read."));
             if (!string.Equals(openedPath, canonicalPath, StringComparison.OrdinalIgnoreCase))
             {
                 throw new UnauthorizedAccessException("The selected source handle did not resolve to the validated path.");
@@ -277,44 +280,6 @@ internal sealed class ValidatedGgufImportSource : IAsyncDisposable
         return lines.FirstOrDefault(line => line.StartsWith(prefix, StringComparison.Ordinal))?[prefix.Length..].Trim();
     }
 
-    private static string GetFinalPath(SafeFileHandle handle)
-    {
-        var required = GetFinalPathNameByHandle(handle, null, 0, 0);
-        if (required == 0)
-        {
-            throw new UnauthorizedAccessException("The selected source handle path could not be read.");
-        }
-
-        var buffer = new char[checked((int)required + 1)];
-        var written = GetFinalPathNameByHandle(handle, buffer, buffer.Length, 0);
-        if (written == 0 || written >= buffer.Length)
-        {
-            throw new UnauthorizedAccessException("The selected source handle path could not be read.");
-        }
-
-        return NormalizeWindowsFinalPath(new string(buffer, startIndex: 0, checked((int)written)));
-    }
-
-    internal static string NormalizeWindowsFinalPath(string path)
-    {
-        const string devicePrefix = @"\\?\";
-        const string uncPrefix = @"\\?\UNC\";
-        if (path.StartsWith(uncPrefix, StringComparison.OrdinalIgnoreCase))
-        {
-            path = @"\\" + path[uncPrefix.Length..];
-        }
-        else if (path.StartsWith(devicePrefix, StringComparison.OrdinalIgnoreCase))
-        {
-            path = path[devicePrefix.Length..];
-        }
-
-        return Path.GetFullPath(path);
-    }
-
-    [DllImport("libc", EntryPoint = "open", SetLastError = true)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
-    private static extern int open(byte[] pathname, int flags);
-
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     private static extern SafeFileHandle CreateFile(string fileName,
@@ -324,10 +289,6 @@ internal sealed class ValidatedGgufImportSource : IAsyncDisposable
         FileMode creationDisposition,
         uint flagsAndAttributes,
         IntPtr templateFile);
-
-    [DllImport("kernel32.dll", EntryPoint = "GetFinalPathNameByHandleW", CharSet = CharSet.Unicode, SetLastError = true)]
-    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-    private static extern uint GetFinalPathNameByHandle(SafeFileHandle file, [Out] char[]? filePath, int filePathLength, uint flags);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

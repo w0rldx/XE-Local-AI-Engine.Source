@@ -9,7 +9,6 @@ using NSubstitute;
 using TUnit.Core.Exceptions;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
-using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Compute.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
@@ -613,7 +612,7 @@ public sealed class ComputeSandboxLiveTests : IDisposable
         var provider = new UnisolatedSandboxProvider();
         var environment = new RecordingEnvironment();
         var gateway = new ComputeToolGateway(provider,
-            new StubIdentityProvider(),
+            new FixedAgentHomeIdentityProvider("owner-live", "node-live"),
             environment,
             Options.Create(Enabled(options: null)),
             Options.Create(new LocalContainerOptions()),
@@ -635,7 +634,7 @@ public sealed class ComputeSandboxLiveTests : IDisposable
     private ComputeToolGateway CreateGateway(IAgentSandboxRuntimeProvider provider, ComputeOptions? options = null)
     {
         return new ComputeToolGateway(provider,
-            new StubIdentityProvider(),
+            new FixedAgentHomeIdentityProvider("owner-live", "node-live"),
             _environment,
             Options.Create(Enabled(options)),
             Options.Create(new LocalContainerOptions()),
@@ -716,18 +715,6 @@ public sealed class ComputeSandboxLiveTests : IDisposable
     private static string ToPythonLiteral(string value)
     {
         return "\"" + value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
-    }
-
-    private sealed class StubIdentityProvider : IAgentHomeIdentityProvider
-    {
-        public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(new AgentHomeOwnerIdentity
-            {
-                OwnerUserId = "owner-live",
-                NodeId = "node-live"
-            });
-        }
     }
 
     /// <summary>

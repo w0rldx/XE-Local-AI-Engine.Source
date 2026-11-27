@@ -72,9 +72,37 @@ test("only test files and the shared src/test wrappers are scanned", () => {
 	);
 });
 
+test("a test file declaring its own copy of a shared helper is reported with its line and name", () => {
+	const root = scratchTree({
+		"features/Copy.test.tsx": `function installJsdomEnvironmentMocks(): void {}\nasync function renderWithProviders(ui) {}`,
+		"features/Arrow.test.ts": `export const renderWithMantine = (ui) => ui;`,
+	});
+	assert.deepEqual(
+		checkMantineTestTheme({ sourceRoot: root, root }).copies.map((entry) => entry.replaceAll("\\", "/")),
+		[
+			"features/Arrow.test.ts:1: renderWithMantine",
+			"features/Copy.test.tsx:1: installJsdomEnvironmentMocks",
+			"features/Copy.test.tsx:2: renderWithProviders",
+		],
+	);
+});
+
+test("importing or calling the shared helpers, a wrapper named after what it adds, and src/test itself all pass", () => {
+	const root = scratchTree({
+		"features/Uses.test.tsx": [
+			`import { installJsdomEnvironmentMocks, renderWithMantine } from "@/test/MantineTestRender";`,
+			`function renderWithConfirm(ui) { return renderWithMantine(<ConfirmProvider>{ui}</ConfirmProvider>); }`,
+			`installJsdomEnvironmentMocks();`,
+		].join("\n"),
+		"test/RenderWithProviders.tsx": `export function renderWithProviders(ui) {}`,
+	});
+	assert.deepEqual(checkMantineTestTheme({ sourceRoot: root, root }).copies, []);
+});
+
 test("the real src tree passes, and the scan reaches the hundred-plus live call sites", () => {
-	const { files, providers, offenders } = checkMantineTestTheme();
+	const { files, providers, offenders, copies } = checkMantineTestTheme();
 	assert.deepEqual(offenders, []);
+	assert.deepEqual(copies, []);
 	assert.ok(files > 200, `expected the scan to reach the test tree, it saw ${files} files`);
 	assert.ok(providers > 100, `expected the hand-rolled providers to be scanned, it saw ${providers}`);
 });

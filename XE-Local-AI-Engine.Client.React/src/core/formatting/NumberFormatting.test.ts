@@ -1,7 +1,7 @@
 import i18next from "i18next";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { formatCostUsd, formatCount, formatTokensCompact } from "@/core/formatting/NumberFormatting";
+import { formatCostUsd, formatCount, formatNumber, formatTokensCompact } from "@/core/formatting/NumberFormatting";
 
 describe("NumberFormatting", () => {
 	it("formatTokensCompact abbreviates large counts", () => {
@@ -44,12 +44,24 @@ describe("NumberFormatting", () => {
 			expect(formatCostUsd(12.5)).toMatch(/^12,50\s\$$/);
 		});
 
+		it("formatNumber applies its options in the UI language", async () => {
+			await i18next.changeLanguage("en");
+			expect(formatNumber(1.5, { minimumFractionDigits: 2 })).toBe("1.50");
+			expect(formatNumber(1.5, { maximumFractionDigits: 0 })).toBe("2");
+
+			await i18next.changeLanguage("de");
+
+			expect(formatNumber(1.5, { minimumFractionDigits: 2 })).toBe("1,50");
+			expect(formatNumber(0.125, { style: "percent", maximumFractionDigits: 1 })).toMatch(/^12,5\s%$/);
+		});
+
 		it("falls back to the environment default when the stored language tag is malformed", async () => {
 			await i18next.changeLanguage("en_US");
 
 			// The premise, pinned: without the guard this tag throws inside Intl.
 			expect(() => new Intl.NumberFormat("en_US")).toThrow(RangeError);
 			expect(formatCount(1234567)).toMatch(/^1\D?234\D?567$/);
+			expect(formatNumber(1.5, { minimumFractionDigits: 2 })).toMatch(/^1\D50$/);
 		});
 	});
 });

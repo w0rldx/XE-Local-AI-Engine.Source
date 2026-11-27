@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 /// <summary>
 ///     Estimates the fixed parts of the next chat request (system prompt, offered tools, output reserve, safety margin)
@@ -13,9 +14,9 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 /// <remarks>Read-only, content-free, Operator-gated; 404 when the node does not know the model or the conversation.</remarks>
 public sealed class GetNodeChatContextEstimateEndpoint : Endpoint<GetNodeChatContextEstimateRequest, NodeChatContextWindowResponse>
 {
-    private readonly IChatContextEstimateService _estimateService;
+    private readonly ChatContextEstimateService _estimateService;
 
-    public GetNodeChatContextEstimateEndpoint(IChatContextEstimateService estimateService)
+    public GetNodeChatContextEstimateEndpoint(ChatContextEstimateService estimateService)
     {
         ArgumentNullException.ThrowIfNull(estimateService);
         _estimateService = estimateService;

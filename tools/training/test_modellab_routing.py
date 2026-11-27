@@ -7,17 +7,11 @@ is not installed, every test skips with the reason.
 """
 
 import contextlib
-import sys
 import types
-import unittest
 from unittest import mock
 
 from modellablib import JobError, routing_record
-
-try:
-    import torch
-except ImportError:
-    torch = None
+from test_stubs import load_modellab, require_torch, run_standalone
 
 HIDDEN = 8
 VOCAB = 13
@@ -27,37 +21,10 @@ TOP_K = 3
 ROUTED = [0, 2, 3]
 
 
-def _require_torch():
-    if torch is None:
-        raise unittest.SkipTest("torch is not installed: the root dev venv carries CPU torch on linux x86_64 only.")
-    return torch
-
-
-def _load_modellab():
-    """The real script on real torch, with transformers reduced to the names it imports. Leaves no stub behind."""
-    _require_torch()
-    transformers = types.SimpleNamespace(
-        __version__="stub",
-        AutoModelForCausalLM=None,
-        AutoTokenizer=None,
-        DynamicCache=None,
-        LogitsProcessor=object,
-        LogitsProcessorList=None,
-        StoppingCriteria=object,
-        StoppingCriteriaList=None,
-    )
-    with mock.patch.dict(sys.modules, {"transformers": transformers}):
-        sys.modules.pop("modellab", None)
-        import modellab
-
-        sys.modules.pop("modellab", None)
-    return modellab
-
-
 def _model(normalized=False):
     """Embeddings, three routed blocks and a dense one, and a head. Blocks act per position, so a decode forward may
     pass only the newest token, as with a cache."""
-    torch = _require_torch()
+    torch = require_torch()
     nn = torch.nn
     torch.manual_seed(0)
 
@@ -120,7 +87,7 @@ def _model(normalized=False):
 def _generate(model, processor, prompt, steps, eos=None):
     """Greedy decoding as generate runs it: the prompt in one forward, then one token a forward, the processor once
     per token after its forward. Returns (generated ids, last logits)."""
-    torch = _require_torch()
+    torch = require_torch()
     generated, feed, logits = [], prompt, None
     with torch.inference_mode():
         for _ in range(steps):
@@ -141,12 +108,12 @@ def _hooks(model):
 
 
 def _decoded(bits):
-    torch = _require_torch()
+    torch = require_torch()
     return torch.tensor(bits, dtype=torch.int16).view(torch.bfloat16)
 
 
 def test_routers_are_the_blocks_with_a_top_k_gate():
-    modellab = _load_modellab()
+    modellab = load_modellab()
     model = _model()
     assert [index for index, _ in modellab.routers_of(model.layers)] == ROUTED
     assert modellab.routers_of(model.layers)[0][1] is model.layers[0].mlp.gate
@@ -157,8 +124,8 @@ def test_routers_are_the_blocks_with_a_top_k_gate():
 
 
 def test_each_step_keeps_the_ids_and_exact_weights_the_experts_received_at_the_predicting_position():
-    torch = _require_torch()
-    modellab = _load_modellab()
+    torch = require_torch()
+    modellab = load_modellab()
     for normalized in (False, True):
         model = _model(normalized)
         prompt = torch.tensor([[1, 2, 3, 4, 5]])
@@ -186,8 +153,8 @@ def test_each_step_keeps_the_ids_and_exact_weights_the_experts_received_at_the_p
 
 
 def test_the_hooks_change_no_value():
-    torch = _require_torch()
-    modellab = _load_modellab()
+    torch = require_torch()
+    modellab = load_modellab()
     prompt = torch.tensor([[3, 1, 4, 1, 5]])
     off = _generate(_model(), None, prompt, 4)
     model = _model()
@@ -198,8 +165,8 @@ def test_the_hooks_change_no_value():
 
 
 def test_an_early_eos_records_one_step_per_generated_token():
-    torch = _require_torch()
-    modellab = _load_modellab()
+    torch = require_torch()
+    modellab = load_modellab()
     prompt = torch.tensor([[2, 7]])
     tokens, _ = _generate(_model(), None, prompt, 4)
     eos = tokens[1]
@@ -219,8 +186,8 @@ def test_an_early_eos_records_one_step_per_generated_token():
 
 
 def test_a_second_router_call_before_the_processor_overwrites_the_first():
-    torch = _require_torch()
-    modellab = _load_modellab()
+    torch = require_torch()
+    modellab = load_modellab()
     model = _model()
     with contextlib.ExitStack() as stack, torch.inference_mode():
         routing = modellab._Routing(stack, modellab.routers_of(model.layers))
@@ -235,8 +202,8 @@ def test_a_second_router_call_before_the_processor_overwrites_the_first():
 
 
 def test_a_step_without_every_router_is_refused():
-    torch = _require_torch()
-    modellab = _load_modellab()
+    torch = require_torch()
+    modellab = load_modellab()
     model = _model()
     with contextlib.ExitStack() as stack, torch.inference_mode():
         routing = modellab._Routing(stack, modellab.routers_of(model.layers))
@@ -252,8 +219,8 @@ def test_a_step_without_every_router_is_refused():
 
 
 def test_a_later_step_whose_router_did_not_fire_is_refused_not_given_the_previous_steps_row():
-    torch = _require_torch()
-    modellab = _load_modellab()
+    torch = require_torch()
+    modellab = load_modellab()
     model = _model()
     with contextlib.ExitStack() as stack, torch.inference_mode():
         routing = modellab._Routing(stack, modellab.routers_of(model.layers))
@@ -273,8 +240,8 @@ def test_a_later_step_whose_router_did_not_fire_is_refused_not_given_the_previou
 
 
 def test_saving_moves_every_row_to_the_host_in_one_transfer():
-    torch = _require_torch()
-    modellab = _load_modellab()
+    torch = require_torch()
+    modellab = load_modellab()
     model = _model()
     with contextlib.ExitStack() as stack:
         routing = modellab._Routing(stack, modellab.routers_of(model.layers))
@@ -293,8 +260,8 @@ def test_saving_moves_every_row_to_the_host_in_one_transfer():
 
 
 def test_a_constructor_failing_after_its_first_hook_leaves_no_hook():
-    torch = _require_torch()
-    modellab = _load_modellab()
+    torch = require_torch()
+    modellab = load_modellab()
     model = _model()
     original = torch.nn.Module.register_forward_hook
     count = [0]
@@ -319,8 +286,8 @@ def test_a_constructor_failing_after_its_first_hook_leaves_no_hook():
 
 
 def test_a_router_output_of_another_shape_or_type_is_refused():
-    torch = _require_torch()
-    modellab = _load_modellab()
+    torch = require_torch()
+    modellab = load_modellab()
     model = _model()
     stack = contextlib.ExitStack()
     routing = modellab._Routing(stack, modellab.routers_of(model.layers))
@@ -352,7 +319,7 @@ def test_a_router_output_of_another_shape_or_type_is_refused():
 
 
 def test_a_routed_model_set_to_output_its_router_logits_is_refused_before_any_hook():
-    modellab = _load_modellab()
+    modellab = load_modellab()
     model = _model()
     reached = RuntimeError("admitted")
 
@@ -379,11 +346,4 @@ def test_a_routed_model_set_to_output_its_router_logits_is_refused_before_any_ho
 
 
 if __name__ == "__main__":
-    for name, test in sorted(globals().items()):
-        if name.startswith("test_") and callable(test):
-            try:
-                test()
-            except unittest.SkipTest as reason:
-                print(f"skip {name}: {reason}")
-            else:
-                print(f"ok {name}")
+    run_standalone(globals())

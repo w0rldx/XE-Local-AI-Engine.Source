@@ -36,7 +36,7 @@ internal static class AddNodeDevelopmentExtensions
                .ValidateDataAnnotations()
                .ValidateOnStart();
         // Before the early return: the capability endpoint answers while Development Mode is off.
-        builder.Services.AddScoped<IDevelopmentCapabilityService, DevelopmentCapabilityService>();
+        builder.Services.AddScoped<DevelopmentCapabilityService>();
 
         if (!startupSettings.DevelopmentEnabled)
         {
@@ -59,10 +59,9 @@ internal static class AddNodeDevelopmentExtensions
         builder.Services.AddScoped<IDevelopmentApplyService, DevelopmentApplyService>();
         builder.Services.AddScoped<IDevelopmentRepositoryBindingService, DevelopmentRepositoryBindingService>();
         builder.Services.AddScoped<IDevelopmentTemplateStore, DevelopmentTemplateStore>();
-        builder.Services.AddScoped<IDevelopmentTemplateService, DevelopmentTemplateService>();
+        builder.Services.AddScoped<DevelopmentTemplateService>();
         builder.Services.AddSingleton<IDevelopmentCommandProfileDetector, DevelopmentCommandProfileDetector>();
         builder.Services.AddSingleton<DevelopmentCloudContextCatalog>();
-        builder.Services.AddSingleton<IDevelopmentCloudContextCatalog>(static services => services.GetRequiredService<DevelopmentCloudContextCatalog>());
         builder.Services.AddSingleton<IDevelopmentCloudContextBuilder, DevelopmentCloudContextBuilder>();
         builder.Services.AddSingleton<DevelopmentCloudRoleRouteFactory>();
         builder.Services.AddScoped<IDevelopmentCloudAttemptContextService, DevelopmentCloudAttemptContextService>();

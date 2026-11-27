@@ -13,10 +13,10 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 /// </summary>
 public sealed class ReorderBenchmarkTaskItemsEndpoint : Endpoint<ReorderBenchmarkTaskItemsRequest, ListBenchmarkTaskItemsResponse>
 {
-    private readonly IBenchmarkTaskItemService _items;
+    private readonly BenchmarkTaskItemService _items;
     private readonly BenchmarkRecordService _records;
 
-    public ReorderBenchmarkTaskItemsEndpoint(IBenchmarkTaskItemService items, BenchmarkRecordService records)
+    public ReorderBenchmarkTaskItemsEndpoint(BenchmarkTaskItemService items, BenchmarkRecordService records)
     {
         ArgumentNullException.ThrowIfNull(items);
         ArgumentNullException.ThrowIfNull(records);

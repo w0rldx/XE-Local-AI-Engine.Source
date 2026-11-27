@@ -7,9 +7,9 @@ using XE_Local_AI_Engine.Client.Services.ModelLab;
 
 public sealed class GetModelLabExperimentTraceEndpoint : Endpoint<ModelLabExperimentRouteRequest, ModelLabTraceResponse>
 {
-    private readonly ModelLabExperimentService _experiments;
+    private readonly ModelLabExperimentReader _experiments;
 
-    public GetModelLabExperimentTraceEndpoint(ModelLabExperimentService experiments)
+    public GetModelLabExperimentTraceEndpoint(ModelLabExperimentReader experiments)
     {
         ArgumentNullException.ThrowIfNull(experiments);
         _experiments = experiments;

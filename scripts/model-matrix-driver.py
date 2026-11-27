@@ -29,7 +29,6 @@ logged in to. Stdlib only; the REST and SignalR client and the device audit are 
 from __future__ import annotations
 
 import argparse
-import datetime
 import hashlib
 import importlib.util
 import json
@@ -38,8 +37,6 @@ import subprocess
 import sys
 import threading
 import time
-import urllib.parse
-import urllib.request
 import uuid
 from pathlib import Path
 from typing import Any
@@ -51,6 +48,7 @@ gsd = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(gsd)
 
 API = gsd.API
+now = gsd.now
 # Where this checkout's node host runs from: the runner builds and starts the host of the checkout this script is in.
 HOST_DIR = str(Path(__file__).resolve().parent.parent / "XE-Local-AI-Engine.Client") + os.sep
 TIERS = ("fast", "extended", "rc")
@@ -100,10 +98,6 @@ MULTI_TOOL_PROMPT = (
 
 class PrerequisiteError(RuntimeError):
     """The node is not prepared for the lane; nothing was judged."""
-
-
-def now() -> str:
-    return datetime.datetime.now().isoformat(timespec="milliseconds")
 
 
 # Pure logic (unit-tested in scripts/tests/test_model_matrix_driver.py)
@@ -371,12 +365,15 @@ class Evidence:
             handle.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
 
 
-class Client(gsd.NodeClient):
-    """NodeClient that logs every call (hub polls excepted) at call time and logs in again once on a 401."""
+class Client(gsd.RecordingNodeClient):
+    """RecordingNodeClient that logs to the current evidence directory and logs in again once on a 401."""
 
     def __init__(self, base_url: str, evidence: Evidence) -> None:
         super().__init__(base_url, None, 180.0)
         self.evidence = evidence
+
+    def http_log(self) -> Path:
+        return self.evidence.dir / "http.jsonl"
 
     def login(self) -> None:
         email = os.environ.get("XE_MODEL_MATRIX_EMAIL", "")
@@ -391,43 +388,29 @@ class Client(gsd.NodeClient):
         record: dict = {"t": now(), "method": "POST", "path": f"{API}/auth/login"}
         started = time.monotonic()
         try:
-            code, payload = super().request(
+            code, payload = super().exchange(
                 "POST", f"{API}/auth/login", json.dumps({"email": email, "password": password})
             )
         except gsd.DriverError as error:
             record.update(ms=int((time.monotonic() - started) * 1000), error=str(error)[:4000])
-            self.evidence.append("http.jsonl", record)
+            gsd.append_jsonl(self.http_log(), record)
             raise
         record.update(ms=int((time.monotonic() - started) * 1000), status=code, response="(token omitted)")
-        self.evidence.append("http.jsonl", record)
+        gsd.append_jsonl(self.http_log(), record)
         if not isinstance(payload, dict) or not payload.get("accessToken"):
             raise gsd.DriverError("auth/login returned no accessToken")
         self.token = payload["accessToken"]
 
-    def request(self, method, path, body=None, content_type="application/json", expect_binary=False, allowed_status=()):
-        poll = "/hub?id=" in path and method in ("GET", "DELETE")
-        record: dict = {"t": now(), "method": method, "path": path}
-        if body is not None and not poll:
-            text = body.decode("utf-8", "replace") if isinstance(body, bytes) else body
-            record["request"] = text[:20000]
-        started = time.monotonic()
+    def exchange(
+        self, method, path, body=None, content_type="application/json", expect_binary=False, allowed_status=()
+    ):
         try:
-            try:
-                status, payload = super().request(method, path, body, content_type, expect_binary, allowed_status)
-            except gsd.DriverError as error:
-                if "HTTP 401" not in str(error) or not self.token:
-                    raise
-                self.login()
-                status, payload = super().request(method, path, body, content_type, expect_binary, allowed_status)
+            return super().exchange(method, path, body, content_type, expect_binary, allowed_status)
         except gsd.DriverError as error:
-            record.update(ms=int((time.monotonic() - started) * 1000), error=str(error)[:4000])
-            self.evidence.append("http.jsonl", record)
-            raise
-        if not poll:
-            shown = payload.decode("utf-8", "replace")[:2000] if isinstance(payload, bytes) else payload
-            record.update(ms=int((time.monotonic() - started) * 1000), status=status, response=shown)
-            self.evidence.append("http.jsonl", record)
-        return status, payload
+            if "HTTP 401" not in str(error) or not self.token:
+                raise
+            self.login()
+            return super().exchange(method, path, body, content_type, expect_binary, allowed_status)
 
     def get(self, path: str, allowed: tuple[int, ...] = ()) -> Any:
         return self.request("GET", API + path, allowed_status=allowed)[1]
@@ -575,7 +558,7 @@ class SlotWatcher:
                 try:
                     url = f"http://127.0.0.1:{port}/slots"
                     # Loopback http only: the URL is built here from a port of a local llama-server process.
-                    slots = json.loads(urllib.request.urlopen(url, timeout=2).read())  # noqa: S310  # nosec B310
+                    slots = json.loads(gsd.direct_opener().open(url, timeout=2).read())  # nosec B310
                 except (OSError, ValueError):
                     continue
                 for slot in slots if isinstance(slots, list) else []:
@@ -1134,14 +1117,7 @@ def command_download(args: argparse.Namespace) -> int:
         _, started = client.post(
             "/model-fit/download", {"repoId": entry["repo"], "fileName": entry["file"], "includeProjector": False}
         )
-        operation = urllib.parse.quote(str(started["operationId"]))
-        deadline, phase = time.monotonic() + args.timeout, ""
-        while time.monotonic() < deadline:
-            state = client.get(f"/model-fit/gguf/downloads/operations/{operation}")
-            phase = str(state.get("phase") or "")
-            if phase.lower() not in ("running", "queued", "pending", "starting", "verifying", "finalizing"):
-                break
-            time.sleep(5)
+        phase = gsd.poll_download(client.get, started["operationId"], args.timeout)
         if phase.lower() != "completed":
             raise gsd.DriverError(f"download of {entry['id']} ended in phase {phase!r}")
         print(f"{entry['id']}\tdownloaded")

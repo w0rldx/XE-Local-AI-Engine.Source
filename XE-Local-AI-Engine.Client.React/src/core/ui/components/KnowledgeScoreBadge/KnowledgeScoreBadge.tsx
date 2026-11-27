@@ -2,6 +2,7 @@ import { Badge, type MantineSize, Tooltip, VisuallyHidden } from "@mantine/core"
 import { useTranslation } from "react-i18next";
 
 import type { XeLocalAiEngineClientServicesKnowledgeKnowledgeScoreKind as KnowledgeScoreKind } from "@/core/api/generated";
+import { formatNumber } from "@/core/formatting/NumberFormatting";
 
 interface KnowledgeScoreBadgeProps {
 	readonly score: number;
@@ -15,11 +16,9 @@ interface KnowledgeScoreBadgeProps {
 // Fusion needs three decimals to tell hits apart, rerank two. Shared by the knowledge search panel and the chat
 // sources strip, so it lives in core rather than in either feature.
 export function KnowledgeScoreBadge({ score, scoreKind, size }: KnowledgeScoreBadgeProps) {
-	const { t, i18n } = useTranslation();
+	const { t } = useTranslation();
 	const digits = scoreKind === "Rerank" ? 2 : 3;
-	const value = new Intl.NumberFormat(i18n.language, { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(
-		score,
-	);
+	const value = formatNumber(score, { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
 	const detail =
 		scoreKind === "Rerank"

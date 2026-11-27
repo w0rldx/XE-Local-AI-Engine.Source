@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { ApiError } from "@/core/api/errors/ApiError";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { getModelLabExperimentLensOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import type {
@@ -11,6 +10,7 @@ import type {
 	XeLocalAiEngineClientServicesModelLabModelLabTraceResult as TraceResult,
 } from "@/core/api/generated/types.gen";
 import { logprobPercentLabel, logprobTextLabel } from "@/core/directInference/DirectInferenceModels";
+import { formatNumber } from "@/core/formatting/NumberFormatting";
 import {
 	BasisBadge,
 	ExplanationEntry,
@@ -19,6 +19,7 @@ import {
 } from "@/features/modelLab/components/ArchitectureExplanation";
 import { CandidateBar } from "@/features/modelLab/components/NextTokenStepView";
 import { type ExplanationLevel, explanationKey, type lensTopics } from "@/features/modelLab/models/ModelLabExplanation";
+import { isNotFound } from "@/features/modelLab/models/ModelLabPyTorch";
 
 // S0 measured the last block's lens bitwise equal to the raw output; one storage quantum (log-probabilities are floored
 // to 1/10,000) is the most the two stored values may differ by.
@@ -27,6 +28,10 @@ const lastBlockTolerance = 1e-4;
 const toleranceSlack = 1e-9;
 
 const notRecorded = ["stepper.lensNotRecorded"];
+
+const twoDecimals: Intl.NumberFormatOptions = { minimumFractionDigits: 2, maximumFractionDigits: 2 };
+const threeDigits: Intl.NumberFormatOptions = { maximumSignificantDigits: 3 };
+const twoDigits: Intl.NumberFormatOptions = { maximumSignificantDigits: 2 };
 
 // Null is a value that was not finite: probability 0.
 function logprobOf(value: number | null | undefined): number {
@@ -125,9 +130,6 @@ export function TraceLensPanel({ experimentId, result, step, selectedBlock, laye
 		"Each block's lens readout at step {{step}}; the chosen token is {{text}}",
 		{ step: step + 1, text: logprobTextLabel(token?.text) },
 	);
-	const numbers = new Intl.NumberFormat(i18n.language, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-	const counts = new Intl.NumberFormat(i18n.language, { maximumSignificantDigits: 3 });
-	const quantum = new Intl.NumberFormat(i18n.language, { maximumSignificantDigits: 2 });
 	// Competition rank: rank 1 with another token listed first is a tie at the top, not a second place. Without the
 	// chosen token's id the top token cannot be told apart from it, so no tie is claimed. A null rank sits beside a
 	// chosen logprob that was not finite.
@@ -170,7 +172,7 @@ export function TraceLensPanel({ experimentId, result, step, selectedBlock, laye
 			{lens.status === "pending" && <Loader size="sm" />}
 			{lens.status === "error" && (
 				<Alert color="red" data-testid="model-lab-stepper-lens-failed">
-					{lens.error instanceof ApiError && lens.error.statusCode === 404
+					{isNotFound(lens.error)
 						? t("pages.modelLab.trace.stepper.lens.notFound", "This run kept no logit lens.")
 						: apiErrorMessage(lens.error, t("pages.modelLab.trace.stepper.lens.failed", "The logit lens could not be read."))}
 				</Alert>
@@ -256,7 +258,7 @@ export function TraceLensPanel({ experimentId, result, step, selectedBlock, laye
 												</Stack>
 											</Table.Td>
 											<Table.Td ta="right" style={{ whiteSpace: "nowrap" }}>
-												{block.entropy === null ? <NotAvailable /> : numbers.format(block.entropy)}
+												{block.entropy === null ? <NotAvailable /> : formatNumber(block.entropy, twoDecimals)}
 											</Table.Td>
 										</Table.Tr>
 									);
@@ -324,9 +326,9 @@ export function TraceLensPanel({ experimentId, result, step, selectedBlock, laye
 												"pages.modelLab.trace.stepper.lens.spreadLine",
 												"Spread of this block's readout: {{entropy}} nats, about as spread as e^H ≈ {{tokens}} equally likely tokens (at most ln V = {{max}} nats for this vocabulary).",
 												{
-													entropy: numbers.format(picked.entropy),
-													tokens: counts.format(Math.exp(picked.entropy)),
-													max: numbers.format(Math.log(data.vocabSize)),
+													entropy: formatNumber(picked.entropy, twoDecimals),
+													tokens: formatNumber(Math.exp(picked.entropy), threeDigits),
+													max: formatNumber(Math.log(data.vocabSize), twoDecimals),
 												},
 											)}
 								</Text>
@@ -337,8 +339,8 @@ export function TraceLensPanel({ experimentId, result, step, selectedBlock, laye
 						<LastBlock
 							block={last}
 							raw={token?.logprob}
-							tolerance={quantum.format(lastBlockTolerance)}
-							difference={(delta) => quantum.format(delta)}
+							tolerance={formatNumber(lastBlockTolerance, twoDigits)}
+							difference={(delta) => formatNumber(delta, twoDigits)}
 						/>
 					)}
 				</>

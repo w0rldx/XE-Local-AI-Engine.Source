@@ -55,26 +55,9 @@ public sealed class GgufImportEndpointContractTests
                      "CancelGgufImportEndpoint.cs"
                  })
         {
-            var source = await File.ReadAllTextAsync(GetEndpointPath(fileName));
+            var source = await File.ReadAllTextAsync(RepositoryPaths.ClientProject("Endpoints", "ModelFit", "V1", fileName));
             AssertEx.True(source.Contains("Policies(NodeAuthorizationPolicies.Operator)", StringComparison.Ordinal),
                 $"{fileName} must declare Policies(NodeAuthorizationPolicies.Operator).");
         }
-    }
-
-    private static string GetEndpointPath(string fileName)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine(directory.FullName, "XE-Local-AI-Engine.Client", "Endpoints", "ModelFit", "V1", fileName);
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException($"Could not locate endpoint source {fileName}.");
     }
 }

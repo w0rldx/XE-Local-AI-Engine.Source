@@ -1,9 +1,6 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Stub the generated resolve mutation's mutationFn so the wiring can be asserted without a backend.
@@ -16,18 +13,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal)
 
 import { AskUserQuestionCard } from "@/core/chat/components/AskUserQuestionCard";
 import type { PendingUserQuestion } from "@/core/models/ChatMessageParts";
-import { testMantineTheme } from "@/test/MantineTestRender";
-
-function renderWithProviders(ui: ReactElement) {
-	const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
-	return render(
-		<QueryClientProvider client={queryClient}>
-			<MantineProvider env="test" theme={testMantineTheme}>
-				{ui}
-			</MantineProvider>
-		</QueryClientProvider>,
-	);
-}
+import { renderWithProviders } from "@/test/RenderWithProviders";
 
 const singleSelect: PendingUserQuestion = {
 	requestId: "question-42",

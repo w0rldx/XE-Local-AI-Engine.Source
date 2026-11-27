@@ -36,7 +36,7 @@ internal static class AddNodeKnowledgeBaseExtensions
                    .ValidateOnStart();
 
         // Stateless, thread-safe collaborators — safe as singletons and injectable into the scoped ingestion service.
-        builder.Services.AddSingleton<IChunkingService, HeaderBoundaryChunkingService>();
+        builder.Services.AddSingleton<HeaderBoundaryChunkingService>();
         builder.Services.AddSingleton<IKnowledgeEmbeddingPrefixer, KnowledgeEmbeddingPrefixer>();
         // Maps the pinned or configured embedding name to an installed model, shared by ingestion and search so chunk and
         // query vectors use the identical model. Reads the pin through the singleton settings store → singleton.
@@ -70,7 +70,7 @@ internal static class AddNodeKnowledgeBaseExtensions
 
         // Shared admission rule for every store path — upload endpoint and repository importer (enqueue when the store wrote the
         // document, or on a retryable dedupe hit). Scoped: it reads status through the scoped catalog service, enqueuing on the dispatcher.
-        builder.Services.AddScoped<IKnowledgeIngestionAdmissionService, KnowledgeIngestionAdmissionService>();
+        builder.Services.AddScoped<KnowledgeIngestionAdmissionService>();
 
         // Reciprocal Rank Fusion is a pure, stateless function over rank lists — safe as a singleton, no DbContext.
         builder.Services.AddSingleton<IRankingFusionService, ReciprocalRankFusion>();

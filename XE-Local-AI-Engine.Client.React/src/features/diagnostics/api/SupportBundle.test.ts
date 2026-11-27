@@ -5,16 +5,13 @@ import { delay, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SCHEMA_VERSION, type Snapshot } from "@/core/diagnostics/Diagnostics";
-import {
-	buildSupportBundleZip,
-	exportSupportBundle,
-	SUPPORT_BUNDLE_PATH,
-	SUPPORT_BUNDLE_TIMEOUT_MS,
-} from "@/features/diagnostics/api/SupportBundle";
+import { buildSupportBundleZip, exportSupportBundle, SUPPORT_BUNDLE_TIMEOUT_MS } from "@/features/diagnostics/api/SupportBundle";
 import { parseSnapshotZip } from "@/features/diagnostics/models/ExportSnapshot";
 import en from "@/locales/en.json";
 import { binaryRoute, localApiPath, problemDetailsRoute } from "@/test/msw/Handlers";
 import { setupMswServer } from "@/test/UseMswServer";
+
+const SUPPORT_BUNDLE_PATH = "diagnostics/support-bundle";
 
 const { saveBlobMock, exportSnapshotMock, toastMock } = vi.hoisted(() => ({
 	saveBlobMock: vi.fn(),

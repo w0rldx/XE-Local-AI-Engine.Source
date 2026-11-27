@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
 	benchmarkPythonTestsLimits,
 	defaultVerifierConfig,
-	firstVerifierIssue,
 	parseMathAnswerNumber,
 	parseVerifierConfig,
 	serializeVerifierConfig,
@@ -138,27 +137,6 @@ describe("parseMathAnswerNumber", () => {
 		expect(parseMathAnswerNumber("1/0")).toBeNull();
 		expect(parseMathAnswerNumber("")).toBeNull();
 		expect(parseMathAnswerNumber(undefined)).toBeNull();
-	});
-});
-
-describe("firstVerifierIssue", () => {
-	it("names the first row the node would refuse, so the editor can point at one", () => {
-		expect(
-			firstVerifierIssue([
-				{ kind: "llm", config: null },
-				{ kind: "exact", config: '{"expected":"42"}' },
-				{ kind: "regex", config: '{"pattern":""}' },
-			]),
-		).toEqual({ index: 2, issue: "patternRequired" });
-	});
-
-	it("is null when every criterion passes the pre-check", () => {
-		expect(
-			firstVerifierIssue([
-				{ kind: "llm", config: null },
-				{ kind: "exact", config: '{"expected":"42"}' },
-			]),
-		).toBeNull();
 	});
 });
 

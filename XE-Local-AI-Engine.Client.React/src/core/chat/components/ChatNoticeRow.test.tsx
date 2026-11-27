@@ -1,9 +1,8 @@
 // @vitest-environment jsdom
 
 import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import i18next from "i18next";
-import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ChatNoticeRow } from "@/core/chat/components/ChatNoticeRow";
@@ -11,15 +10,7 @@ import { ChatNoticeContinueContext } from "@/core/chat/models/ChatNoticeContinue
 import type { ChatNoticePart } from "@/core/models/ChatMessageParts";
 import de from "@/locales/de.json";
 import { nonEnglishLocales } from "@/test/Locales";
-import { testMantineTheme } from "@/test/MantineTestRender";
-
-function renderWithProviders(ui: ReactElement) {
-	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			{ui}
-		</MantineProvider>,
-	);
-}
+import { renderWithMantine, testMantineTheme } from "@/test/MantineTestRender";
 
 function noticePart(overrides: Partial<ChatNoticePart> = {}): ChatNoticePart {
 	return {
@@ -54,7 +45,7 @@ describe("ChatNoticeRow", () => {
 	});
 
 	it("renders the server-provided notice message verbatim", () => {
-		renderWithProviders(<ChatNoticeRow part={noticePart({ text: "Switched to a smaller model." })} />);
+		renderWithMantine(<ChatNoticeRow part={noticePart({ text: "Switched to a smaller model." })} />);
 
 		expect(screen.getByText("Switched to a smaller model.")).toBeTruthy();
 	});
@@ -63,7 +54,7 @@ describe("ChatNoticeRow", () => {
 		const text = "run_python was not offered because Compute tools is turned off. Turn it on in Node Settings, Features.";
 		i18next.addResourceBundle("de", "translation", de, true, true);
 		await i18next.changeLanguage("de");
-		renderWithProviders(<ChatNoticeRow part={noticePart({ noticeKind: "ToolsWithheld", text, detail: "compute" })} />);
+		renderWithMantine(<ChatNoticeRow part={noticePart({ noticeKind: "ToolsWithheld", text, detail: "compute" })} />);
 
 		expect(
 			screen.getByText(
@@ -73,7 +64,7 @@ describe("ChatNoticeRow", () => {
 	});
 
 	it("localizes the stopped-while-thinking sentence and still shows the finish reason", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ChatNoticeRow
 				part={noticePart({
 					noticeKind: "EmptyAnswer",
@@ -91,7 +82,7 @@ describe("ChatNoticeRow", () => {
 
 	it("localizes the tool-call-in-reasoning sentence in en and de", () => {
 		const text = "The model tried to call a tool inside its reasoning, where the call cannot run, and stopped without an answer.";
-		renderWithProviders(<ChatNoticeRow part={noticePart({ noticeKind: "EmptyAnswer", text, detail: "stop" })} />);
+		renderWithMantine(<ChatNoticeRow part={noticePart({ noticeKind: "EmptyAnswer", text, detail: "stop" })} />);
 
 		expect(screen.getByText(text)).toBeTruthy();
 		const de = nonEnglishLocales.find((locale) => locale.code === "de")?.resource as {
@@ -104,7 +95,7 @@ describe("ChatNoticeRow", () => {
 
 	it("renders the agent-unavailable notice with its kind tag and localizes the sentence in en and de", async () => {
 		const text = "The agent this conversation uses no longer exists, so the default assistant answered.";
-		renderWithProviders(<ChatNoticeRow part={noticePart({ noticeKind: "AgentUnavailable", text, detail: "agent-id" })} />);
+		renderWithMantine(<ChatNoticeRow part={noticePart({ noticeKind: "AgentUnavailable", text, detail: "agent-id" })} />);
 
 		expect(screen.getByTestId("chat-notice-row").getAttribute("data-notice-kind")).toBe("AgentUnavailable");
 		expect(screen.getByText(text)).toBeTruthy();
@@ -112,7 +103,7 @@ describe("ChatNoticeRow", () => {
 		cleanup();
 		i18next.addResourceBundle("de", "translation", de, true, true);
 		await i18next.changeLanguage("de");
-		renderWithProviders(<ChatNoticeRow part={noticePart({ noticeKind: "AgentUnavailable", text, detail: "agent-id" })} />);
+		renderWithMantine(<ChatNoticeRow part={noticePart({ noticeKind: "AgentUnavailable", text, detail: "agent-id" })} />);
 		expect(
 			screen.getByText("Der Agent dieses Chats existiert nicht mehr, deshalb hat der Standard-Assistent geantwortet."),
 		).toBeTruthy();
@@ -122,7 +113,7 @@ describe("ChatNoticeRow", () => {
 		const text = "After your answer, this reply was queued behind another running reply.";
 		i18next.addResourceBundle("de", "translation", de, true, true);
 		await i18next.changeLanguage("de");
-		renderWithProviders(
+		renderWithMantine(
 			<ChatNoticeRow part={noticePart({ noticeKind: "ResumeQueuedBehindTurn", text, detail: "conversation-id" })} />,
 		);
 
@@ -136,7 +127,7 @@ describe("ChatNoticeRow", () => {
 		const text = "This message is waiting for an approval or a question in another conversation. Answer it there to continue.";
 		i18next.addResourceBundle("de", "translation", de, true, true);
 		await i18next.changeLanguage("de");
-		renderWithProviders(
+		renderWithMantine(
 			<ChatNoticeRow part={noticePart({ noticeKind: "QueuedBehindParkedTurn", text, detail: "conversation-id" })} />,
 		);
 
@@ -151,7 +142,7 @@ describe("ChatNoticeRow", () => {
 	it("localizes the tool-call-as-text sentence in en and de", () => {
 		const text =
 			"The model wrote a tool call as text instead of calling the tool, so the call did not run and there is no answer.";
-		renderWithProviders(<ChatNoticeRow part={noticePart({ noticeKind: "EmptyAnswer", text, detail: "stop" })} />);
+		renderWithMantine(<ChatNoticeRow part={noticePart({ noticeKind: "EmptyAnswer", text, detail: "stop" })} />);
 
 		expect(screen.getByText(text)).toBeTruthy();
 		const de = nonEnglishLocales.find((locale) => locale.code === "de")?.resource as {
@@ -163,7 +154,7 @@ describe("ChatNoticeRow", () => {
 	});
 
 	it("tags the row with the notice kind for each known kind", () => {
-		const { rerender } = renderWithProviders(<ChatNoticeRow part={noticePart({ noticeKind: "ModelSubstituted" })} />);
+		const { rerender } = renderWithMantine(<ChatNoticeRow part={noticePart({ noticeKind: "ModelSubstituted" })} />);
 		expect(screen.getByTestId("chat-notice-row").getAttribute("data-notice-kind")).toBe("ModelSubstituted");
 
 		rerender(
@@ -184,7 +175,7 @@ describe("ChatNoticeRow", () => {
 	it("labels a CPU-fallback notice and shows its reason and remediation verbatim", () => {
 		const text =
 			"The Vulkan llama.cpp runtime is selected but enumerated no GPU devices. To run on the GPU: build the CUDA runtime from source.";
-		renderWithProviders(<ChatNoticeRow part={noticePart({ noticeKind: "CpuFallback", text })} />);
+		renderWithMantine(<ChatNoticeRow part={noticePart({ noticeKind: "CpuFallback", text })} />);
 
 		expect(screen.getByLabelText("Running on the CPU")).toBeTruthy();
 		expect(screen.getByText(text)).toBeTruthy();
@@ -192,7 +183,7 @@ describe("ChatNoticeRow", () => {
 
 	it("renders the orchestration-degraded notice with its own kind tag and server text", () => {
 		// An orchestrator that ran as a single agent must be visible in the turn, not just in a server log.
-		renderWithProviders(
+		renderWithMantine(
 			<ChatNoticeRow
 				part={noticePart({
 					noticeKind: "OrchestrationDegraded",
@@ -214,7 +205,7 @@ describe("ChatNoticeRow", () => {
 		// against BuildToolsFilteredNoticeMessage). A copy of it here would drift silently, so this uses a stand-in
 		// string: what the component owns is the kind tag and rendering the server text verbatim.
 		const serverText = "a server-owned counts-only sentence";
-		const { container } = renderWithProviders(
+		const { container } = renderWithMantine(
 			<ChatNoticeRow part={noticePart({ noticeKind: "ToolsFiltered", text: serverText })} />,
 		);
 
@@ -228,7 +219,7 @@ describe("ChatNoticeRow", () => {
 	it("renders the effort-dispatched notice with its own kind tag and the server's sentence", () => {
 		// A reasoning depth the user did not choose has to be visible in the turn. The sentence carries the tier, the
 		// concrete effort and — only when the model was actually replaced — the model; never a signal value.
-		renderWithProviders(
+		renderWithMantine(
 			<ChatNoticeRow
 				part={noticePart({
 					noticeKind: "EffortDispatched",
@@ -246,7 +237,7 @@ describe("ChatNoticeRow", () => {
 	it("renders the playbook-withheld notice with its own glyph, label and the withheld agents as detail", () => {
 		// Withheld playbook memory is otherwise only a server log line; the detail names agents, never memory content.
 		const serverText = "a server-owned playbook-withheld sentence";
-		const { container } = renderWithProviders(
+		const { container } = renderWithMantine(
 			<ChatNoticeRow part={noticePart({ noticeKind: "PlaybookWithheld", text: serverText, detail: "Researcher, Writer" })} />,
 		);
 
@@ -269,16 +260,14 @@ describe("ChatNoticeRow", () => {
 		["AttachmentsNotSent", "Attachments not sent", ".tabler-icon-file-off"],
 		["AttachmentsTruncated", "Attachment truncated", ".tabler-icon-file-text"],
 	])("renders the %s notice with its own glyph and label", (noticeKind, label, iconClass) => {
-		const { container } = renderWithProviders(
-			<ChatNoticeRow part={noticePart({ noticeKind, text: "a server-owned sentence" })} />,
-		);
+		const { container } = renderWithMantine(<ChatNoticeRow part={noticePart({ noticeKind, text: "a server-owned sentence" })} />);
 
 		expect(screen.getByLabelText(label)).toBeTruthy();
 		expect(container.querySelector(iconClass)).toBeTruthy();
 	});
 
 	it("renders the cloud-tools-withheld notice with the withheld switch codes as its detail", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<ChatNoticeRow
 				part={noticePart({
 					noticeKind: "CloudToolsWithheld",
@@ -294,7 +283,7 @@ describe("ChatNoticeRow", () => {
 
 	it("renders the attachments-not-sent notice with its localized sentence and every unsent file name", () => {
 		// A scanned PDF with no text and an image on a model without vision used to vanish from the turn silently.
-		renderWithProviders(
+		renderWithMantine(
 			<ChatNoticeRow
 				part={noticePart({
 					noticeKind: "AttachmentsNotSent",
@@ -319,7 +308,7 @@ describe("ChatNoticeRow", () => {
 	it("localizes the attachments-not-sent sentence for a turn without the file tools", async () => {
 		i18next.addResourceBundle("de", "translation", de, true, true);
 		await i18next.changeLanguage("de");
-		renderWithProviders(
+		renderWithMantine(
 			<ChatNoticeRow
 				part={noticePart({
 					noticeKind: "AttachmentsNotSent",
@@ -341,7 +330,7 @@ describe("ChatNoticeRow", () => {
 			noticeKind: "QueuedBehindWorkSession",
 			text: "This message was queued behind a running work session step.",
 		});
-		const { unmount } = renderWithProviders(<ChatNoticeRow part={part} />);
+		const { unmount } = renderWithMantine(<ChatNoticeRow part={part} />);
 
 		expect(screen.getByText(part.text)).toBeTruthy();
 		expect(screen.getByLabelText("Waiting for a work session")).toBeTruthy();
@@ -349,7 +338,7 @@ describe("ChatNoticeRow", () => {
 
 		i18next.addResourceBundle("de", "translation", de, true, true);
 		await i18next.changeLanguage("de");
-		renderWithProviders(<ChatNoticeRow part={part} />);
+		renderWithMantine(<ChatNoticeRow part={part} />);
 
 		expect(
 			screen.getByText("Diese Nachricht wurde hinter einem laufenden Schritt einer Arbeitssitzung eingereiht."),
@@ -360,7 +349,7 @@ describe("ChatNoticeRow", () => {
 	it("names the GPU holder a local turn waited for, localized in de, with its own glyph label", async () => {
 		i18next.addResourceBundle("de", "translation", de, true, true);
 		await i18next.changeLanguage("de");
-		renderWithProviders(
+		renderWithMantine(
 			<ChatNoticeRow
 				part={noticePart({
 					noticeKind: "QueuedBehindGpuWork",
@@ -377,7 +366,7 @@ describe("ChatNoticeRow", () => {
 	it("renders the notice detail beside the sentence when the server sent one", () => {
 		// The dispatch reason code is the only record of WHICH rule decided the turn. It was computed and then dropped
 		// on the wire, so nothing showed it; it now rides beside the sentence as the stable code it is.
-		renderWithProviders(
+		renderWithMantine(
 			<ChatNoticeRow
 				part={noticePart({
 					noticeKind: "EffortDispatched",
@@ -392,7 +381,7 @@ describe("ChatNoticeRow", () => {
 
 	it("never prints a bare id as the detail line", () => {
 		// Queued-behind and agent-fallback notices carried a conversation or agent id that rendered verbatim.
-		renderWithProviders(
+		renderWithMantine(
 			<ChatNoticeRow
 				part={noticePart({
 					noticeKind: "QueuedBehindParkedTurn",
@@ -407,13 +396,13 @@ describe("ChatNoticeRow", () => {
 	});
 
 	it("renders nothing extra for a notice that carries no detail", () => {
-		renderWithProviders(<ChatNoticeRow part={noticePart({ text: "Switched to a smaller model." })} />);
+		renderWithMantine(<ChatNoticeRow part={noticePart({ text: "Switched to a smaller model." })} />);
 
 		expect(screen.queryByTestId("chat-notice-detail")).toBeNull();
 	});
 
 	it("falls back gracefully for an unknown/forward-compat notice kind", () => {
-		renderWithProviders(<ChatNoticeRow part={noticePart({ noticeKind: "SomethingNew", text: "A new kind of notice." })} />);
+		renderWithMantine(<ChatNoticeRow part={noticePart({ noticeKind: "SomethingNew", text: "A new kind of notice." })} />);
 
 		expect(screen.getByText("A new kind of notice.")).toBeTruthy();
 		expect(screen.getByTestId("chat-notice-row").getAttribute("data-notice-kind")).toBe("SomethingNew");
@@ -421,7 +410,7 @@ describe("ChatNoticeRow", () => {
 
 	it("offers Continue on a cut-off answer when the page provides it, and sends through it", () => {
 		const onContinue = vi.fn();
-		renderWithProviders(
+		renderWithMantine(
 			<ChatNoticeContinueContext value={onContinue}>
 				<ChatNoticeRow part={noticePart({ noticeKind: "OutputLimitReached", text: "The answer stopped." })} />
 			</ChatNoticeContinueContext>,
@@ -433,7 +422,7 @@ describe("ChatNoticeRow", () => {
 	});
 
 	it("hides Continue without a provided callback and on every other notice kind", () => {
-		renderWithProviders(
+		renderWithMantine(
 			<>
 				<ChatNoticeRow part={noticePart({ noticeKind: "OutputLimitReached", text: "The answer stopped." })} />
 				<ChatNoticeContinueContext value={vi.fn()}>

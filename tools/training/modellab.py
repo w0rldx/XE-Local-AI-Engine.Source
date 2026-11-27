@@ -80,7 +80,6 @@ from modellablib import (
     describe_failure,
     discover_block_path,
     fitted_trace_result,
-    frame_bytes,
     heartbeat_counts,
     layer_kind,
     layer_types_follow_cut,
@@ -109,6 +108,7 @@ from modellablib import (
     trace_record,
     validate_job,
     vector_norm,
+    write_frame,
 )
 from trainlib import CANCELLED_EXIT_CODE
 
@@ -128,10 +128,8 @@ _WRITE_LOCK = threading.RLock()
 
 def emit(event, **fields):
     # os.write, not print: the SIGTERM handler, the heartbeat and the stdin reader all write here, one frame per write.
-    data = frame_bytes(event, os.environ.get("XE_TRAINING_RUN_TOKEN"), fields)
     with _WRITE_LOCK:
-        while data:  # a pipe write interrupted by a signal can be partial
-            data = data[os.write(1, data) :]
+        write_frame(event, fields)
 
 
 class JobCancelled(Exception):  # noqa: N818 - a cancel, not an error: it ends in done{cancelled: true}

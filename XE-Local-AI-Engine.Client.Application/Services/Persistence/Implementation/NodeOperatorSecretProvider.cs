@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 /// <summary>
 ///     Provider implementation for node operator secret behavior.
 /// </summary>
-public sealed class NodeOperatorSecretProvider : INodeOperatorSecretProvider
+public sealed class NodeOperatorSecretProvider
 {
     public const int ExpectedSecretLength = 32;
     public const string EnvVarName = "XE_NODE_SQLITE_KEY";

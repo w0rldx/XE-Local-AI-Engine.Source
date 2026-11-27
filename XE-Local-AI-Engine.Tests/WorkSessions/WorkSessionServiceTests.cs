@@ -5,12 +5,12 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration;
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Tests.Testing;
+using static WorkSessionTestSupport;
 
 /// <summary>
 ///     The contract the REST layer sits on: which agent a session may run on, when its objective may change, what a
@@ -26,7 +26,7 @@ public sealed class WorkSessionServiceTests
     public async Task Create_MintsTheOwnedConversationAndReturnsTheEffectiveStepBudget()
     {
         // Private host: the step budget it asserts on IS a host-level config override.
-        await using var factory = NewFactory(("WorkSessions:MaxStepsPerRun", "9"));
+        await using var factory = NewFactory(configuration: Configuration(("WorkSessions:MaxStepsPerRun", "9")));
         var agentId = await SeedAgentAsync(factory, "tool-capable-model");
 
         await using var scope = factory.Services.CreateAsyncScope();
@@ -346,7 +346,7 @@ public sealed class WorkSessionServiceTests
                 services.RemoveAll<IWorkSessionEventPublisher>();
                 services.AddSingleton<IWorkSessionEventPublisher>(publisher);
             },
-            configuration: ("WorkSessions:MaxStepsPerRun", "1"));
+            configuration: Configuration(("WorkSessions:MaxStepsPerRun", "1")));
 
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         await PauseAsync(factory, sessionId);
@@ -383,7 +383,7 @@ public sealed class WorkSessionServiceTests
                 services.RemoveAll<IWorkSessionEventPublisher>();
                 services.AddSingleton<IWorkSessionEventPublisher>(publisher);
             },
-            configuration: ("WorkSessions:MaxStepsPerRun", "1"));
+            configuration: Configuration(("WorkSessions:MaxStepsPerRun", "1")));
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
 
         WorkSessionDetail started;
@@ -617,46 +617,6 @@ public sealed class WorkSessionServiceTests
         AssertEx.NotNull(await service.GetAsync(sessionId), "Reads keep working so the page can explain itself.");
     }
 
-    internal static TestServerWebAppFactory NewFactory(params (string Key, string Value)[] configuration) =>
-        NewFactory(configureExtra: null, configuration);
-
-    internal static TestServerWebAppFactory NewFactory(Action<IServiceCollection>? configureExtra, params (string Key, string Value)[] configuration) =>
-        new()
-        {
-            AdditionalConfiguration = WorkSessionTestSupport.Configuration(configuration),
-            ConfigureAdditionalTestServices = services =>
-            {
-                // Deterministic capability answers: the real resolver probes providers, which would make these
-                // assertions depend on what happens to be installed.
-                services.RemoveAll<IModelCapabilityResolver>();
-                services.AddSingleton<IModelCapabilityResolver, StubModelCapabilityResolver>();
-                services.RemoveAll<ILocalDefaultChatModelResolver>();
-                services.AddSingleton<ILocalDefaultChatModelResolver, StubDefaultChatModelResolver>();
-                configureExtra?.Invoke(services);
-            }
-        };
-
-    internal static async Task<Guid> SeedAgentAsync(TestServerWebAppFactory factory, string modelProfile)
-    {
-        using var scope = factory.Services.CreateScope();
-        var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
-        // GUID-suffixed: the classes that call this share one host, so a fixed name would make the definition table
-        // unfilterable for a test that wants only its own agent.
-        var definition = await store.AddAsync(new AgentDefinitionInput
-        {
-            Name = $"Agent on {modelProfile} {Guid.NewGuid():N}",
-            Description = null,
-            Instructions = "Work the objective.",
-            ModelProfile = modelProfile,
-            ReasoningEffort = null,
-            Kind = AgentDefinitionKind.Single,
-            AllowedToolNames = [],
-            ToolApprovals = new Dictionary<string, bool>(StringComparer.Ordinal),
-            OrchestrationTopologyJson = null
-        });
-        return definition.Id;
-    }
-
     private static async Task PauseAsync(TestServerWebAppFactory factory, Guid sessionId)
     {
         await using var scope = factory.Services.CreateAsyncScope();
@@ -689,20 +649,5 @@ public sealed class WorkSessionServiceTests
 
         public bool IsRunning(Guid sessionId) =>
             false;
-    }
-
-    /// <summary>Tool-capable unless the model's name says otherwise; cloud only for the explicitly cloud-named ones.</summary>
-    internal sealed class StubModelCapabilityResolver : IModelCapabilityResolver
-    {
-        public Task<ModelCapabilitySnapshot> ResolveAsync(string? model, CancellationToken cancellationToken) =>
-            Task.FromResult(new ModelCapabilitySnapshot(SupportsThinking: false,
-                model?.Contains("without-tools", StringComparison.Ordinal) != true,
-                model?.Contains("cloud", StringComparison.Ordinal) == true));
-    }
-
-    internal sealed class StubDefaultChatModelResolver : ILocalDefaultChatModelResolver
-    {
-        public Task<string?> ResolveAsync(string? persistedDefault, CancellationToken cancellationToken = default) =>
-            Task.FromResult<string?>("tool-capable-model");
     }
 }

@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 
+using XE_Local_AI_Engine.Providers.Abstractions;
+
 /// <summary>Deep host-path canonicalization for the sandbox workspace copy.</summary>
 /// <remarks>
 ///     It resolves the trusted root to its real canonical path (following symlinks), rejects <c>\\?\</c>/<c>\\.\</c> extended/device paths,
@@ -77,7 +79,7 @@ internal static class HostPathSafety
                 return false;
             }
 
-            withinRoot = IsPathWithinRoot(resolvedRoot, Normalize(target.FullName));
+            withinRoot = PathContainment.IsRootOrUnderCanonical(Normalize(target.FullName), resolvedRoot);
             return true;
         }
         catch (IOException)
@@ -88,17 +90,6 @@ internal static class HostPathSafety
         {
             return false;
         }
-    }
-
-    /// <summary>Returns whether <paramref name="candidateRealPath" /> is the root itself or sits beneath it.</summary>
-    public static bool IsPathWithinRoot(string resolvedRoot, string candidateRealPath)
-    {
-        if (string.Equals(resolvedRoot, candidateRealPath, StringComparison.Ordinal))
-        {
-            return true;
-        }
-
-        return candidateRealPath.StartsWith(resolvedRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal);
     }
 
     /// <summary>Returns whether the entry is a reparse point (Windows junction/symlink or Linux symlink).</summary>

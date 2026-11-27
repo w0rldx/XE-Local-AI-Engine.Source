@@ -8,7 +8,7 @@ import {
 	updateCheck,
 	visitSumCheck,
 } from "@/features/modelLab/models/ModelLabPlayground";
-import fixture from "@/features/modelLab/models/playgroundTrace.fixture.json";
+import fixture from "@/features/modelLab/test/playgroundTrace.fixture.json";
 
 // The contract fixture's run: XOR, shared block, depth 2, hidden 4, 8 steps, all recorded.
 const trace = playgroundTraceSchema.parse(fixture.trace);

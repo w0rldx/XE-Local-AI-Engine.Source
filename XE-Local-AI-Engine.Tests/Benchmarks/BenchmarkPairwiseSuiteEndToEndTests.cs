@@ -34,8 +34,8 @@ public sealed class BenchmarkPairwiseSuiteEndToEndTests
     [Test]
     public async Task TwoItemsByTwoModels_PlanJudgeAndFit_ScoresTheBetterModelAheadOnEachItem()
     {
-        var installed = BenchmarkJudgeExecutorTests.Installed();
-        var snapshot = BenchmarkJudgeExecutorTests.Snapshot(installed);
+        var installed = BenchmarkJudgeTestSupport.Installed();
+        var snapshot = BenchmarkJudgeTestSupport.Snapshot(installed);
         BenchmarkRunRecord[] runs =
         [
             SuiteRun(snapshot, ItemZero, "cell-27b", "big"),
@@ -82,7 +82,7 @@ public sealed class BenchmarkPairwiseSuiteEndToEndTests
 
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>())
-                  .Returns(_ => new BenchmarkJudgeExecutorTests.TrackingAsyncDisposable());
+                  .Returns(_ => new BenchmarkJudgeTestSupport.TrackingAsyncDisposable());
         var runner = Substitute.For<IInvocationRunner>();
         runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
               .Returns(call =>
@@ -92,11 +92,11 @@ public sealed class BenchmarkPairwiseSuiteEndToEndTests
                   using var payload = JsonDocument.Parse(package.ConversationContext[0].Content);
                   var verdict = payload.RootElement.GetProperty("answerA").GetRawText().Contains("big", StringComparison.Ordinal) ? "a" : "b";
                   dispatcher.InvocationStateChanged += Raise.EventWith(dispatcher,
-                      new InvocationStateChangedEventArgs(BenchmarkJudgeExecutorTests.State(package.InvocationId,
+                      new InvocationStateChangedEventArgs(BenchmarkJudgeTestSupport.State(package.InvocationId,
                           $$"""{"schemaVersion":1,"verdict":"{{verdict}}","rationale":"The bigger answer."}""")));
                   return Task.CompletedTask;
               });
-        await using var lease = new BenchmarkJudgeExecutorTests.FakeLease(installed);
+        await using var lease = new BenchmarkJudgeTestSupport.FakeLease(installed);
         var executor = Executor(store.Pairwise, store.Judging, store.Runs, store.TaskItems, snapshot, lease, dispatcher, runner);
 
         foreach (var comparison in comparisons)
@@ -149,7 +149,7 @@ public sealed class BenchmarkPairwiseSuiteEndToEndTests
     [Test]
     public async Task OneModelOverTwoItems_PlansNothingAndPublishesTheRefusalWithoutAJudgeCall()
     {
-        var snapshot = BenchmarkJudgeExecutorTests.Snapshot(BenchmarkJudgeExecutorTests.Installed());
+        var snapshot = BenchmarkJudgeTestSupport.Snapshot(BenchmarkJudgeTestSupport.Installed());
         BenchmarkRunRecord[] runs =
         [
             SuiteRun(snapshot, ItemZero, "model-9b", "small"),
@@ -204,7 +204,7 @@ public sealed class BenchmarkPairwiseSuiteEndToEndTests
     }
 
     internal static BenchmarkRunRecord SuiteRun(BenchmarkRuntimeSnapshotV1 snapshot, Guid item, string cell, string answer) =>
-        BenchmarkJudgeExecutorTests.Run(snapshot, BenchmarkRunJudgeStates.Running, version: 1) with
+        BenchmarkJudgeTestSupport.Run(snapshot, BenchmarkRunJudgeStates.Running, version: 1) with
         {
             TaskItemId = item,
             TaskInputHash = "v1:" + item,
@@ -236,7 +236,7 @@ public sealed class BenchmarkPairwiseSuiteEndToEndTests
             JudgeRuntimeJson = BenchmarkJudgeSerialization.SerializeRuntime(new BenchmarkJudgeRuntimeV1(BenchmarkJudgeRuntimeV1.CurrentSchemaVersion,
                 BenchmarkInstalledModelSnapshotMapper.ToSnapshot(installed),
                 4096,
-                BenchmarkJudgeExecutorTests.Runtime(4096),
+                BenchmarkJudgeTestSupport.Runtime(4096),
                 BenchmarkFrozenPolicies.DeterministicSampling())),
             EnqueuedAtUtc = 1,
             StartedAtUtc = null,
@@ -261,7 +261,7 @@ public sealed class BenchmarkPairwiseSuiteEndToEndTests
             Id = RevisionId,
             ProjectId = Guid.NewGuid(),
             Revision = 1,
-            PolicyJson = BenchmarkJudgeSerialization.SerializePolicy(BenchmarkJudgeExecutorTests.Policy() with
+            PolicyJson = BenchmarkJudgeSerialization.SerializePolicy(BenchmarkJudgeTestSupport.Policy() with
             {
                 Mode = BenchmarkJudgePolicyModes.Pairwise,
                 ReferenceAnswer = referenceAnswer
@@ -277,25 +277,25 @@ public sealed class BenchmarkPairwiseSuiteEndToEndTests
         IBenchmarkRunStore runStore,
         IBenchmarkTaskItemStore taskItemStore,
         BenchmarkRuntimeSnapshotV1 snapshot,
-        BenchmarkJudgeExecutorTests.FakeLease lease,
+        BenchmarkJudgeTestSupport.FakeLease lease,
         IWorkerEventDispatcher dispatcher,
         IInvocationRunner runner) =>
         new(pairwiseStore,
             judgeStore,
             runStore,
             taskItemStore,
-            new BenchmarkJudgeExecutorTests.FixedSnapshotFactory(snapshot),
-            new BenchmarkJudgeExecutorTests.FixedLeaseProvider(lease),
-            new BenchmarkJudgeExecutorTests.JudgeCapacityService(CapacityVerdict.Allow),
+            new BenchmarkJudgeTestSupport.FixedSnapshotFactory(snapshot),
+            new BenchmarkJudgeTestSupport.FixedLeaseProvider(lease),
+            new BenchmarkJudgeTestSupport.JudgeCapacityService(CapacityVerdict.Allow),
             new LocalChatRuntimePackageBuilder(),
             dispatcher,
             runner,
-            BenchmarkJudgeExecutorTests.PassthroughSupervisor(),
-            BenchmarkJudgeExecutorTests.FixedVariantSelector(),
-            BenchmarkJudgeExecutorTests.EndpointBinding(),
+            BenchmarkJudgeTestSupport.PassthroughSupervisor(),
+            BenchmarkJudgeTestSupport.FixedVariantSelector(),
+            BenchmarkJudgeTestSupport.EndpointBinding(),
             new BenchmarkEventBuffer(Options.Create(new BenchmarkEventBufferOptions())),
             new BenchmarkCancellationRegistry(),
-            new BenchmarkJudgeExecutorTests.StubEnvironmentFacts(),
+            new BenchmarkJudgeTestSupport.StubEnvironmentFacts(),
             Substitute.For<IBenchmarkPairwiseFitter>(),
             new BenchmarkAdmissionRetry
             {

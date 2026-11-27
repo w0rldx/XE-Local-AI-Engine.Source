@@ -23,6 +23,7 @@ import {
 	applyModelLabPatch,
 	defaultModelLabTab,
 	installedGgufModels,
+	installedModelsStaleMs,
 	jumpPatch,
 	type ModelLabIntent,
 	type ModelLabJump,
@@ -81,7 +82,7 @@ function ModelLabContent({ search: routeSearch, onSearchChange, afterNavigation 
 		[onSearchChange],
 	);
 
-	const models = useQuery({ ...listLocalModelsOptions(), staleTime: 30_000 });
+	const models = useQuery({ ...listLocalModelsOptions(), staleTime: installedModelsStaleMs });
 	const modelOptions = installedGgufModels(models.data?.items).map((model) => ({ value: model.modelName, label: model.label }));
 	const modelNames = modelOptions.map((option) => option.value);
 	// The URL's model, once a held list confirms it. A list kept after a failed refetch still counts.

@@ -9,9 +9,9 @@ using XE_Local_AI_Engine.Client.Services.ModelLab;
 /// <summary>Replaces the operator's note on a finished experiment; a null or blank note clears it.</summary>
 public sealed class SetModelLabExperimentNotesEndpoint : Endpoint<SetModelLabExperimentNotesRequest>
 {
-    private readonly ModelLabExperimentService _experiments;
+    private readonly ModelLabExperimentReader _experiments;
 
-    public SetModelLabExperimentNotesEndpoint(ModelLabExperimentService experiments)
+    public SetModelLabExperimentNotesEndpoint(ModelLabExperimentReader experiments)
     {
         ArgumentNullException.ThrowIfNull(experiments);
         _experiments = experiments;

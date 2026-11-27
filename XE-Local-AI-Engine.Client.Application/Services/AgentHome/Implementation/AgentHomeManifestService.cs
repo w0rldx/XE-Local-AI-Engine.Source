@@ -250,14 +250,8 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
         }
     }
 
-    private static async Task WriteManifestAtomicAsync(string agentHomeRoot, AgentHomeManifest manifest, CancellationToken cancellationToken)
-    {
-        var path = Path.Combine(agentHomeRoot, ManifestFileName);
-        var temporaryPath = path + ".tmp";
-        var json = JsonSerializer.Serialize(manifest, SerializerOptions);
-        await File.WriteAllTextAsync(temporaryPath, json, cancellationToken);
-        File.Move(temporaryPath, path, overwrite: true);
-    }
+    private static Task WriteManifestAtomicAsync(string agentHomeRoot, AgentHomeManifest manifest, CancellationToken cancellationToken) =>
+        SecureFilePermissions.WriteJsonAtomicAsync(Path.Combine(agentHomeRoot, ManifestFileName), manifest, SerializerOptions, cancellationToken);
 
     private static void EnsureDirectories(string agentHomeRoot)
     {

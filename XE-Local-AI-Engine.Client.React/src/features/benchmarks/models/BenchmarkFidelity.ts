@@ -30,10 +30,6 @@ export const formatKldValue = (value: number | null): string | null => (value ==
  */
 export const isKldComparable = (fidelity: Pick<BenchmarkRunFidelity, "kldState">): boolean => fidelity.kldState === "ok";
 
-/** Nothing measured yet: the cell renders a dash rather than an empty statistics block. */
-export const hasFidelityNumbers = (fidelity: BenchmarkRunFidelity): boolean =>
-	fidelity.perplexityMean !== null || (isKldComparable(fidelity) && fidelity.kldMean !== null);
-
 /**
  * The comparable fidelity facts of one run, in the shape the launch-evidence diff already consumes — so the N-way
  * compare reuses that one diff engine rather than growing a second. The KLD trio is omitted entirely when the run's

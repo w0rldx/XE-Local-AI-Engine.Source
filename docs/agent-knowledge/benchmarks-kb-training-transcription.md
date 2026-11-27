@@ -1,7 +1,7 @@
 # Benchmarks, knowledge base, training and transcription
 
-Scope: benchmarks, knowledge-base retrieval, fine-tuning and live transcription. Read when: changing any `Benchmark*`
-type, the knowledge base, `Services/Training` or `Services/Transcription`. Architecture lives in `docs/wiki/15`, `18`,
+Scope: benchmarks, knowledge-base retrieval, fine-tuning, Model Lab and live transcription. Read when: changing any
+`Benchmark*` type, the knowledge base, `Services/Training`, `Services/ModelLab`, `modellab.py` or `Services/Transcription`. Architecture lives in `docs/wiki/15`, `18`,
 `20` and `24`; this file holds only the traps those pages lack. Model fit, capacity and spawn:
 [model-fit-and-discovery](model-fit-and-discovery.md).
 
@@ -51,6 +51,10 @@ type, the knowledge base, `Services/Training` or `Services/Transcription`. Archi
 
 **Rule:** delete order and invariants: `docs/wiki/15-knowledge-base.md`; pooled `-b/-ub`: `docs/wiki/03-local-runtime-and-providers.md`. Not stated there: vector search is managed brute-force cosine by design; ingest and query share one `EmbeddingModelResolver` result, and corpus-wide stale/reset decisions run only when `EmbeddingModelResolution.IsConfident`; retrieval is BM25 ∪ cosine → RRF(k=60) → optional rerank; query embeddings of sensitive text are RAM-only, bounded, keyed by vector identity + query hash. **Prevents:** a transient provider failure reinterpreting a healthy corpus under a fallback model; persisted sensitive vectors; a delete test on an attached EF graph can false-pass, so assert through `KnowledgeDocumentPurgeService`. **Authority:** the symbols named. [evidence](../agent-knowledge-evidence.md#knowledge-retrieval-evidence)
 
+### A cosine threshold cannot tell a paraphrase from a one-word contradiction
+
+**Rule:** never let an embedding-cosine threshold alone delete or merge user knowledge (memory dedup or anything like it). Measured embedders score a lesson and its one-word contradiction ("always" vs "never") as close as two paraphrases, so a threshold that catches duplicates also drops contradictions. Semantic memory dedup stays off by default until a contradiction-aware check sits beside the cosine; re-run the calibration before enabling it for any embedder. **Prevents:** a lesson that reverses a live memory being silently discarded as its duplicate. **Authority:** `MemoryExtractionOptions.SemanticDedupEnabled`, `MemoryDedupCalibrationLiveTests`, `MemoryDedupPairSetTests`. [evidence](../agent-knowledge-evidence.md#knowledge-retrieval-evidence)
+
 ## Training
 
 ### Training module (fine-tuning) — live-gate rules, 2026-08-15
@@ -72,6 +76,28 @@ type, the knowledge base, `Services/Training` or `Services/Transcription`. Archi
 ### A PyTorch source graph from `torch.export` on the meta device is the reference path, not the GPU path
 
 **Rule:** treat a Model Lab PyTorch graph as the code that defines the model's maths, never as what a GPU run executes: on the meta device `torch.export` follows transformers' reference implementation, while a GPU run may switch to fused kernels (SDPA or flash attention, causal-conv1d, flash-linear-attention) the graph does not show. Say so wherever a graph or its lines are presented. **Prevents:** reading a graph node as a kernel that ran, or "fixing" a missing fused op in the index. **Authority:** `ModelLabPyTorchSourceService`, `modellab.py` source job.
+
+### A null process read must not mean gone
+
+**Rule:** a probe of `/proc/[pid]/stat` returns a tri-state (`TrainingProcessPresence`: `Alive`, `Gone`, `Unknown`), and only `Gone` (or a verified kill, `TrainingReapOutcome.Verified`) lets a caller delete the last record of a process. Never collapse "no such entry" and "entry unreadable" into one null. **Prevents:** a receipt deleted for a live GPU holder whose stat could not be read, stranding its VRAM with nothing left to find it by. **Authority:** `LinuxTrainingProcessInspector`, `TrainingProcessReaper`, `ModelLabWarmReceipts.ReapAsync`, `LinuxTrainingProcessGroupTests`.
+
+### The training runtime install is detached: admit inside the start transaction
+
+**Rule:** a check that must hold for the whole install or remove (no GPU job and no registered CPU job (`TrainingRuntimeUsers`) runs from the runtime directory) is passed into `ITrainingRuntimeService.InstallAsync` and `RemoveAsync` as the admission delegate, which the provider awaits after it publishes the non-ready phase. A check in the endpoint or the orchestration service before the call is UX only. **Prevents:** a Model Lab start taking its lease between an outer check and the detached install, then running from the directory the install swaps. **Authority:** `TrainingRuntimeService.PublishThenAdmitAsync`, `TrainingRuntimeOrchestrationService.AdmitAsync`, `ModelLabExperimentService` (the phase re-read after the lease), `ModelLabRuntimeJob` (register, then re-read the phase), `TrainingRuntimeServiceTests`.
+
+## Model Lab
+
+### A Model Lab hook registers onto the job's ExitStack as it is made
+
+**Rule:** in `modellab.py`, a class that installs hooks takes the job's `contextlib.ExitStack` and pushes each handle onto it as it registers it (`stack.enter_context(...)`), and a patch of a shared registry puts its restore on the stack before the swap (`_AttentionRows`: `stack.callback` before `functions["sdpa"] = ...`). **Prevents:** a constructor that fails halfway leaving a hook or the wrapped `sdpa` on a model a warm worker keeps for the next job, which then exits `worker-poisoned`. **Authority:** `_Tracer`, `_AttentionRows`, `_left_behind` in `tools/training/modellab.py`, `test_modellab_serve.py`.
+
+### Re-check OLMoE's config defaults on a transformers bump
+
+**Rule:** when the training runtime's transformers pin moves, compare `OlmoeConfig`'s defaults for `sliding_window`, `attention_chunk_size`, `num_kv_shared_layers` and `output_router_logits` with what the host assumes for a key that `config.json` leaves out. The host reads the raw `config.json` (`BaseCheckpointConfigV1`: a missing key is null or false), while `modellab.py` reads the loaded config, where the class default fills a missing key; both refusals must agree. **Prevents:** a preflight that admits attention or a trace the script then refuses after the weights are on the GPU, or a script that admits a config the host would have refused, because a new class default is non-null or true. **Authority:** `ModelLabCheckpointPreflightService.AttentionRefusalOrNull` and its `TraceRefusalMessage`, `modellablib.attention_refusal`, the `output_router_logits` check in `modellab.trace`.
+
+### Re-prove the routing hook on a transformers bump
+
+**Rule:** when the transformers pin moves, re-run the check that the router hook's stash equals what the experts consumed: for every step and block, the ids and bf16 weights `_Routing` stashed from the router's output must be bitwise equal to `top_k_index[-1]` and `top_k_weights[-1]` seen by a wrapper on the experts' own forward, and the tokens and logits must stay bitwise equal with routing on and off. The stubbed CPU tests check the hook's mechanics, not that the router's output is still what the experts receive. **Prevents:** routing labelled as measured while a new transformers version rescales, recasts or re-picks the weights between the router and the experts. **Authority:** `_Routing` and `routers_of` in `tools/training/modellab.py`, `test_modellab_routing.py`.
 
 ## Live transcription
 

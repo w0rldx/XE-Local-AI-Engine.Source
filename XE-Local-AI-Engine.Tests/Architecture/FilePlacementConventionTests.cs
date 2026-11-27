@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The rule is general; the guards that already read file identity are not.
 ///     <see cref="EndpointConventionTests" /> owns it for endpoints, by reflection, with no allowlist;
 ///     <c>ServiceModelColocationTests</c> owns it for six named service folders. This one covers everything else,
-///     against a shrink-only allowlist and four exception shapes that are the operator's call, not the scanner's.
+///     against a shrink-only allowlist and five exception shapes that are the operator's call, not the scanner's.
 /// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class FilePlacementConventionTests
@@ -23,7 +23,7 @@ public sealed class FilePlacementConventionTests
         RepositoryPaths.Combine("XE-Local-AI-Engine.Tests", "Architecture", "FilePlacementAllowlist.txt");
 
     /// <summary>Today's entry count. Only ever lowered, in the commit that shrinks the list.</summary>
-    private const int MaxEntries = 198;
+    private const int MaxEntries = 121;
 
     /// <summary>
     ///     A floor a little under today's file count, which the cleanup batches do not lower.
@@ -153,10 +153,12 @@ public sealed class FilePlacementConventionTests
                             .ToList();
 
         AssertEx.Empty(offenders,
-            "A production C# file declares more than one top-level type without one of the four exception shapes "
+            "A production C# file declares more than one top-level type without one of the five exception shapes "
             + "(docs/wiki/16-code-conventions.md): a family file named *Dtos.cs, *Contracts.cs, *ServiceModels.cs "
             + "or *Models.cs; an interface beside its single implementation; one type beside only enums and "
-            + "delegates; or an I*Store.cs / I*Service.cs carrying its own vocabulary. The allowlist is "
+            + "delegates; enums only; or an I<Name>.cs declaring that interface plus its own vocabulary (data only "
+            + "unless the file is an I*Store.cs or I*Service.cs). "
+            + "The allowlist is "
             + "SHRINK-ONLY, so the fix is to split the file, not to raise the count:"
             + Environment.NewLine + string.Join(Environment.NewLine, offenders));
     }
@@ -342,6 +344,32 @@ public sealed class FilePlacementConventionTests
         }
     }
 
+    /// <summary>The contract-bundle and enums-only shapes: what the file name and the kinds must say.</summary>
+    [Test]
+    [Arguments("Some/IRunCoordinator.cs",
+        "namespace N;\npublic interface IRunCoordinator { }\npublic sealed record RunRequest(int X);\n"
+        + "public sealed class RunRefusedException : Exception { }", true)]
+    [Arguments("Some/IRunCoordinator.cs",
+        "namespace N;\npublic interface IOther { }\npublic sealed record RunRequest(int X);\npublic sealed class Helper { }",
+        false)]
+    [Arguments("Some/Inventory.cs",
+        "namespace N;\npublic interface Inventory { }\npublic sealed record A(int X);\npublic sealed class B { }", false)]
+    [Arguments("Some/IRunCoordinator.cs",
+        "namespace N;\npublic interface IRunCoordinator { }\npublic sealed record RunRequest(int X);\n"
+        + "public sealed class RunPlan { public int Count() => 1; }", false)]
+    [Arguments("Some/IRunStore.cs",
+        "namespace N;\npublic interface IRunStore { }\npublic sealed record RunRequest(int X);\n"
+        + "public sealed class RunPlan { public int Count() => 1; }", true)]
+    [Arguments("Some/TrainingEnums.cs", "namespace N;\npublic enum A { X }\npublic enum B { Y }", true)]
+    [Arguments("Some/TrainingEnums.cs",
+        "namespace N;\npublic enum A { X }\npublic sealed class B { }\npublic sealed class C { }", false)]
+    public void TheBundleAndEnumExemptions_ReadTheFileShape(string file, string source, bool exempt)
+    {
+        AssertEx.Equal(exempt, IsExempt(file, TopLevelTypes(source)),
+            $"'{file}' was exempted wrongly. Only an I<Name>.cs declaring interface I<Name> (data only unless it is an "
+            + "I*Store.cs or I*Service.cs), or a file of enums alone, takes these two shapes.");
+    }
+
     // ---------------------------------------------------------------- the allowlist
 
     /// <summary>Reads <c>file|count</c> from the repository rather than from the test output directory.</summary>
@@ -425,13 +453,13 @@ public sealed class FilePlacementConventionTests
 
             var declared = TopLevelTypes(File.ReadAllText(path));
 
-            if (declared.Count > 1 && IsProduction(relative) && !IsExempt(relative, declared))
+            if (declared.Count > 1 && EnforcedSourceFiles.IsProduction(relative) && !IsExempt(relative, declared))
             {
                 counted[relative] = declared.Count;
                 types[relative] = [.. declared.Select(declaration => declaration.ToString())];
             }
 
-            if (declared.Count > 1 && IsProduction(relative) && IsFamilyFile(relative))
+            if (declared.Count > 1 && EnforcedSourceFiles.IsProduction(relative) && IsFamilyFile(relative))
             {
                 familyFiles++;
 
@@ -450,30 +478,20 @@ public sealed class FilePlacementConventionTests
         return new Scan(files, seen, counted, types, familyFiles, behaviour);
     }
 
-    /// <summary>Test projects and the shared test doubles are out of scope for the one-type rule.</summary>
-    private static bool IsProduction(string relative) =>
-        !relative.Contains(".Tests/", StringComparison.Ordinal)
-        && !relative.Contains(".Tests.", StringComparison.Ordinal)
-        && !relative.Contains(".Testing/", StringComparison.Ordinal)
-        && !relative.Contains(".Testing.", StringComparison.Ordinal);
-
-    /// <summary>The four operator-approved shapes a multi-type file may take.</summary>
+    /// <summary>The five operator-approved shapes a multi-type file may take.</summary>
     private static bool IsExempt(string relative, IReadOnlyList<Declaration> declared)
     {
-        var name = relative[(relative.LastIndexOf('/') + 1)..];
-
         if (IsFamilyFile(relative))
         {
             return true;
         }
 
-        // An I*Store.cs / I*Service.cs whose interface names the file: the commands, snapshots, results and
-        // exceptions it takes and throws are one vocabulary, which a split would scatter over a folder.
-        if (name.StartsWith('I')
-            && (name.EndsWith("Store.cs", StringComparison.Ordinal)
-                || name.EndsWith("Service.cs", StringComparison.Ordinal))
-            && declared.Any(declaration => declaration.Kind == "interface"
-                                           && string.Equals(declaration.Name, name[..^3], StringComparison.Ordinal)))
+        // An I<Name>.cs whose interface names the file holds one vocabulary a split would scatter; behavior beside
+        // the interface is allowed only in I*Store.cs and I*Service.cs.
+        if (IsContractBundle(relative, declared)
+            && (relative.EndsWith("Store.cs", StringComparison.Ordinal)
+                || relative.EndsWith("Service.cs", StringComparison.Ordinal)
+                || declared.All(declaration => DeclaredMethods(declaration).Count == 0)))
         {
             return true;
         }
@@ -483,8 +501,25 @@ public sealed class FilePlacementConventionTests
             return true;
         }
 
+        if (declared.All(declaration => declaration.Kind == "enum"))
+        {
+            return true;
+        }
+
         // One primary type beside only the enums and delegates it takes or returns.
         return declared.Count(declaration => declaration.Kind is not ("enum" or "delegate")) == 1;
+    }
+
+    /// <summary>An <c>I&lt;Name&gt;.cs</c> that declares <c>interface I&lt;Name&gt;</c>, whatever else it holds.</summary>
+    private static bool IsContractBundle(string relative, IReadOnlyList<Declaration> declared)
+    {
+        var name = relative[(relative.LastIndexOf('/') + 1)..^3];
+
+        return name.Length > 1
+               && name[0] == 'I'
+               && char.IsUpper(name[1])
+               && declared.Any(declaration => declaration.Kind == "interface"
+                                              && string.Equals(declaration.Name, name, StringComparison.Ordinal));
     }
 
     private static bool IsFamilyFile(string relative) =>
@@ -1006,11 +1041,13 @@ public sealed class FilePlacementConventionTests
                                            #
                                            # Format: <repository-relative file>|<count>, one line per file, sorted. The count is how many top-level
                                            # types that file declares today, and every listed file declares at least two. A production file with no
-                                           # line here must declare one type, or take one of the four exception shapes the test encodes:
+                                           # line here must declare one type, or take one of the five exception shapes the test encodes:
                                            #   family file   *Dtos.cs, *Contracts.cs, *ServiceModels.cs, *Models.cs
                                            #   pair          exactly an interface IFoo and its implementation Foo
                                            #   satellites    one primary type beside only enums and delegates
-                                           #   contract      I*Store.cs / I*Service.cs declaring that interface plus its own vocabulary
+                                           #   enums         enums only
+                                           #   contract      I<Name>.cs declaring interface I<Name> plus its own vocabulary; its classes and
+                                           #                 structs declare no public method unless the file is an I*Store.cs or I*Service.cs
                                            # Test projects and generated/migration code are out of scope. Endpoints are not judged here at all:
                                            # EndpointConventionTests owns one-endpoint-per-file by reflection, and has no allowlist.
                                            #

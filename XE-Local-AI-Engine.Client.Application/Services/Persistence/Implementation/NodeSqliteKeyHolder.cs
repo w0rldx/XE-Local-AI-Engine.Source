@@ -16,7 +16,7 @@ public sealed class NodeSqliteKeyHolder : INodeSqliteKeyHolder
 
     private byte[]? _key;
 
-    public NodeSqliteKeyHolder(IOptions<WorkerNodeOptions> workerNodeOptions, INodeOperatorSecretProvider operatorSecretProvider)
+    public NodeSqliteKeyHolder(IOptions<WorkerNodeOptions> workerNodeOptions, NodeOperatorSecretProvider operatorSecretProvider)
     {
         ArgumentNullException.ThrowIfNull(workerNodeOptions);
         ArgumentNullException.ThrowIfNull(operatorSecretProvider);

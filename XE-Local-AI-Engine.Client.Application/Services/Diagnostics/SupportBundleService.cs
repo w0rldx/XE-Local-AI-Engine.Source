@@ -8,14 +8,14 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Providers.Abstractions.Diagnostics;
 
-/// <inheritdoc />
+/// <summary>Builds the scrubbed server-side support bundle the Diagnostics panel merges with its browser snapshot.</summary>
 /// <remarks>
 ///     Layout (schema 1): manifest, node info, tails of the newest and previous node log (256/128 KB), startup-crash,
 ///     desktop and launcher logs (64 KB each, cut to a line boundary), one <c>processes/*.txt</c> per child-process
 ///     tail and <c>perf.json</c> (recent turn throughput and model loads). Every text entry is scrubbed. A missing log is listed as <c>absent</c>: the Testing host and a fresh install
 ///     have no log directory. Bounded by construction (under 2 MB), so it is built in memory.
 /// </remarks>
-public sealed class SupportBundleService : ISupportBundleService
+public sealed class SupportBundleService
 {
     public const int SchemaVersion = 1;
     public const string ManifestEntry = "manifest.json";
@@ -70,6 +70,8 @@ public sealed class SupportBundleService : ISupportBundleService
         _timeProvider = timeProvider;
     }
 
+    /// <param name="isShellOwned">Passed through to <see cref="INodeInfoService.GetAsync" />.</param>
+    /// <param name="ct">The request's cancellation.</param>
     public async Task<SupportBundle> BuildAsync(bool isShellOwned, CancellationToken ct)
     {
         var createdAt = _timeProvider.GetUtcNow();
