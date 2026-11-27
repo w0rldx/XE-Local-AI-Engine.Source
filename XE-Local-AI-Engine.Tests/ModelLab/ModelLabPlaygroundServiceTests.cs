@@ -152,9 +152,11 @@ public sealed class ModelLabPlaygroundServiceTests
         await lab.ExpectFailureAsync(script, "not valid JSON", trace: MinimalTrace[..(MinimalTrace.Length / 2)]);
         await lab.ExpectFailureAsync(script, "format", trace: MinimalTrace.Replace("\"formatVersion\":1", "\"formatVersion\":2", StringComparison.Ordinal));
         await lab.ExpectFailureAsync(script, "'recorded'", trace: MinimalTrace.Replace("\"recorded\":[]", "\"recorded\":null", StringComparison.Ordinal));
-        await lab.ExpectFailureAsync(script, "'data.count'", trace: MinimalTrace.Replace("\"data\":{\"count\":4,\"probes\":[0,1,2,3],\"x\":[[0,0],[0,1],[1,0],[1,1]],\"y\":[0,1,1,0]}", "\"data\":{}", StringComparison.Ordinal));
+        await lab.ExpectFailureAsync(script, "'data.count'",
+            trace: MinimalTrace.Replace("\"data\":{\"count\":4,\"probes\":[0,1,2,3],\"x\":[[0,0],[0,1],[1,0],[1,1]],\"y\":[0,1,1,0]}", "\"data\":{}", StringComparison.Ordinal));
         await lab.ExpectFailureAsync(script, "'modules[0].outputActivation'", trace: MinimalTrace.Replace(",\"outputActivation\":null", "", StringComparison.Ordinal));
-        await lab.ExpectFailureAsync(script, "'recorded[0].loss'", trace: MinimalTrace.Replace("\"recorded\":[]", "\"recorded\":[{\"step\":0,\"forward\":[],\"loss\":{},\"backward\":null,\"update\":null}]", StringComparison.Ordinal));
+        await lab.ExpectFailureAsync(script, "'recorded[0].loss'",
+            trace: MinimalTrace.Replace("\"recorded\":[]", "\"recorded\":[{\"step\":0,\"forward\":[],\"loss\":{},\"backward\":null,\"update\":null}]", StringComparison.Ordinal));
         await lab.ExpectFailureAsync(script, "'data.probes'", trace: MinimalTrace.Replace("\"probes\":[0,1,2,3]", "\"probes\":[0,-1,2,3]", StringComparison.Ordinal));
         await lab.ExpectFailureAsync(script, "'occurrences[1].visit'", trace: MinimalTrace.Replace("\"visit\":1", "\"visit\":1.5", StringComparison.Ordinal));
         await lab.ExpectFailureAsync(script, "another template", result: MinimalResult.Replace("tiny-mlp-v1", "other-v1", StringComparison.Ordinal));
@@ -293,7 +295,7 @@ public sealed class ModelLabPlaygroundServiceTests
         await lab.ExpectFailureAsync(script, "'outcome.updatesApplied'", trace: MinimalTrace.Replace("\"updatesApplied\":8", "\"updatesApplied\":-8", StringComparison.Ordinal));
         AssertEx.Equal(ModelLabPlaygroundSpec.MaxRetainedRuns, (await lab.Service.ListAsync(CancellationToken.None)).Count, "A refused trace trims no run.");
         script.Trace = MinimalTrace;
-        var saved =AssertEx.NotNull((await lab.Service.StartAsync(Config(), CancellationToken.None)).Run);
+        var saved = AssertEx.NotNull((await lab.Service.StartAsync(Config(), CancellationToken.None)).Run);
 
         var kept = (await lab.Service.ListAsync(CancellationToken.None)).Select(static run => run.Id).ToList();
         AssertEx.Equal(ModelLabPlaygroundSpec.MaxRetainedRuns, kept.Count);
@@ -367,7 +369,8 @@ public sealed class ModelLabPlaygroundServiceTests
         using var client = lab.Host.Factory.CreateClient();
         const string runs = "/api/local/v1/model-lab/playground/runs";
 
-        KeyValuePair<HttpMethod, string>[] routes = [new(HttpMethod.Get, runs), new(HttpMethod.Post, runs), new(HttpMethod.Get, $"{runs}/{Guid.NewGuid()}"), new(HttpMethod.Delete, $"{runs}/{Guid.NewGuid()}")];
+        KeyValuePair<HttpMethod, string>[] routes =
+            [new(HttpMethod.Get, runs), new(HttpMethod.Post, runs), new(HttpMethod.Get, $"{runs}/{Guid.NewGuid()}"), new(HttpMethod.Delete, $"{runs}/{Guid.NewGuid()}")];
         foreach (var (method, path) in routes)
         {
             using var request = new HttpRequestMessage(method, path);

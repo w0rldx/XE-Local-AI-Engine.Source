@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;

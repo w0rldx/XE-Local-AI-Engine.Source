@@ -237,7 +237,11 @@ public sealed class TrainingRuntimeOrchestrationServiceTests
         var interpreterThrows = new PhasedRuntime();
         interpreterThrows.Runtime.ResolveInterpreterPath().Returns(_ => throw new IOException("venv unreadable"));
 
-        foreach (var runtime in new[] { statusThrows, interpreterThrows })
+        foreach (var runtime in new[]
+                 {
+                     statusThrows,
+                     interpreterThrows
+                 })
         {
             _ = AssertEx.Throws<IOException>(() => ModelLabRuntimeJob.TryEnter(users, runtime.Runtime, Script(script), "not installed", out _, out _));
             AssertEx.False(users.InUse, "A throwing recheck gives its registration back.");

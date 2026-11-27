@@ -104,16 +104,14 @@ public sealed partial class SingleImplementationInterfaceTests
     [Arguments("qualified implementations", "public interface IStore { }",
         "sealed class A : Ns.IStore { }\nsealed class B : global::Ns.IStore, IOther<IStore> { }", "", "",
         "2 production implementations")]
-    public void TheRule_ReadsEveryReasonAnInterfaceMayStay(
-        string name, string declaration, string implementations, string consumer, string elsewhere, string expected)
+    public void TheRule_ReadsEveryReasonAnInterfaceMayStay(string name, string declaration, string implementations, string consumer, string elsewhere, string expected)
     {
         var interfaceName = InterfaceDeclaration().Matches(declaration)[^1].Groups["name"].Value;
         var application = string.Join("\n", declaration, implementations, consumer);
         var host = elsewhere.StartsWith("HOST:", StringComparison.Ordinal) ? elsewhere[5..] : string.Empty;
         var test = elsewhere.StartsWith("TEST:", StringComparison.Ordinal) ? elsewhere[5..] : string.Empty;
 
-        var verdicts = JudgeSources(
-        [
+        var verdicts = JudgeSources([
             Read(DeclaringProject + "A.cs", application, isTest: false),
             Read("XE-Local-AI-Engine.Client/H.cs", host, isTest: false),
             Read("XE-Local-AI-Engine.Tests/T.cs", test, isTest: true)
@@ -125,8 +123,7 @@ public sealed partial class SingleImplementationInterfaceTests
 
     private static IReadOnlyDictionary<string, string> Judge() =>
         JudgeSources([
-            .. EnforcedSourceFiles.All().Select(file => Read(
-                file.Relative,
+            .. EnforcedSourceFiles.All().Select(file => Read(file.Relative,
                 File.ReadAllText(file.Path),
                 isTest: !EnforcedSourceFiles.IsProduction(file.Relative)))
         ]);
@@ -170,8 +167,7 @@ public sealed partial class SingleImplementationInterfaceTests
     }
 
     /// <summary>The first rule that lets <paramref name="name" /> stay, or empty when none does.</summary>
-    private static string ReasonToStay(
-        string name, List<Implementer> implementers, List<string> production, List<string> tests)
+    private static string ReasonToStay(string name, List<Implementer> implementers, List<string> production, List<string> tests)
     {
         var productionClasses = implementers.Where(type => !type.IsInterface && !type.Source.IsTest).ToList();
 
@@ -200,7 +196,12 @@ public sealed partial class SingleImplementationInterfaceTests
 
     /// <summary>Whether a test substitutes <paramref name="name" /> as the first type argument of <c>Substitute.For</c>.</summary>
     private static bool IsSubstituted(string text, string name) =>
-        new[] { ">", ",", "<" }.Any(next => text.Contains($"Substitute.For<{name}{next}", StringComparison.Ordinal));
+        new[]
+        {
+            ">",
+            ",",
+            "<"
+        }.Any(next => text.Contains($"Substitute.For<{name}{next}", StringComparison.Ordinal));
 
     /// <summary>
     ///     Every distinct type whose base list implements <paramref name="name" />, followed through derived interfaces.
@@ -210,7 +211,10 @@ public sealed partial class SingleImplementationInterfaceTests
     {
         var found = new List<Implementer>();
         var pending = new Queue<string>([name]);
-        var visited = new HashSet<string>(StringComparer.Ordinal) { name };
+        var visited = new HashSet<string>(StringComparer.Ordinal)
+        {
+            name
+        };
 
         while (pending.TryDequeue(out var current))
         {

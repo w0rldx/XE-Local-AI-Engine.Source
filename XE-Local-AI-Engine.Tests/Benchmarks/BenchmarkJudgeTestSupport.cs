@@ -325,4 +325,5 @@ internal static class BenchmarkJudgeTestSupport
             Disposed = true;
             return ValueTask.CompletedTask;
         }
-    }}
+    }
+}

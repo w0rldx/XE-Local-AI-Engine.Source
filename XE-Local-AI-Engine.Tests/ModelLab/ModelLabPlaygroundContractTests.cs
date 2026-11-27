@@ -107,7 +107,11 @@ public sealed class ModelLabPlaygroundContractTests
     [Test]
     public void AWrongFormatVersion_OrAForeignTemplate_IsRefused()
     {
-        foreach (var document in new[] { MinimalTrace, MinimalResult })
+        foreach (var document in new[]
+                 {
+                     MinimalTrace,
+                     MinimalResult
+                 })
         {
             AssertEx.Contains(Check(document, Mutate(document, static root => root["formatVersion"] = 2)), "format");
             AssertEx.Contains(Check(document, Mutate(document, static root => root["formatVersion"] = "1")), "format");
@@ -138,7 +142,11 @@ public sealed class ModelLabPlaygroundContractTests
             AssertEx.Contains(Check(MinimalResult, Mutate(MinimalResult, root => root["config"]![member] = new JsonArray())), $"'config.{member}'");
         }
 
-        foreach (var document in new[] { MinimalTrace, MinimalResult })
+        foreach (var document in new[]
+                 {
+                     MinimalTrace,
+                     MinimalResult
+                 })
         {
             AssertEx.Contains(Check(document, Mutate(document, static root => root["outcome"]!["kind"] = "paused")), "'outcome.kind'");
             AssertEx.Contains(Check(document, Mutate(document, static root => root["outcome"]!.AsObject().Remove("atStep"))), "'outcome.atStep'");
@@ -228,7 +236,11 @@ public sealed class ModelLabPlaygroundContractTests
     [Test]
     public void ATruncatedOrNonObjectDocument_IsRefused()
     {
-        foreach (var document in new[] { MinimalTrace, MinimalResult })
+        foreach (var document in new[]
+                 {
+                     MinimalTrace,
+                     MinimalResult
+                 })
         {
             var bytes = Encoding.UTF8.GetBytes(document);
             AssertEx.Contains(Check(document, bytes[..(bytes.Length / 2)]), "not valid JSON");

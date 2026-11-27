@@ -70,8 +70,7 @@ public sealed class WorkSessionCloudEgressTests
     public async Task Update_WhenTheOperatorOptedCloudDataAccessIn_AllowsTheRepoint()
     {
         // Private host: the operator opt-in it asserts on is a host-level config value.
-        await using var factory = WorkSessionTestSupport.NewFactory(
-            configuration: WorkSessionTestSupport.Configuration(("KnowledgeBase:AllowCloudModelAccess", "true")));
+        await using var factory = WorkSessionTestSupport.NewFactory(configuration: WorkSessionTestSupport.Configuration(("KnowledgeBase:AllowCloudModelAccess", "true")));
         var sessionId = Guid.NewGuid();
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         await RecordAFindingAsync(factory, sessionId);

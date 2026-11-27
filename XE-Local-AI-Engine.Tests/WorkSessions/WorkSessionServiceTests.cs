@@ -154,7 +154,7 @@ public sealed class WorkSessionServiceTests
     {
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        var seeded = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        var seeded = await SeedSessionAsync(factory.Services, sessionId);
         var unlistedAgentId = await SeedAgentAsync(factory, "a-model-nobody-listed");
         var listedAgentId = await SeedAgentAsync(factory, "another-local-model");
 
@@ -226,7 +226,7 @@ public sealed class WorkSessionServiceTests
     {
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        var session = await SeedSessionAsync(factory.Services, sessionId);
         await using var scope = factory.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
         _ = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand
@@ -259,7 +259,7 @@ public sealed class WorkSessionServiceTests
     {
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        var session = await SeedSessionAsync(factory.Services, sessionId);
         await using var scope = factory.Services.CreateAsyncScope();
         _ = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()
                        .TransitionStatusAsync(new TransitionWorkSessionStatusCommand
@@ -278,7 +278,7 @@ public sealed class WorkSessionServiceTests
     {
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        var session = await SeedSessionAsync(factory.Services, sessionId);
         await using var scope = factory.Services.CreateAsyncScope();
         _ = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()
                        .TransitionStatusAsync(new TransitionWorkSessionStatusCommand
@@ -299,7 +299,7 @@ public sealed class WorkSessionServiceTests
     {
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        var session = await SeedSessionAsync(factory.Services, sessionId);
 
         await using var scope = factory.Services.CreateAsyncScope();
         await scope.ServiceProvider.GetRequiredService<IWorkSessionService>().DeleteAsync(sessionId);
@@ -316,7 +316,7 @@ public sealed class WorkSessionServiceTests
         // anything downstream could inspect it.
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        var session = await SeedSessionAsync(factory.Services, sessionId);
 
         await using var scope = factory.Services.CreateAsyncScope();
         var cap = scope.ServiceProvider.GetRequiredService<IOptions<SecurityOptions>>().Value.MaxMessageSizeKb;
@@ -348,7 +348,7 @@ public sealed class WorkSessionServiceTests
             },
             configuration: Configuration(("WorkSessions:MaxStepsPerRun", "1")));
 
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        var session = await SeedSessionAsync(factory.Services, sessionId);
         await PauseAsync(factory, sessionId);
         _ = factory.Services.GetRequiredService<INodeChatStreamService>();
 
@@ -357,7 +357,7 @@ public sealed class WorkSessionServiceTests
             _ = await scope.ServiceProvider.GetRequiredService<IWorkSessionService>().PostFollowUpAsync(sessionId, "Also check the ADR.");
         }
 
-        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused);
+        _ = await WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused);
         AssertEx.NotNull(stream, "The auto-resume must have driven a step.");
         AssertEx.NotEmpty(stream!.Requests, "A paused session picks a follow-up up by resuming, which is what the composer implies.");
 
@@ -384,7 +384,7 @@ public sealed class WorkSessionServiceTests
                 services.AddSingleton<IWorkSessionEventPublisher>(publisher);
             },
             configuration: Configuration(("WorkSessions:MaxStepsPerRun", "1")));
-        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        _ = await SeedSessionAsync(factory.Services, sessionId);
 
         WorkSessionDetail started;
         await using (var scope = factory.Services.CreateAsyncScope())
@@ -396,7 +396,7 @@ public sealed class WorkSessionServiceTests
         AssertEx.Contains(publisher.Published,
             published => published.SessionId == sessionId && published.Kind == WorkSessionChangeKind.Status,
             "Start must announce the Running transition itself; the supervisor only announces the statuses it settles.");
-        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused);
+        _ = await WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused);
     }
 
     /// <summary>No loop owns a paused session, so its cancel is the only announcement of the end; the operations feed hears it as a status broadcast.</summary>
@@ -410,7 +410,7 @@ public sealed class WorkSessionServiceTests
             services.RemoveAll<IWorkSessionEventPublisher>();
             services.AddSingleton<IWorkSessionEventPublisher>(publisher);
         });
-        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        _ = await SeedSessionAsync(factory.Services, sessionId);
         await PauseAsync(factory, sessionId);
 
         WorkSessionDetail cancelled;
@@ -442,7 +442,7 @@ public sealed class WorkSessionServiceTests
             services.RemoveAll<IWorkSessionExecutionSupervisor>();
             services.AddSingleton<IWorkSessionExecutionSupervisor>(supervisor);
         });
-        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        _ = await SeedSessionAsync(factory.Services, sessionId);
 
         await using (var scope = factory.Services.CreateAsyncScope())
         {
@@ -450,7 +450,7 @@ public sealed class WorkSessionServiceTests
                 scope.ServiceProvider.GetRequiredService<IWorkSessionService>().StartAsync(sessionId));
         }
 
-        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused);
+        _ = await WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused);
         AssertEx.ContainsSingle(publisher.Published,
             published => published.SessionId == sessionId && published.Kind == WorkSessionChangeKind.Status,
             "The park after a lost admission must be announced exactly once.");
@@ -463,7 +463,7 @@ public sealed class WorkSessionServiceTests
         // a follow-up queues for the next step rather than starting one.
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        var session = await SeedSessionAsync(factory.Services, sessionId);
 
         await using var scope = factory.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
@@ -490,7 +490,7 @@ public sealed class WorkSessionServiceTests
     {
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        _ = await SeedSessionAsync(factory.Services, sessionId);
 
         await using var scope = factory.Services.CreateAsyncScope();
         var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();
@@ -522,9 +522,9 @@ public sealed class WorkSessionServiceTests
     {
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        _ = await SeedSessionAsync(factory.Services, sessionId);
         var otherSessionId = Guid.NewGuid();
-        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, otherSessionId);
+        _ = await SeedSessionAsync(factory.Services, otherSessionId);
 
         await using var scope = factory.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
@@ -573,7 +573,7 @@ public sealed class WorkSessionServiceTests
     {
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
-        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        _ = await SeedSessionAsync(factory.Services, sessionId);
 
         await using var scope = factory.Services.CreateAsyncScope();
         var operationId = Guid.NewGuid();
@@ -607,7 +607,7 @@ public sealed class WorkSessionServiceTests
             }
         };
         var sessionId = Guid.NewGuid();
-        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        _ = await SeedSessionAsync(factory.Services, sessionId);
 
         await using var scope = factory.Services.CreateAsyncScope();
         var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();

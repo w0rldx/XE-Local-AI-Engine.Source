@@ -66,7 +66,10 @@ public sealed class HubBearerSubprotocolKestrelTests
     private static async Task<Uri> TransportUriAsync(TestServerWebAppFactory factory, string token, CancellationToken cancellationToken)
     {
         var address = factory.KestrelAddress;
-        using var client = new HttpClient { BaseAddress = address };
+        using var client = new HttpClient
+        {
+            BaseAddress = address
+        };
         using var request = new HttpRequestMessage(HttpMethod.Post, new Uri($"{LocalApiRoutes.LocalChat.Hub}/negotiate?negotiateVersion=1", UriKind.Relative));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         using var response = await client.SendAsync(request, cancellationToken);
@@ -102,7 +105,10 @@ public sealed class HubBearerSubprotocolKestrelTests
     /// <summary>One Kestrel-served host for the class; both tests only read.</summary>
     public sealed class KestrelHost : IAsyncDisposable
     {
-        public TestServerWebAppFactory Factory { get; } = new() { ServeOnKestrel = true };
+        public TestServerWebAppFactory Factory { get; } = new()
+        {
+            ServeOnKestrel = true
+        };
 
         public ValueTask DisposeAsync() =>
             Factory.DisposeAsync();

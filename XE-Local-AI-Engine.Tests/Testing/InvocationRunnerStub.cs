@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Testing;
 
-using XE_Local_AI_Engine.AI.Contracts.Events;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 

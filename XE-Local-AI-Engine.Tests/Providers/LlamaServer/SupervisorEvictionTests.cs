@@ -1417,7 +1417,7 @@ public sealed class SupervisorEvictionTests
         }
 
         public LlamaServerIdleReaper CreateReaper() =>
-            SupervisorEvictionTests.NewReaper(Processes, Options, new CallbackClock(_now), ports: Ports);
+            NewReaper(Processes, Options, new CallbackClock(_now), ports: Ports);
     }
 
     private sealed class LostClaimProcess

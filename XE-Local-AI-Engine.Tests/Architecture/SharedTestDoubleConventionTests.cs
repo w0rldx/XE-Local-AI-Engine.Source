@@ -35,11 +35,26 @@ public sealed partial class SharedTestDoubleConventionTests
         "XE-Local-AI-Engine.Tests/Testing/ImmediateTimerTimeProvider.cs|ImmediateTimerTimeProvider"
     };
 
-    private static readonly HashSet<string> InterfacesWithASharedDouble = new(StringComparer.Ordinal) { "INodeSqliteKeyHolder", "IAgentHomeIdentityProvider" };
+    private static readonly HashSet<string> InterfacesWithASharedDouble = new(StringComparer.Ordinal)
+    {
+        "INodeSqliteKeyHolder",
+        "IAgentHomeIdentityProvider"
+    };
 
-    private static readonly HashSet<string> ClockNames = new(StringComparer.Ordinal) { "ManualTimeProvider", "FixedTimeProvider", "SteppingClock", "SteppingTimeProvider", "ImmediateTimerTimeProvider" };
+    private static readonly HashSet<string> ClockNames = new(StringComparer.Ordinal)
+    {
+        "ManualTimeProvider",
+        "FixedTimeProvider",
+        "SteppingClock",
+        "SteppingTimeProvider",
+        "ImmediateTimerTimeProvider"
+    };
 
-    private static readonly HashSet<string> TempDirectoryNames = new(StringComparer.Ordinal) { "TempDir", "TempDirectory" };
+    private static readonly HashSet<string> TempDirectoryNames = new(StringComparer.Ordinal)
+    {
+        "TempDir",
+        "TempDirectory"
+    };
 
     private static readonly Lazy<CopyScan> Scan = new(ScanTree, isThreadSafe: true);
 

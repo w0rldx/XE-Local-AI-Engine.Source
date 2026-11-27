@@ -42,12 +42,21 @@ internal static class ModelLabQkvLabels
         // hold a block with neither weight, so only positive evidence counts and such a block makes the layout mixed.
         if (ofKind.All(static block => HasWeight(block, ".attn_qkv.weight")))
         {
-            return fused with { QkvLayout = FusedLayout };
+            return fused with
+            {
+                QkvLayout = FusedLayout
+            };
         }
 
         return ofKind.All(static block => HasWeight(block, ".attn_q.weight"))
-            ? separate with { QkvLayout = SeparateLayout }
-            : mixed with { QkvLayout = MixedLayout };
+            ? separate with
+            {
+                QkvLayout = SeparateLayout
+            }
+            : mixed with
+            {
+                QkvLayout = MixedLayout
+            };
     }
 
     private static bool HasWeight(ModelLabArchitectureBlock block, string suffix) =>

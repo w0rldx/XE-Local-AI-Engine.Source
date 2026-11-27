@@ -27,8 +27,7 @@ public sealed class RepositoryRootWalkUpGuardTests
         TimeSpan.FromSeconds(1));
 
     // `d = d.Parent`, `d = d?.Parent`, `d = Directory.GetParent(d…)`, `p = Path.GetDirectoryName(p)`: a step that repeats.
-    private static readonly Regex ParentStep = new(
-        @"\b(\w+)\s*=\s*(?:\1\s*!?\s*\??\.\s*Parent\b|Directory\.GetParent\(\s*\1\b|Path\.GetDirectoryName\(\s*\1\b)",
+    private static readonly Regex ParentStep = new(@"\b(\w+)\s*=\s*(?:\1\s*!?\s*\??\.\s*Parent\b|Directory\.GetParent\(\s*\1\b|Path\.GetDirectoryName\(\s*\1\b)",
         RegexOptions.CultureInvariant,
         TimeSpan.FromSeconds(1));
 

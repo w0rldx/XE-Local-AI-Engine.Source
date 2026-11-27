@@ -49,8 +49,11 @@ public static class ModelLabPlaygroundSpec
 /// <summary>The datasets the template trains on. The one vocabulary the request, the OpenAPI enum and the job file share.</summary>
 public enum ModelLabPlaygroundDataset
 {
-    [JsonStringEnumMemberName("xor")] Xor,
-    [JsonStringEnumMemberName("spirals")] Spirals
+    [JsonStringEnumMemberName("xor")]
+    Xor,
+
+    [JsonStringEnumMemberName("spirals")]
+    Spirals
 }
 
 /// <summary>The knobs of one run, as the job file and <c>result.json</c> carry them. Read back from the stored result, so nothing is <c>required</c>.</summary>

@@ -74,8 +74,7 @@ public sealed partial class TestClassHostConventionTests
         var host = new ScannedFile
         {
             Relative = "XE-Local-AI-Engine.Tests/FooTests.cs",
-            Text = SourceCommentStripper.StripCommentsAndLiterals(
-                "public sealed class FooTests\n{\n    [Test]\n    public void A() { }\n}"),
+            Text = SourceCommentStripper.StripCommentsAndLiterals("public sealed class FooTests\n{\n    [Test]\n    public void A() { }\n}"),
         };
         var plain = new ScannedFile
         {
@@ -106,7 +105,11 @@ public sealed partial class TestClassHostConventionTests
                                        })
                                        .ToList();
 
-        return new HostScan { Scanned = files.Count, Edges = EdgesIn(files) };
+        return new HostScan
+        {
+            Scanned = files.Count,
+            Edges = EdgesIn(files)
+        };
     }
 
     /// <summary>Every <c>host|consumer</c> pair, sorted, where the consumer file does not declare the host itself.</summary>

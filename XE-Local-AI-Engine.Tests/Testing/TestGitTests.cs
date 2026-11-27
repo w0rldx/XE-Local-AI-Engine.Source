@@ -80,8 +80,7 @@ public sealed class TestGitTests
             await AssertEx.EventuallyAsync(() => File.Exists(helperPid), TestBudgets.Contended, "the helper never saw git exit");
             await cancellation.CancelAsync();
 
-            await AssertEx.CompletesAsync(
-                AssertEx.ThrowsAsync<OperationCanceledException>(() => run),
+            await AssertEx.CompletesAsync(AssertEx.ThrowsAsync<OperationCanceledException>(() => run),
                 TestBudgets.Contended,
                 "the run kept waiting on pipes a helper holds after git exited, past its caller's cancellation");
         }
@@ -105,8 +104,7 @@ public sealed class TestGitTests
         start += Opening.Length;
         var listed = script[start..script.IndexOf(')', start)].Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
 
-        AssertEx.Equal(
-            string.Join(' ', listed.Order(StringComparer.Ordinal)),
+        AssertEx.Equal(string.Join(' ', listed.Order(StringComparer.Ordinal)),
             string.Join(' ', TestGitEnvironment.RepositorySelectors.Order(StringComparer.Ordinal)));
     }
 
@@ -327,6 +325,6 @@ public sealed class TestGitTests
 
     private static string Snapshot(string root) =>
         string.Join('\n', Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
-            .Order(StringComparer.Ordinal)
-            .Select(file => $"{Path.GetRelativePath(root, file)} {Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(file)))}"));
+                                   .Order(StringComparer.Ordinal)
+                                   .Select(file => $"{Path.GetRelativePath(root, file)} {Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(file)))}"));
 }

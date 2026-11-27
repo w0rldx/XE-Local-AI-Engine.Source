@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Testing.Git;
 
 using System.Diagnostics;
+using System.Globalization;
 
 /// <summary>The inherited git environment a test's child process drops, so fixture git only touches the fixture.</summary>
 public static class TestGitEnvironment
@@ -47,7 +48,7 @@ public static class TestGitEnvironment
             ["core.excludesFile", nullDevice], ["core.attributesFile", nullDevice], ["core.fsmonitor", "false"],
             ["init.templateDir", ""]
         ];
-        startInfo.Environment["GIT_CONFIG_COUNT"] = settings.Length.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        startInfo.Environment["GIT_CONFIG_COUNT"] = settings.Length.ToString(CultureInfo.InvariantCulture);
         for (var index = 0; index < settings.Length; index++)
         {
             startInfo.Environment[$"GIT_CONFIG_KEY_{index}"] = settings[index][0];

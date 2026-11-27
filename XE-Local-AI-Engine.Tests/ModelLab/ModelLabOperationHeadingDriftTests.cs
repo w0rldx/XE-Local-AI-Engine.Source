@@ -25,7 +25,10 @@ public sealed class ModelLabOperationHeadingDriftTests
     private static readonly string[] Layouts = ["separate", "fused", "mixed"];
 
     // The client's architectureFallbacks.
-    private static readonly Dictionary<string, string> ArchitectureFallbacks = new(StringComparer.Ordinal) { ["qwen35moe"] = "qwen35" };
+    private static readonly Dictionary<string, string> ArchitectureFallbacks = new(StringComparer.Ordinal)
+    {
+        ["qwen35moe"] = "qwen35"
+    };
 
     [Test]
     public async Task EveryHeading_HasGermanText_AndEveryKeyReached_CoversOneEnglishLabel()
@@ -85,8 +88,17 @@ public sealed class ModelLabOperationHeadingDriftTests
     private static IEnumerable<string> Candidates(string architecture, string kind, string id, string? layout)
     {
         string[] architectures = ArchitectureFallbacks.TryGetValue(architecture, out var fallback) ? [architecture, fallback] : [architecture];
-        var keys = architectures.SelectMany(name => new[] { $"byKind.{name}.{kind}.{id}", $"arch.{name}.{id}" }).Append($"any.{id}");
-        return keys.SelectMany(key => layout is null ? new[] { key } : [$"{key}_{layout}", key]);
+        var keys = architectures.SelectMany(name => new[]
+        {
+            $"byKind.{name}.{kind}.{id}",
+            $"arch.{name}.{id}"
+        }).Append($"any.{id}");
+        return keys.SelectMany(key => layout is null
+            ? new[]
+            {
+                key
+            }
+            : [$"{key}_{layout}", key]);
     }
 
     private static string? TextAt(JsonElement root, string path)
@@ -162,9 +174,21 @@ public sealed class ModelLabOperationHeadingDriftTests
         string[] Qkv(int block) =>
             (layout == "fused" || (layout == "mixed" && block % 2 == 0)) ? ["attn_qkv.weight"] : ["attn_q.weight", "attn_k.weight", "attn_v.weight"];
 
-        var names = new[] { "blk.0.ssm_a", "blk.0.attn_qkv.weight" }
-                    .Concat(new[] { 1, 2 }.SelectMany(block => Qkv(block).Append("attn_norm.weight").Select(suffix => $"blk.{block}.{suffix}")))
-                    .Concat(new[] { 3, 4 }.SelectMany(block => Qkv(block).Append("nextn.eh_proj.weight").Select(suffix => $"blk.{block}.{suffix}")));
+        var names = new[]
+                    {
+                        "blk.0.ssm_a",
+                        "blk.0.attn_qkv.weight"
+                    }
+                    .Concat(new[]
+                    {
+                        1,
+                        2
+                    }.SelectMany(block => Qkv(block).Append("attn_norm.weight").Select(suffix => $"blk.{block}.{suffix}")))
+                    .Concat(new[]
+                    {
+                        3,
+                        4
+                    }.SelectMany(block => Qkv(block).Append("nextn.eh_proj.weight").Select(suffix => $"blk.{block}.{suffix}")));
         return names.Select(static name => Qwen35TensorFixture.Tensor(name, [64], "F32"));
     }
 
@@ -180,6 +204,7 @@ public sealed class ModelLabOperationHeadingDriftTests
 
         public required string Label { get; init; }
 
-        public override string ToString() => $"{Architecture}/{Kind}/{Layout ?? "-"}/{Id}: {Label}";
+        public override string ToString() =>
+            $"{Architecture}/{Kind}/{Layout ?? "-"}/{Id}: {Label}";
     }
 }

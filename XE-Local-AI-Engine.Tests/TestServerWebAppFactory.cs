@@ -146,9 +146,10 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
     public TestServer Server => EnsureApp().GetTestServer();
 
     /// <summary>The base address Kestrel bound when <see cref="ServeOnKestrel" /> is set.</summary>
-    public Uri KestrelAddress => ServeOnKestrel
-        ? new Uri(EnsureApp().Urls.Single())
-        : throw new InvalidOperationException($"{nameof(KestrelAddress)} needs {nameof(ServeOnKestrel)} = true; this host runs on TestServer.");
+    public Uri KestrelAddress =>
+        ServeOnKestrel
+            ? new Uri(EnsureApp().Urls.Single())
+            : throw new InvalidOperationException($"{nameof(KestrelAddress)} needs {nameof(ServeOnKestrel)} = true; this host runs on TestServer.");
 
     private static bool RunLocalIntegration =>
         string.Equals(Environment.GetEnvironmentVariable("RUN_LOCAL_INTEGRATION"),
