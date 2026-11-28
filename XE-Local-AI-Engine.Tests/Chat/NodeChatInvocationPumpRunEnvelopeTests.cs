@@ -266,7 +266,8 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
             TurnInputTokens = 6_000,
             TurnOutputTokens = 60,
             TurnTotalTokens = 6_078,
-            TurnReasoningTokens = 18
+            TurnReasoningTokens = 18,
+            TurnUsageReported = true
         };
 
         _ = await pump.TerminalizeAsync(correlation, state, "requested-model");
@@ -280,7 +281,8 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
                 && request.Envelope.TurnInputTokens == 6_000
                 && request.Envelope.TurnOutputTokens == 60
                 && request.Envelope.TurnTotalTokens == 6_078
-                && request.Envelope.TurnReasoningTokens == 18),
+                && request.Envelope.TurnReasoningTokens == 18
+                && request.Envelope.TurnUsageReported),
             Arg.Any<CancellationToken>());
     }
 
@@ -315,7 +317,8 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
                 && request.Envelope.TurnInputTokens == null
                 && request.Envelope.TurnOutputTokens == null
                 && request.Envelope.TurnTotalTokens == null
-                && request.Envelope.TurnReasoningTokens == null),
+                && request.Envelope.TurnReasoningTokens == null
+                && !request.Envelope.TurnUsageReported),
             Arg.Any<CancellationToken>());
     }
 
@@ -736,7 +739,9 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
                 ReasoningStripped = 4,
                 ProviderInputTokens = 850,
                 ProviderOutputTokens = 33,
-                ProviderReasoningTokens = 7
+                ProviderReasoningTokens = 7,
+                RequestedReasoningBudgetTokens = 4096,
+                ReasoningBudgetTokens = 2048
             }
         };
 
@@ -761,6 +766,8 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
         AssertEx.Equal(expected: 850, window.ProviderInputTokens);
         AssertEx.Equal(expected: 33, window.ProviderOutputTokens);
         AssertEx.Equal(expected: 7, window.ProviderReasoningTokens);
+        AssertEx.Equal(expected: 4096, window.RequestedReasoningBudgetTokens);
+        AssertEx.Equal(expected: 2048, window.ReasoningBudgetTokens);
         var estimate = AssertEx.NotNull(window.Estimated);
         AssertEx.Equal(expected: 300, estimate.SystemPromptTokens);
         AssertEx.Equal(expected: 20, estimate.InstructionsTokens);

@@ -168,6 +168,10 @@ export function useBenchmarkRunActions({ detail, selectedProjectId, runs, select
 				...(cell.agentDefinitionId === "" || cell.agentDefinitionId === detail.agentDefinitionId
 					? {}
 					: { agentDefinitionId: cell.agentDefinitionId }),
+				// Likewise a budget-sweep cell re-runs at its own budget, not the project's.
+				...(cell.reasoningBudgetTokens === null || cell.reasoningBudgetTokens === detail.reasoningBudgetTokens
+					? {}
+					: { reasoningBudgetTokens: cell.reasoningBudgetTokens }),
 				repeatMode,
 				answerVarianceTemperature: repeatMode === "AnswerVariance" ? answerVarianceTemperature : null,
 			},

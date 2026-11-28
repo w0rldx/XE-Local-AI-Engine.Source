@@ -199,16 +199,17 @@ public sealed class AddBenchmarkDiscriminationMigrationTests
 
     private static async Task SeedProjectRunAsync(MigrationSchemaProbe probe)
     {
-        // The work item's FK needs a run, and the run's needs a project. Written as SQL rather than through the entity
-        // model on purpose: the model describes the schema at head, and half these tests observe it before this migration applies.
-        await probe.ExecuteAsync("""
-                                 INSERT INTO benchmark_projects (id, name, core_task_json, context_tokens, agent_definition_id, version, created_at_utc, updated_at_utc)
-                                 VALUES ($project, 'discrimination-probe', x'00', 4096, $agent, 1, 1, 1);
-                                 INSERT INTO benchmark_runs (id, project_id, runtime_snapshot_json, primary_model_name, model_content_fingerprint,
-                                                             agent_name, agent_version, requested_context_tokens, primary_status, last_stream_sequence,
-                                                             is_warmup, version, created_at_utc, updated_at_utc)
-                                 VALUES ($run, $project, x'00', 'probe-model', 'v1:0', 'probe-agent', 1, 4096, 'Queued', 0, 0, 1, 1, 1);
-                                 """, command =>
+        // The work item's FK needs a run, the run's a project. SQL, not the model: half these tests run before this migration, and
+        // at head the agent and cell stamps lost their migration-only defaults to a later table rebuild, so a head seed names them.
+        var atHead = (await probe.ColumnsAsync("benchmark_runs")).Contains("agent_definition_id");
+        await probe.ExecuteAsync($"""
+                                  INSERT INTO benchmark_projects (id, name, core_task_json, context_tokens, agent_definition_id, version, created_at_utc, updated_at_utc)
+                                  VALUES ($project, 'discrimination-probe', x'00', 4096, $agent, 1, 1, 1);
+                                  INSERT INTO benchmark_runs (id, project_id, runtime_snapshot_json, primary_model_name, model_content_fingerprint,
+                                                              agent_name, agent_version, requested_context_tokens, primary_status, last_stream_sequence,
+                                                              is_warmup, version, created_at_utc, updated_at_utc{(atHead ? ", agent_definition_id, cell_key" : string.Empty)})
+                                  VALUES ($run, $project, x'00', 'probe-model', 'v1:0', 'probe-agent', 1, 4096, 'Queued', 0, 0, 1, 1, 1{(atHead ? ", $agent, 'run:1'" : string.Empty)});
+                                  """, command =>
         {
             command.Parameters.AddWithValue("$project", ProjectId);
             command.Parameters.AddWithValue("$run", RunId);

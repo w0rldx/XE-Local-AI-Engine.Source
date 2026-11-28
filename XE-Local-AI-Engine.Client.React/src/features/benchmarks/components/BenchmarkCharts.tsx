@@ -12,7 +12,8 @@ import {
 	speedBarSeries,
 	throughputScatterSeries,
 } from "@/features/benchmarks/models/BenchmarkChartData";
-import type { BenchmarkRunDetail, BenchmarkRunSummary } from "@/features/benchmarks/models/BenchmarkModels";
+import { benchmarkCellBudgetLabel } from "@/features/benchmarks/models/BenchmarkCells";
+import type { BenchmarkRunSummary } from "@/features/benchmarks/models/BenchmarkModels";
 import { formatStatSummary } from "@/features/benchmarks/models/BenchmarkThroughput";
 
 // Built on `@mantine/charts` — the app's existing charting layer (the usage dashboard is the other user), which is
@@ -75,6 +76,8 @@ function ThroughputScatter({ runs }: { runs: readonly BenchmarkRunSummary[] }) {
 	}
 	const shown = series.slice(0, seriesColors.length);
 	const hidden = series.length - shown.length;
+	// A budget sweep yields cohorts that differ only in budget; without it in the name their legend rows read the same.
+	const withBudget = new Set(series.map((cohort) => cohort.reasoningBudgetTokens)).size > 1;
 	return (
 		<ChartPanel
 			title={t("pages.benchmarks.charts.throughputTitle", "Decode speed per repeat")}
@@ -92,7 +95,7 @@ function ThroughputScatter({ runs }: { runs: readonly BenchmarkRunSummary[] }) {
 				data={shown.map((cohort, index) => ({
 					// The cohort's mean and sigma ride in the legend rather than as a second mark: they are one fact about
 					// the cloud, and drawing them would double the marks for a number the label already states.
-					name: `${cohort.label}${formatStatSummary(cohort.stats) === null ? "" : ` — ${formatStatSummary(cohort.stats)}`}`,
+					name: `${cohort.label}${withBudget ? ` · ${benchmarkCellBudgetLabel(cohort, t)}` : ""}${formatStatSummary(cohort.stats) === null ? "" : ` — ${formatStatSummary(cohort.stats)}`}`,
 					color: seriesColors[index] as string,
 					data: cohort.points.map((point) => ({ repeat: point.repeat, tokensPerSecond: point.tokensPerSecond })),
 				}))}
@@ -225,7 +228,7 @@ function FidelityBars({ runs }: { runs: readonly BenchmarkRunSummary[] }) {
  * Quality against the reasoning budget the run was frozen with. Rendered only while the budget actually varies across
  * the runs in hand — with one budget the line is a vertical stack of points that answers nothing.
  */
-function ReasoningBudgetLine({ runs }: { runs: readonly BenchmarkRunDetail[] }) {
+function ReasoningBudgetLine({ runs }: { runs: readonly BenchmarkRunSummary[] }) {
 	const { t } = useTranslation();
 	const points = useMemo(() => reasoningBudgetSeries(runs), [runs]);
 	if (points.length === 0) {
@@ -234,7 +237,7 @@ function ReasoningBudgetLine({ runs }: { runs: readonly BenchmarkRunDetail[] }) 
 	return (
 		<ChartPanel
 			title={t("pages.benchmarks.charts.reasoningBudgetTitle", "Quality against the frozen reasoning budget")}
-			note={t("pages.benchmarks.charts.reasoningBudgetNote", "Across the runs currently selected for comparison.")}
+			note={t("pages.benchmarks.charts.reasoningBudgetNote", "Across the measured runs listed above.")}
 		>
 			<LineChart
 				h={chartHeight}
@@ -254,14 +257,7 @@ function ReasoningBudgetLine({ runs }: { runs: readonly BenchmarkRunDetail[] }) 
  * panel hides itself when its data does not exist — a project with one model and no fidelity measurement renders the
  * empty state rather than four axes with nothing on them.
  */
-export default function BenchmarkCharts({
-	runs,
-	selectedRuns,
-}: {
-	runs: readonly BenchmarkRunSummary[];
-	/** The compare selection, whose details carry the frozen reasoning budget the list projection does not. */
-	selectedRuns: readonly BenchmarkRunDetail[];
-}) {
+export default function BenchmarkCharts({ runs }: { runs: readonly BenchmarkRunSummary[] }) {
 	const { t } = useTranslation();
 	// `titleOrder={3}` on both branches: this card is mounted INSIDE the "Runs" SectionCard, so its heading is a
 	// subsection of that section rather than another top-level one. It is the only nested SectionCard in the app.
@@ -281,7 +277,7 @@ export default function BenchmarkCharts({
 				<ThroughputScatter runs={runs} />
 				<SpeedBars runs={runs} />
 				<FidelityBars runs={runs} />
-				<ReasoningBudgetLine runs={selectedRuns} />
+				<ReasoningBudgetLine runs={runs} />
 			</Stack>
 		</SectionCard>
 	);

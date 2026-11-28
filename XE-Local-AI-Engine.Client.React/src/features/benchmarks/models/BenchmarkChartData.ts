@@ -1,5 +1,5 @@
 import { isKldComparable } from "@/features/benchmarks/models/BenchmarkFidelity";
-import type { BenchmarkRunDetail, BenchmarkRunSummary } from "@/features/benchmarks/models/BenchmarkModels";
+import type { BenchmarkRunSummary } from "@/features/benchmarks/models/BenchmarkModels";
 import { benchmarkBaseModelLabel, benchmarkQuantTag } from "@/features/benchmarks/models/BenchmarkModels";
 import type { BenchmarkStatSummary } from "@/features/benchmarks/models/BenchmarkThroughput";
 import { benchmarkRepeatCohortKey, benchmarkRepeatStats } from "@/features/benchmarks/models/BenchmarkThroughput";
@@ -43,6 +43,8 @@ export interface BenchmarkThroughputPoint {
 export interface BenchmarkThroughputSeries {
 	key: string;
 	label: string;
+	/** The cohort's frozen budget; the chart names it once the series froze more than one. */
+	reasoningBudgetTokens: number | null;
 	points: BenchmarkThroughputPoint[];
 	/**
 	 * Mean and sample deviation over the cohort's points, or null when it reported none. A one-sample summary is kept
@@ -63,6 +65,7 @@ export function throughputScatterSeries(runs: readonly BenchmarkRunSummary[]): B
 		const series = cohorts.get(key) ?? {
 			key,
 			label: benchmarkRunLabel(run),
+			reasoningBudgetTokens: run.reasoningBudgetTokens,
 			points: [],
 			stats: stats.get(key)?.tokensPerSecond ?? null,
 		};
@@ -186,13 +189,10 @@ export interface BenchmarkReasoningBudgetPoint {
 
 /**
  * Quality against the frozen reasoning budget, ascending. Empty unless the budget actually VARIES across the runs in
- * hand: with one budget the chart is a vertical stack of points that says nothing, and a project can only carry a
- * second budget after being unfrozen, so hiding it is the ordinary case rather than a degraded one.
- *
- * Takes details rather than summaries because `reasoningBudgetTokens` is a detail-only member — the list projection
- * does not carry it.
+ * hand: with one budget the chart is a vertical stack of points that says nothing, and a second budget comes from a
+ * launch-time budget sweep, so hiding it is the ordinary case rather than a degraded one.
  */
-export function reasoningBudgetSeries(runs: readonly BenchmarkRunDetail[]): BenchmarkReasoningBudgetPoint[] {
+export function reasoningBudgetSeries(runs: readonly BenchmarkRunSummary[]): BenchmarkReasoningBudgetPoint[] {
 	const points = runs
 		.filter((run) => isPlottable(run) && finite(run.reasoningBudgetTokens) && finite(run.qualityScore))
 		.map((run) => ({

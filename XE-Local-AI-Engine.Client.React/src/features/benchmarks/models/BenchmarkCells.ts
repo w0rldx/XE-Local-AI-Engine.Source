@@ -1,3 +1,5 @@
+import type { TFunction } from "i18next";
+
 import type {
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkCellItemResponse as CellItemResponse,
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkCellResponse as CellResponse,
@@ -5,6 +7,7 @@ import type {
 } from "@/core/api/generated";
 import type { BenchmarkRankExclusionReason, BenchmarkRunVerifier } from "@/features/benchmarks/models/BenchmarkModels";
 import { toBenchmarkRankExclusionReason } from "@/features/benchmarks/models/BenchmarkModels";
+import { medianOf } from "@/features/benchmarks/models/BenchmarkRunEstimate";
 import type { BenchmarkTaskItem } from "@/features/benchmarks/models/BenchmarkTaskItems";
 import { niahCaseCriterionId } from "@/features/benchmarks/models/BenchmarkTaskItems";
 
@@ -21,6 +24,13 @@ export interface BenchmarkCellItem {
 	qualityScore: number | null;
 	primaryStopReason: string | null;
 	rankExclusionReason: BenchmarkRankExclusionReason | null;
+	/** Reasoning tokens the run produced; null = not measured. */
+	reasoningTokens: number | null;
+	durationMs: number | null;
+	/** Whether the reasoning reached the applied budget; null = unknown or a multi-round turn, never "no". */
+	reasoningAtBudget: boolean | null;
+	/** Decoded tokens that were not reasoning, derived by the node; null under the same rule as `reasoningAtBudget`. */
+	nonReasoningOutputTokens: number | null;
 }
 
 export interface BenchmarkCell {
@@ -32,6 +42,8 @@ export interface BenchmarkCell {
 	agentDefinitionId: string;
 	agentName: string;
 	agentVersion: number | null;
+	/** The thinking budget the cell's runs froze (a launch override or the project's); null = none pinned. */
+	reasoningBudgetTokens: number | null;
 	repeatGroupId: string | null;
 	repeatIndex: number | null;
 	/** The mean over the scorable items, or null when the cell is excluded. */
@@ -48,6 +60,10 @@ const toBenchmarkCellItem = (value: CellItemResponse): BenchmarkCellItem => ({
 	qualityScore: value.qualityScore ?? null,
 	primaryStopReason: value.primaryStopReason ?? null,
 	rankExclusionReason: toBenchmarkRankExclusionReason(value.rankExclusionReason),
+	reasoningTokens: value.reasoningTokens ?? null,
+	durationMs: value.durationMs ?? null,
+	reasoningAtBudget: value.reasoningAtBudget ?? null,
+	nonReasoningOutputTokens: value.nonReasoningOutputTokens ?? null,
 });
 
 export const toBenchmarkCell = (value: CellResponse): BenchmarkCell => ({
@@ -58,6 +74,7 @@ export const toBenchmarkCell = (value: CellResponse): BenchmarkCell => ({
 	agentDefinitionId: value.agentDefinitionId ?? "",
 	agentName: value.agentName,
 	agentVersion: value.agentVersion ?? null,
+	reasoningBudgetTokens: value.reasoningBudgetTokens ?? null,
 	repeatGroupId: value.repeatGroupId ?? null,
 	repeatIndex: value.repeatIndex ?? null,
 	quality: value.quality ?? null,
@@ -199,12 +216,52 @@ export const hasBenchmarkAgentVariants = (cells: readonly BenchmarkCell[]): bool
 export const benchmarkCellAgentLabel = (cell: BenchmarkCell): string =>
 	cell.agentVersion === null ? cell.agentName : `${cell.agentName} v${cell.agentVersion}`;
 
-/** `owner/Repo Q4_K_M · q8_0` — enough to tell two cells of one project apart in a picker; `withAgent` adds the variant. */
-export const benchmarkCellLabel = (cell: BenchmarkCell, autoLabel: string, withAgent = false): string => {
+/** Whether the listed cells froze more than one thinking budget; the same rule as {@link hasBenchmarkAgentVariants}. */
+export const hasBenchmarkBudgetVariants = (cells: readonly BenchmarkCell[]): boolean =>
+	new Set(cells.map((cell) => cell.reasoningBudgetTokens)).size > 1;
+
+/** `2048 thinking tokens`, or `no budget` for a cell that froze none (the model thought as its effort level allows). */
+export const benchmarkCellBudgetLabel = (cell: Pick<BenchmarkCell, "reasoningBudgetTokens">, t: TFunction): string =>
+	cell.reasoningBudgetTokens === null
+		? t("pages.benchmarks.cells.budgetNone", "no budget")
+		: t("pages.benchmarks.cells.budgetValue", "{{tokens}} thinking tokens", { tokens: cell.reasoningBudgetTokens });
+
+/**
+ * `owner/Repo Q4_K_M · q8_0` — enough to tell two cells of one project apart in a picker; `withAgent` adds the variant
+ * and `budgetLabel` (given only when the cells ran more than one budget) the thinking budget.
+ */
+export const benchmarkCellLabel = (cell: BenchmarkCell, autoLabel: string, withAgent = false, budgetLabel?: string): string => {
 	const repeat = cell.repeatIndex === null ? "" : ` #${cell.repeatIndex}`;
 	const agent = withAgent ? ` · ${benchmarkCellAgentLabel(cell)}` : "";
-	return `${cell.primaryModelName} · ${cell.kvCacheType ?? autoLabel}${agent}${repeat}`;
+	const budget = budgetLabel === undefined ? "" : ` · ${budgetLabel}`;
+	return `${cell.primaryModelName} · ${cell.kvCacheType ?? autoLabel}${agent}${budget}${repeat}`;
 };
+
+/** A set of answers' reasoning readout. Every figure is over the answers that reported it, never over all of them. */
+export interface BenchmarkReasoningReadout {
+	meanReasoningTokens: number | null;
+	meanNonReasoningTokens: number | null;
+	medianDurationMs: number | null;
+	/** Answers whose reasoning reached the applied budget. */
+	atBudget: number;
+	/** The denominator of `atBudget`: answers where the flag is known. An unknown is never counted as "not at budget". */
+	atBudgetMeasured: number;
+}
+
+const known = <T>(values: readonly (T | null)[]): T[] => values.filter((value): value is T => value !== null);
+const meanOf = (values: readonly number[]): number | null =>
+	values.length === 0 ? null : values.reduce((total, value) => total + value, 0) / values.length;
+
+export function benchmarkReasoningReadout(items: readonly BenchmarkCellItem[]): BenchmarkReasoningReadout {
+	const flags = known(items.map((item) => item.reasoningAtBudget));
+	return {
+		meanReasoningTokens: meanOf(known(items.map((item) => item.reasoningTokens))),
+		meanNonReasoningTokens: meanOf(known(items.map((item) => item.nonReasoningOutputTokens))),
+		medianDurationMs: medianOf(known(items.map((item) => item.durationMs))),
+		atBudget: flags.filter(Boolean).length,
+		atBudgetMeasured: flags.length,
+	};
+}
 
 /**
  * Whether a paired delta can exist at all. The node reports NO entry below three shared scoring items, so a project

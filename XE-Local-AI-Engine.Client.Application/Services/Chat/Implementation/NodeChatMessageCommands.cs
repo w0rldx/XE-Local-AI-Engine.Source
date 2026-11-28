@@ -930,7 +930,8 @@ internal sealed class NodeChatMessageCommands
         // supplied them. The message's own tokens are the LAST round's — context occupancy — and are the fallback.
         AddParameter(command, "$prompt_tokens", envelope.TurnInputTokens ?? promptTokens);
         AddParameter(command, "$completion_tokens", envelope.TurnOutputTokens ?? completionTokens);
-        AddParameter(command, "$reasoning_tokens", envelope.TurnReasoningTokens ?? reasoningTokens);
+        // A reported turn total that is null means a round went unmeasured; the last round's count would understate the turn.
+        AddParameter(command, "$reasoning_tokens", envelope.TurnReasoningTokens ?? (envelope.TurnUsageReported ? null : reasoningTokens));
         AddParameter(command, "$total_tokens", envelope.TurnTotalTokens ?? totalTokens);
         AddParameter(command, "$content_chunk_count", envelope.ContentChunkCount);
         AddParameter(command, "$reasoning_chunk_count", envelope.ReasoningChunkCount);

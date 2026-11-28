@@ -16,7 +16,7 @@ public sealed class DeferredLlamaServerLogprobsTests
     [Test]
     public async Task Streaming_SendsTheCountBesideTheThinkingSwitch_AndEveryEntryStaysReadable()
     {
-        using var server = DeferredLlamaServerResponseSchemaEntryPointTests.CapturingServer.Start(ThinkingStream, "text/event-stream");
+        using var server = CapturingServer.Start(ThinkingStream, "text/event-stream");
         using var client = new DeferredLlamaServerChatClient(new FakeProcessSupervisor
         {
             EnsureEndpoint = server.BaseAddress

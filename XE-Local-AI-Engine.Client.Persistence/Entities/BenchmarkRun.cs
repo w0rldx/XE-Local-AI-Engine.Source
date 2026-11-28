@@ -74,6 +74,18 @@ internal sealed record class BenchmarkRun
     public long? ToolTimeMs { get; set; }
 
     /// <summary>
+    ///     The thinking budget frozen onto the run: the launch's override, else the project's pin; NULL when neither
+    ///     pinned one. The same value the run's snapshot sampling carries, flat so a listing never decrypts.
+    /// </summary>
+    public int? ReasoningBudgetTokens { get; set; }
+
+    /// <summary>The primary turn's reasoning tokens as the provider round usage reported them; NULL when unmeasured.</summary>
+    public int? ReasoningTokens { get; set; }
+
+    /// <summary>The thinking budget the provider put on the wire for the turn's last round; NULL when none was applied or unknown.</summary>
+    public int? AppliedReasoningBudgetTokens { get; set; }
+
+    /// <summary>
     ///     Plaintext UTF-8 JSON while tracked; encrypted at rest with node-scoped AAD column
     ///     <c>benchmark_output_parts_json</c>.
     /// </summary>

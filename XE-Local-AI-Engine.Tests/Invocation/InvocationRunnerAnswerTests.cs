@@ -208,6 +208,80 @@ public sealed class InvocationRunnerAnswerTests
         await dispatcher.DidNotReceive().ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload => payload.Kind == TurnNoticeKind.EmptyAnswer));
     }
 
+    /// <summary>
+    ///     Live on a 27B after a budget-forced close: the count covers the reasoning channel only, so once the draft before
+    ///     a stray close tag joins the reasoning the count is unmeasured everywhere it surfaces. Without the tag it stands.
+    /// </summary>
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task RunAsync_WhenReclassifyingMovesTextIntoTheReasoning_ReportsTheReasoningCountAsUnmeasured(bool strayCloseTag)
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: CountedReasoningThenContent(strayCloseTag));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner, package);
+
+        int? expected = strayCloseTag ? null : 255;
+        await dispatcher.Received(1).ReportInvocationCompletedAsync(package.InvocationId,
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            expected,
+            Arg.Any<long?>(),
+            Arg.Any<string?>(),
+            Arg.Any<InvocationThroughput?>());
+        await dispatcher.Received(1).ReportTurnTelemetryAsync(package.InvocationId,
+            Arg.Any<long?>(),
+            Arg.Is<TurnUsageTotals?>(usage => usage != null && usage.ReasoningTokens == expected));
+        await dispatcher.Received(1).ReportTurnContextSnapshotAsync(package.InvocationId,
+            Arg.Is<ProviderRoundContextSnapshot>(snapshot => snapshot.ProviderReasoningTokens == expected && snapshot.ReasoningBudgetTokens == 256));
+
+        static async IAsyncEnumerable<AgentResponseUpdate> CountedReasoningThenContent(bool strayCloseTag)
+        {
+            AssertEx.NotNull(ProviderCallBudget.Current, "The runner seeds the provider-call budget before the agent runs.").RecordRoundContext(new ProviderRoundContextSnapshot
+            {
+                WindowTokens = 8192,
+                ReservedOutputTokens = 1024,
+                UsableWindowTokens = 6000,
+                SystemPromptTokens = 0,
+                InstructionsTokens = 0,
+                ToolSchemaTokens = 0,
+                ToolTemplatePreambleTokens = 0,
+                KnowledgeTokens = 0,
+                AttachmentTokens = 0,
+                CompactionTokens = 0,
+                ConversationTokens = 0,
+                EstimatedInputTokens = 0,
+                Tools = [],
+                ToolsWithheldCount = 0,
+                MessagesDropped = 0,
+                ToolResultsTruncated = 0,
+                ReasoningStripped = 0,
+                ProviderReasoningTokens = 255,
+                ReasoningBudgetTokens = 256
+            });
+            yield return new AgentResponseUpdate(ChatRole.Assistant, [new TextReasoningContent("budget ran out")]);
+            await Task.Yield();
+            foreach (var chunk in strayCloseTag ? new[] { "draft answer\n", "</think>", "\n\nHello there." } : ["Hello there."])
+            {
+                yield return new AgentResponseUpdate(ChatRole.Assistant, chunk);
+                await Task.Yield();
+            }
+
+            yield return new AgentResponseUpdate(ChatRole.Assistant, [new UsageContent(new UsageDetails
+            {
+                InputTokenCount = 100,
+                OutputTokenCount = 300,
+                ReasoningTokenCount = 255
+            })])
+            {
+                FinishReason = new ChatFinishReason("stop")
+            };
+        }
+    }
+
     /// <summary>Live on LFM2.5 at effort none: the whole reply was "Okay." and a stray close tag. The text stays the answer.</summary>
     [Test]
     public async Task RunAsync_WhenTheOnlyTextPrecedesAStrayCloseTag_KeepsItAsTheAnswerWithoutTheTag()

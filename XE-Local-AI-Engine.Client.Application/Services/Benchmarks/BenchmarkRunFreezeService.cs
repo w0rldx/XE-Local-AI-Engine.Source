@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 using System.Globalization;
 using System.Reflection;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -265,6 +266,11 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
             throw new BenchmarkConflictException("VersionConflict");
         }
 
+        if (request.ReasoningBudgetTokens is { } budgetOverride)
+        {
+            ValidateReasoningBudgetOverride(project, budgetOverride);
+        }
+
         var warmup = request.Warmup;
         var expectedProjectVersion = request.ExpectedProjectVersion;
 
@@ -308,9 +314,17 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         // Frozen off the capabilities read ABOVE, never re-resolved at execution: a model swap or re-detection must not change what a frozen run replays. The conjunction with
         // SupportsThinking is load-bearing — GgufModelCapabilities defaults ReasoningBudgetEnforceable to true. See docs/wiki/20-benchmarks.md ("Freeze — what a launch produces").
         var reasoningBudgetEnforceable = capabilities.SupportsThinking && capabilities.ReasoningBudgetEnforceable;
+        if (request.ReasoningBudgetTokens is not null && !reasoningBudgetEnforceable)
+        {
+            throw new BenchmarkValidationException("The reasoning budget override cannot apply: the selected model does not reason, "
+                                                   + "or its chat template cannot enforce a thinking budget.");
+        }
+
+        // Enforceability is frozen with or without a pin, so an unpinned run on a model that cannot honor a budget replays
+        // with no effort-ladder budget either; a legacy snapshot without the member keeps the executor's inert default.
         var primarySampling = BenchmarkFrozenPolicies.DeterministicSampling(project.MaxOutputTokens,
-            project.ReasoningBudgetTokens,
-            project.ReasoningBudgetTokens is null ? null : reasoningBudgetEnforceable);
+            request.ReasoningBudgetTokens ?? project.ReasoningBudgetTokens,
+            reasoningBudgetEnforceable);
         var createdAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
         var frozenItems = await FreezeItemsAsync(project,
@@ -321,6 +335,13 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
             capabilities.SupportsTools,
             primarySampling,
             cancellationToken);
+
+        // The capability check above cannot see the agent: an effort of "none" sends thinking off, and a budget under it never applies.
+        if (request.ReasoningBudgetTokens is not null
+            && frozenItems.Exists(static item => ReasoningOptionsResolver.ResolveThinkOption(item.Eligible.ReasoningEffort) is false))
+        {
+            throw new BenchmarkValidationException("The reasoning budget override cannot apply: the agent's reasoning effort turns thinking off.");
+        }
 
         // One snapshot per DISTINCT (item, sampling), memoized; answer-variance repeats differ ONLY in the seed.
         // The ITEM half of the key is load-bearing: keyed on the seed alone, every run answers item 0's prompt while its task_item_id column claims otherwise, and nothing fails loudly.
@@ -401,7 +422,9 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
                            TaskItemIndex = item.Item.Index,
                            CellKey = CellKeyFor(isGroup ? sampling.RepeatIndex : 1),
                            TaskInputHash = item.Item.InputHash,
-                           TaskItemSetHash = project.TaskItemSetHash
+                           TaskItemSetHash = project.TaskItemSetHash,
+                           // The value the snapshot freezes, so the flat column and the replay cannot disagree.
+                           ReasoningBudgetTokens = sampling.Sampling.ReasoningBudgetTokens
                        }))
                        .ToArray();
         return new BenchmarkFrozenRunPlan
@@ -589,6 +612,40 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         if (await BenchmarkKldBaseMatch.DescribeMismatchAsync(_ggufModels, primaryModelName, baseModelName, cancellationToken) is { } mismatch)
         {
             throw new BenchmarkValidationException(mismatch);
+        }
+    }
+
+    /// <summary>The request-shape rules a launch's budget override must pass; the project's own pin keeps only the project rule.</summary>
+    /// <remarks>
+    ///     The half-output rule exists because <c>DeferredLlamaServerChatClient.ClampToGenerationRoom</c> caps the wire
+    ///     budget at half the room the round can generate into: 4096 under an output pin of 2048 would silently run as 1024,
+    ///     and the sweep would compare a budget it never measured. Without an output pin the room is the context window.
+    /// </remarks>
+    private static void ValidateReasoningBudgetOverride(BenchmarkProjectRecord project, int budget)
+    {
+        if (budget is < ReasoningBudgets.MinTokens or > ReasoningBudgets.MaxTokens)
+        {
+            throw new BenchmarkValidationException(string.Create(CultureInfo.InvariantCulture,
+                $"The reasoning budget override must be from {ReasoningBudgets.MinTokens} to {ReasoningBudgets.MaxTokens} tokens."));
+        }
+
+        BenchmarkProjectService.ValidateReasoningBudget(budget, project.MaxOutputTokens, project.ContextTokens);
+        if (project.MaxOutputTokens is { } output && budget > output / 2)
+        {
+            throw new BenchmarkValidationException(string.Create(CultureInfo.InvariantCulture,
+                                                       $"The reasoning budget override must be at most half the project's {output}-token output budget ({output / 2}), ")
+                                                   + "or the node narrows it to that. Lower the override or unpin the project's output budget.");
+        }
+
+        // Unpinned output: the room is the window (a run's num_ctx is the project's context, and admission refuses a smaller
+        // launch), so the ceiling is half of it. Only the static part: narrowing by each round's prompt shows as the applied budget.
+        var windowCeiling = Math.Max(project.ContextTokens / 2, 1);
+        if (budget > windowCeiling)
+        {
+            throw new BenchmarkValidationException(string.Create(CultureInfo.InvariantCulture,
+                                                       $"The reasoning budget override must be at most half the project's {project.ContextTokens}-token context window ({windowCeiling}), ")
+                                                   + "or the node narrows it to that. Each round can narrow it further by the size of its prompt; "
+                                                   + "the run records the budget that actually applied.");
         }
     }
 

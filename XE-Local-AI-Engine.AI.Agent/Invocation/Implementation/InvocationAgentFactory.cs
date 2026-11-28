@@ -107,10 +107,11 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
                 additionalProperties[LlamaDisableThinkingMarkerKey] = true;
             }
 
-            // Only send a reasoning budget when llama.cpp can enforce it (a non-empty think-end-tag set); otherwise it
-            // silently ignores the field. An explicit sampling budget wins so benchmark replay remains exact.
+            // Only an enforceable budget is sent (llama.cpp ignores it otherwise), never under thinking off (it would overwrite the off switch's zero
+            // budget). An explicit pin wins, any positive one: a frozen benchmark replay may carry one below the input bound.
             var pinnedBudget = definition.Sampling?.ReasoningBudgetTokens is { } pinned && pinned > 0 ? pinned : (int?)null;
-            if ((pinnedBudget ?? ReasoningOptionsResolver.ResolveReasoningBudgetTokens(definition.ReasoningEffort, definition.ReasoningBudgets)) is { } budgetTokens)
+            if (think is not false
+                && (pinnedBudget ?? ReasoningOptionsResolver.ResolveReasoningBudgetTokens(definition.ReasoningEffort, definition.ReasoningBudgets)) is { } budgetTokens)
             {
                 if (definition.ReasoningBudgetEnforceable)
                 {

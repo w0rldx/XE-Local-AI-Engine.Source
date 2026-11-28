@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -806,6 +807,93 @@ public sealed class BenchmarkRunExecutorTests
         AssertEx.Equal<int?>(2048, AssertEx.NotNull(package.SamplingOptions).ReasoningBudgetTokens);
         AssertEx.False(package.ReasoningBudgetEnforceable, "the frozen capability said this model cannot enforce a budget");
         AssertEx.Null(package.ReservedOutputTokensOverride, "a run with no output cap keeps the node's reserved-output floor");
+    }
+
+    [Test]
+    public async Task Execute_ALegacySnapshotWithoutEnforceability_ReplaysThePinWithTheInertTrue()
+    {
+        var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
+        var installed = Installed("model.gguf", 'a');
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        runStore.MarkPrimarySucceededAsync(Arg.Any<BenchmarkPrimarySuccessCommand>(), Arg.Any<CancellationToken>())
+                .Returns(run with
+                {
+                    PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
+                    Version = 3
+                });
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        RuntimePackage? assignedPackage = null;
+        await using var assignment = new TrackingAsyncDisposable();
+        dispatcher.ReportInvocationAssignedAsync(Arg.Do<RuntimePackage>(value => assignedPackage = value), Arg.Any<CancellationToken>())
+                  .Returns(assignment);
+        var runner = CompletingRunner(dispatcher, state => state);
+        await using var lease = new FakeLease(installed);
+        var snapshot = Snapshot(installed) with
+        {
+            PrimarySampling = BenchmarkFrozenPolicies.DeterministicSampling(maxOutputTokens: null, reasoningBudgetTokens: 2048, reasoningBudgetEnforceable: null)
+        };
+        var executor = Executor(runStore, Substitute.For<IBenchmarkJudgeStore>(), snapshot, lease, new RecordingCapacityService(), dispatcher, runner,
+            new BenchmarkCancellationRegistry(), PassthroughSupervisor());
+
+        await executor.ExecuteAsync(PrimaryWork(run), CancellationToken.None);
+
+        var package = AssertEx.NotNull(assignedPackage);
+        AssertEx.Equal<int?>(2048, AssertEx.NotNull(package.SamplingOptions).ReasoningBudgetTokens);
+        AssertEx.True(package.ReasoningBudgetEnforceable, "a run frozen before the member existed keeps the cap it always had");
+    }
+
+    [Test]
+    public async Task Execute_OnSuccess_RecordsTheTurnsReasoningTokensAndTheAppliedBudget()
+    {
+        var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
+        var installed = Installed("model.gguf", 'a');
+        var runStore = Substitute.For<IBenchmarkRunStore>();
+        BenchmarkPrimarySuccessCommand? command = null;
+        runStore.MarkPrimarySucceededAsync(Arg.Do<BenchmarkPrimarySuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
+                .Returns(run with
+                {
+                    PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
+                    Version = 3
+                });
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        await using var assignment = new TrackingAsyncDisposable();
+        dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>()).Returns(assignment);
+        var runner = CompletingRunner(dispatcher, state =>
+        {
+            state.TurnReasoningTokens = 255;
+            state.ContextSnapshot = new ProviderRoundContextSnapshot
+            {
+                WindowTokens = 8192,
+                ReservedOutputTokens = 1024,
+                UsableWindowTokens = 6000,
+                SystemPromptTokens = 0,
+                InstructionsTokens = 0,
+                ToolSchemaTokens = 0,
+                ToolTemplatePreambleTokens = 0,
+                KnowledgeTokens = 0,
+                AttachmentTokens = 0,
+                CompactionTokens = 0,
+                ConversationTokens = 0,
+                EstimatedInputTokens = 0,
+                Tools = [],
+                ToolsWithheldCount = 0,
+                MessagesDropped = 0,
+                ToolResultsTruncated = 0,
+                ReasoningStripped = 0,
+                RequestedReasoningBudgetTokens = 4096,
+                ReasoningBudgetTokens = 256
+            };
+            return state;
+        });
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(runStore, Substitute.For<IBenchmarkJudgeStore>(), Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
+            new BenchmarkCancellationRegistry(), PassthroughSupervisor());
+
+        await executor.ExecuteAsync(PrimaryWork(run), CancellationToken.None);
+
+        var recorded = AssertEx.NotNull(command);
+        AssertEx.Equal<int?>(255, recorded.ReasoningTokens);
+        AssertEx.Equal<int?>(256, recorded.AppliedReasoningBudgetTokens, "the applied budget is what the provider put on the wire, not the requested 4096");
     }
 
     [Test]
@@ -1724,6 +1812,33 @@ public sealed class BenchmarkRunExecutorTests
                 Interval = TimeSpan.Zero
             },
             logger ?? NullLogger<BenchmarkRunExecutor>.Instance);
+
+    /// <summary>A runner that admits the generation and completes the turn with the state <paramref name="shape" /> returns.</summary>
+    private static IInvocationRunner CompletingRunner(IWorkerEventDispatcher dispatcher, Func<InvocationState, InvocationState> shape)
+    {
+        var runner = Substitute.For<IInvocationRunner>();
+        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
+              .Returns(async call =>
+              {
+                  var execution = call.Arg<InvocationExecutionContext>();
+                  var invocationId = execution.Package.InvocationId;
+                  _ = await AssertEx.NotNull(execution.GenerationAdmissionPolicy).EvaluateAsync(Admission(invocationId));
+                  dispatcher.InvocationStateChanged += Raise.EventWith(dispatcher,
+                      new InvocationStateChangedEventArgs(shape(State(invocationId, InvocationStatus.Completed, "answer", 100, 50, "stop"))));
+              });
+        return runner;
+    }
+
+    private static BenchmarkClaimedWork PrimaryWork(BenchmarkRunRecord run) =>
+        new()
+        {
+            QueueSequence = 1,
+            RunId = run.Id,
+            Kind = BenchmarkWorkKind.Primary,
+            Attempt = 1,
+            Version = 2,
+            Run = run
+        };
 
     private static InvocationState State(Guid invocationId,
         InvocationStatus status,

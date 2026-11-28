@@ -300,10 +300,158 @@ public sealed class BenchmarkRunFreezeServiceTests
             "SupportsThinking is half the answer: a non-thinking model can never honour the cap, whatever the template says.");
         AssertEx.Equal<bool?>(true, AssertEx.NotNull(thinking.SnapshotInput).PrimarySampling.ReasoningBudgetEnforceable);
 
-        // Null, never false: the member is omitted when writing null, which is what keeps every snapshot frozen
-        // before the field existed hashing to the bytes it already hashed to.
-        AssertEx.Null(AssertEx.NotNull(unbudgeted.SnapshotInput).PrimarySampling.ReasoningBudgetEnforceable,
-            "No pinned budget means no enforceability claim at all.");
+        // Frozen without a pin too: an unpinned run on a model that cannot honor a budget must replay with no effort-ladder
+        // budget, and only a legacy snapshot (member absent) falls back to the executor's inert true.
+        var unpinned = AssertEx.NotNull(unbudgeted.SnapshotInput).PrimarySampling;
+        AssertEx.Null(unpinned.ReasoningBudgetTokens);
+        AssertEx.Equal<bool?>(false, unpinned.ReasoningBudgetEnforceable, "the non-thinking model's answer is frozen whether or not a budget is pinned");
+    }
+
+    [Test]
+    public async Task Start_UnpinnedOnAnEnforceableThinkingModel_FreezesEnforceabilityTrue()
+    {
+        var harness = new FreezeHarness(supportsThinking: true);
+
+        _ = await harness.StartAsync();
+
+        var sampling = AssertEx.NotNull(harness.SnapshotInput).PrimarySampling;
+        AssertEx.Null(sampling.ReasoningBudgetTokens);
+        AssertEx.Equal<bool?>(true, sampling.ReasoningBudgetEnforceable);
+        AssertEx.Null(AssertEx.NotNull(harness.Command).ReasoningBudgetTokens, "an unpinned run's flat column stays null");
+    }
+
+    [Test]
+    public async Task Start_WithABudgetOverride_FreezesTheOverrideIntoTheSnapshotAndTheFlatColumn()
+    {
+        var harness = new FreezeHarness(reasoningBudgetTokens: 1024, supportsThinking: true);
+
+        var overridden = await harness.StartWithBudgetAsync(2048);
+        var overriddenSampling = AssertEx.NotNull(harness.SnapshotInput).PrimarySampling;
+        var overriddenCommand = AssertEx.NotNull(harness.Command);
+        var inherited = await harness.StartWithBudgetAsync(null);
+
+        AssertEx.Equal<int?>(2048, overriddenSampling.ReasoningBudgetTokens, "the launch's override beats the project's pin");
+        AssertEx.Equal<int?>(2048, overriddenCommand.ReasoningBudgetTokens, "the flat column carries the snapshot's value");
+        AssertEx.Equal<bool?>(true, overriddenSampling.ReasoningBudgetEnforceable);
+        AssertEx.Equal<int?>(1024, AssertEx.NotNull(harness.SnapshotInput).PrimarySampling.ReasoningBudgetTokens, "no override takes the project's pin");
+        AssertEx.Equal<int?>(1024, AssertEx.NotNull(harness.Command).ReasoningBudgetTokens);
+        AssertEx.Equal(1, overridden.Count);
+        AssertEx.Equal(1, inherited.Count);
+    }
+
+    [Test]
+    public async Task Start_TwoBudgetsWithRepeatsAndAWarmup_GiveEachBudgetItsOwnCellsWithEveryRunCarryingIt()
+    {
+        var harness = new FreezeHarness(supportsThinking: true, itemPrompts: ["first", "second"]);
+
+        _ = await harness.StartWithBudgetAsync(256, repeatCount: 2, warmup: true);
+        var low = harness.Commands.ToArray();
+        _ = await harness.StartWithBudgetAsync(1024, repeatCount: 2, warmup: true);
+        var high = harness.Commands.Skip(low.Length).ToArray();
+
+        // Two items x (warm-up + 2 repeats) per budget, three cells each: the warm-up's own cell and one per repeat.
+        AssertEx.Equal(6, low.Length);
+        AssertEx.Equal(6, high.Length);
+        AssertEx.True(low.All(static command => command.ReasoningBudgetTokens == 256) && high.All(static command => command.ReasoningBudgetTokens == 1024));
+        AssertEx.True(harness.SnapshotInputs.Take(2).All(static input => input.PrimarySampling.ReasoningBudgetTokens == 256)
+                      && harness.SnapshotInputs.Skip(2).All(static input => input.PrimarySampling.ReasoningBudgetTokens == 1024),
+            "every snapshot freezes its own launch's budget");
+        AssertEx.Equal(3, low.Select(static command => command.CellKey).Distinct(StringComparer.Ordinal).Count());
+        AssertEx.Equal(3, high.Select(static command => command.CellKey).Distinct(StringComparer.Ordinal).Count());
+        AssertEx.False(low.Select(static command => command.CellKey).Intersect(high.Select(static command => command.CellKey)).Any(),
+            "a second budget never joins the first budget's cells");
+    }
+
+    [Test]
+    [Arguments(127)]
+    [Arguments(131_073)]
+    public async Task Start_WithAnOverrideOutsideTheSharedBound_IsRefusedBeforeAnythingIsWritten(int budget)
+    {
+        var harness = new FreezeHarness(supportsThinking: true);
+
+        var refusal = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => harness.StartWithBudgetAsync(budget));
+
+        AssertEx.Contains(refusal.Message, "from 128 to 131072");
+        AssertEx.Equal(0, harness.StoreCalls);
+    }
+
+    [Test]
+    [Arguments(128)]
+    [Arguments(2048)]
+    public async Task Start_WithAnOverrideInsideTheBound_Starts(int budget)
+    {
+        var harness = new FreezeHarness(supportsThinking: true);
+
+        _ = await harness.StartWithBudgetAsync(budget);
+
+        AssertEx.Equal<int?>(budget, AssertEx.NotNull(harness.Command).ReasoningBudgetTokens);
+    }
+
+    [Test]
+    public async Task Start_WithAnOverrideThatBreaksTheProjectRule_IsRefusedNamingIt()
+    {
+        // The harness project's window is 4096: a budget that fills it leaves no room for an answer.
+        var harness = new FreezeHarness(supportsThinking: true);
+
+        var refusal = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => harness.StartWithBudgetAsync(4096));
+
+        AssertEx.Contains(refusal.Message, "between 1 and the requested context");
+        AssertEx.Equal(0, harness.StoreCalls);
+    }
+
+    [Test]
+    public async Task Start_WithAnOverrideAboveHalfThePinnedOutput_IsRefusedRatherThanSilentlyNarrowed()
+    {
+        // 1025 under an output pin of 2048 would go on the wire as 1024 (half the generation room).
+        var refused = new FreezeHarness(maxOutputTokens: 2048, supportsThinking: true);
+        var fits = new FreezeHarness(maxOutputTokens: 2048, supportsThinking: true);
+
+        var refusal = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => refused.StartWithBudgetAsync(1025));
+        _ = await fits.StartWithBudgetAsync(1024);
+
+        AssertEx.Contains(refusal.Message, "half the project's 2048-token output budget");
+        AssertEx.Equal(0, refused.StoreCalls);
+        AssertEx.Equal<int?>(1024, AssertEx.NotNull(fits.Command).ReasoningBudgetTokens, "exactly half still applies as asked");
+    }
+
+    [Test]
+    public async Task Start_WithAnOverrideAboveHalfTheWindowAndNoOutputPin_IsRefusedRatherThanSilentlyNarrowed()
+    {
+        // The harness window is 4096 with no output pin: 2049 would go on the wire as 2048 (half the window).
+        var harness = new FreezeHarness(supportsThinking: true);
+
+        var refusal = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => harness.StartWithBudgetAsync(2049));
+
+        AssertEx.Contains(refusal.Message, "half the project's 4096-token context window (2048)");
+        AssertEx.Contains(refusal.Message, "the run records the budget that actually applied");
+        AssertEx.Equal(0, harness.StoreCalls);
+    }
+
+    [Test]
+    [Arguments(false, true)]
+    [Arguments(true, false)]
+    public async Task Start_WithAnOverrideOnAModelThatCannotEnforceIt_IsRefused(bool supportsThinking, bool enforceable)
+    {
+        var harness = new FreezeHarness(supportsThinking: supportsThinking, reasoningBudgetEnforceable: enforceable);
+
+        var refusal = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => harness.StartWithBudgetAsync(512));
+
+        AssertEx.Contains(refusal.Message, "cannot enforce a thinking budget");
+        AssertEx.Equal(0, harness.StoreCalls);
+    }
+
+    [Test]
+    public async Task Start_WithAnOverrideUnderAnAgentEffortThatTurnsThinkingOff_IsRefused()
+    {
+        var harness = new FreezeHarness(supportsThinking: true, reasoningEffort: "none");
+        var unpinned = new FreezeHarness(supportsThinking: true, reasoningEffort: "none");
+
+        var refusal = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => harness.StartWithBudgetAsync(512));
+        _ = await unpinned.StartWithBudgetAsync(null);
+
+        AssertEx.Contains(refusal.Message, "reasoning effort turns thinking off");
+        AssertEx.Equal(0, harness.StoreCalls);
+        AssertEx.Equal(1, unpinned.StoreCalls, "the same agent without an override still starts");
     }
 
     [Test]
@@ -914,7 +1062,9 @@ public sealed class BenchmarkRunFreezeServiceTests
             string agentSystemPrompt = "prompt",
             string? kldBaseModel = null,
             GgufModelFootprintFacts? primaryFacts = null,
-            GgufModelFootprintFacts? baseFacts = null)
+            GgufModelFootprintFacts? baseFacts = null,
+            string? reasoningEffort = null,
+            bool reasoningBudgetEnforceable = true)
         {
             _primaryModel = primaryModel;
             AgentId = Guid.NewGuid();
@@ -971,7 +1121,10 @@ public sealed class BenchmarkRunFreezeServiceTests
             Resolver = Substitute.For<IAgentDefinitionResolver>();
             // The task text is the RETRIEVAL QUERY, so it differs per item; the resolution itself is held constant.
             Resolver.ResolveAsync(AgentId, Arg.Any<string>(), Arg.Any<string>(), true, false, false, Arg.Any<CancellationToken>())
-                    .Returns(Runtime(AgentId, agentSystemPrompt));
+                    .Returns(Runtime(AgentId, agentSystemPrompt) with
+                    {
+                        ReasoningEffort = reasoningEffort
+                    });
             Resolver.ResolveAsync(VariantId, Arg.Any<string>(), Arg.Any<string>(), true, false, false, Arg.Any<CancellationToken>())
                     .Returns(new ResolvedAgentRuntime("variant prompt", [], null, null, 7, VariantId, "Variant", Kind: AgentDefinitionKind.Single));
             var capabilities = Substitute.For<IGgufModelCapabilityResolver>();
@@ -979,7 +1132,7 @@ public sealed class BenchmarkRunFreezeServiceTests
             // model nothing was detected about, and freezing it ALONE is what claimed enforceability for a model that
             // does not reason at all.
             capabilities.ResolveOrNullAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                        .Returns(new GgufModelCapabilities(supportsThinking, true, false));
+                        .Returns(new GgufModelCapabilities(supportsThinking, true, false, reasoningBudgetEnforceable));
 
             var models = new Dictionary<string, InstalledModelSnapshot>(StringComparer.OrdinalIgnoreCase)
             {
@@ -1092,6 +1245,17 @@ public sealed class BenchmarkRunFreezeServiceTests
                 PrimaryModelName = _primaryModel,
                 ExpectedProjectVersion = _project.Version,
                 KvCacheType = null,
+                RepeatCount = repeatCount,
+                Warmup = warmup
+            });
+
+        public Task<IReadOnlyList<BenchmarkRunRecord>> StartWithBudgetAsync(int? reasoningBudgetTokens, int repeatCount = 1, bool warmup = false) =>
+            _service.StartAsync(new BenchmarkRunStartRequest
+            {
+                ProjectId = _project.Id,
+                PrimaryModelName = _primaryModel,
+                ExpectedProjectVersion = _project.Version,
+                ReasoningBudgetTokens = reasoningBudgetTokens,
                 RepeatCount = repeatCount,
                 Warmup = warmup
             });

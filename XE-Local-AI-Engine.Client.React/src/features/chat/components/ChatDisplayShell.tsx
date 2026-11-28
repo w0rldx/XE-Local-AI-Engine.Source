@@ -110,8 +110,8 @@ export function ChatDisplayShell({
 	workflow,
 }: ChatDisplayShellProps) {
 	const { t } = useTranslation();
-	// The UI mode off the node-settings query the layout guard already primed, read from cache only so the chat adds no
-	// request. Anything but "simple" is Advanced, the same failure direction as useUiMode.
+	// The UI mode and the thinking-budget ladder off the node-settings query the layout guard already primed, read from
+	// cache only so the chat adds no request. Anything but "simple" is Advanced, the same failure direction as useUiMode.
 	const { data: nodeSettings } = useQuery({ ...getNodeSettingsOptions(), enabled: false });
 	const showTurnThroughput = nodeSettings?.uiMode !== "simple";
 	const conversation = conversations.find((item) => item.id === selectedConversationId);
@@ -376,6 +376,7 @@ export function ChatDisplayShell({
 								}
 							: undefined
 					}
+					reasoningBudgetSettings={nodeSettings}
 					toolsEnabled={toolsEnabled}
 					knowledgeBaseEnabled={knowledgeBaseEnabled}
 					knowledgeBaseHasDocuments={knowledgeBaseHasDocuments}

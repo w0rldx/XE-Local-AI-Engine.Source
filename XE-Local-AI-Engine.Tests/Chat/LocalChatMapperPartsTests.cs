@@ -105,6 +105,8 @@ public sealed class LocalChatMapperPartsTests
             ProviderInputTokens = 900,
             ProviderOutputTokens = 40,
             ProviderReasoningTokens = 12,
+            RequestedReasoningBudgetTokens = 4096,
+            ReasoningBudgetTokens = 2048,
             Estimated = new NodeChatContextWindowEstimate
             {
                 SystemPromptTokens = 300,

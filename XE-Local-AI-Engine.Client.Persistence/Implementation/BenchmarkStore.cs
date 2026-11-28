@@ -292,7 +292,10 @@ public sealed partial class BenchmarkStore : IBenchmarkProjectStore,
             TaskInputHash = entity.TaskInputHash,
             TaskItemSetHash = entity.TaskItemSetHash,
             ToolCallCount = entity.ToolCallCount,
-            ToolTimeMs = entity.ToolTimeMs
+            ToolTimeMs = entity.ToolTimeMs,
+            ReasoningBudgetTokens = entity.ReasoningBudgetTokens,
+            ReasoningTokens = entity.ReasoningTokens,
+            AppliedReasoningBudgetTokens = entity.AppliedReasoningBudgetTokens
         };
 
     /// <summary>

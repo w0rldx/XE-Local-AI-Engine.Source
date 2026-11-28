@@ -221,15 +221,18 @@ public sealed class AddBenchmarkTaskItemsMigrationTests
     /// </summary>
     private static async Task SeedProjectAndRunsAsync(MigrationSchemaProbe probe)
     {
-        await probe.ExecuteAsync("""
-                                 INSERT INTO benchmark_projects (id, name, core_task_json, context_tokens, agent_definition_id, version, created_at_utc, updated_at_utc)
-                                 VALUES ($project, 'task-item-probe', x'0badc0de', 4096, $agent, 1, 1, 1);
-                                 INSERT INTO benchmark_runs (id, project_id, runtime_snapshot_json, primary_model_name, model_content_fingerprint,
-                                                             agent_name, agent_version, requested_context_tokens, primary_status, last_stream_sequence,
-                                                             is_warmup, version, created_at_utc, updated_at_utc)
-                                 VALUES ($run, $project, x'0badbeef', 'probe-model', 'v1:0', 'probe-agent', 1, 4096, 'Succeeded', 0, 0, 3, 1, 1),
-                                        ($second, $project, x'0badbeef', 'probe-model', 'v1:0', 'probe-agent', 1, 4096, 'Succeeded', 0, 0, 3, 1, 1);
-                                 """, command =>
+        // At head the run's cell and agent stamps are NOT NULL with no default (a later table rebuild dropped the migration-only
+        // defaults), so a head seed names them; before this migration neither column exists.
+        var atHead = (await probe.ColumnsAsync("benchmark_runs")).Contains("agent_definition_id");
+        await probe.ExecuteAsync($"""
+                                  INSERT INTO benchmark_projects (id, name, core_task_json, context_tokens, agent_definition_id, version, created_at_utc, updated_at_utc)
+                                  VALUES ($project, 'task-item-probe', x'0badc0de', 4096, $agent, 1, 1, 1);
+                                  INSERT INTO benchmark_runs (id, project_id, runtime_snapshot_json, primary_model_name, model_content_fingerprint,
+                                                              agent_name, agent_version, requested_context_tokens, primary_status, last_stream_sequence,
+                                                              is_warmup, version, created_at_utc, updated_at_utc{(atHead ? ", agent_definition_id, cell_key" : string.Empty)})
+                                  VALUES ($run, $project, x'0badbeef', 'probe-model', 'v1:0', 'probe-agent', 1, 4096, 'Succeeded', 0, 0, 3, 1, 1{(atHead ? ", $agent, 'run:1'" : string.Empty)}),
+                                         ($second, $project, x'0badbeef', 'probe-model', 'v1:0', 'probe-agent', 1, 4096, 'Succeeded', 0, 0, 3, 1, 1{(atHead ? ", $agent, 'run:2'" : string.Empty)});
+                                  """, command =>
         {
             command.Parameters.AddWithValue("$project", ProjectId);
             command.Parameters.AddWithValue("$run", RunId);

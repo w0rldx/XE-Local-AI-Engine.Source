@@ -1,4 +1,5 @@
 import type { XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse as NodeSettingsResponse } from "@/core/api/generated";
+import { reasoningBudgetDefaults } from "@/core/models/ReasoningBudgetDefaults";
 import { KV_CACHE_TYPE_DEFAULT, SPECULATIVE_DISABLED_MODE } from "@/features/node-settings/models/NodeSettingsRuntimeModes";
 import { toUsageRateRows, type UsageRateRow } from "@/features/node-settings/models/NodeSettingsUsageRateModel";
 
@@ -223,10 +224,10 @@ export const chatOutputCapModeSelectValues = ["cap", "notice", "off"] as const;
 // What the node uses while one of these fields is unset (blank in the form): ReasoningBudgets.Default and the
 // StoredNodeSettings output-cap defaults. Shown as the field's default; never sent.
 export const shippedDefaults = {
-	reasoningBudgetMinimalTokens: 1024,
-	reasoningBudgetLowTokens: 2048,
-	reasoningBudgetMediumTokens: 8192,
-	reasoningBudgetHighTokens: 24576,
+	reasoningBudgetMinimalTokens: reasoningBudgetDefaults.minimal,
+	reasoningBudgetLowTokens: reasoningBudgetDefaults.low,
+	reasoningBudgetMediumTokens: reasoningBudgetDefaults.medium,
+	reasoningBudgetHighTokens: reasoningBudgetDefaults.high,
 	chatOutputCapMaxTokens: 16384,
 	intentMaxUtteranceAgeSeconds: 30,
 	defaultReasoningEffort: "low",

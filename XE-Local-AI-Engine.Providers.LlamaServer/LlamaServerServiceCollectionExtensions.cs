@@ -302,7 +302,9 @@ public static class LlamaServerServiceCollectionExtensions
                 sp.GetRequiredService<TimeProvider>(),
                 sp.GetRequiredService<LlamaServerSupervisorOptions>(),
                 sp.GetRequiredService<ITokenEstimatorCalibrationScheduler>(),
-                sp.GetRequiredService<ILlamaServerEndpointBinding>()));
+                sp.GetRequiredService<ILlamaServerEndpointBinding>(),
+                sp.GetRequiredService<ILlamaServerNativeClient>(),
+                sp.GetRequiredService<ILoggerFactory>()));
         services.AddSingleton<ILocalModelProvider>(static sp =>
             sp.GetRequiredService<LlamaServerLocalModelProvider>());
 

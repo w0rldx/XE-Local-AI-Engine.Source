@@ -13,7 +13,11 @@ vi.mock("@/core/api/generated", async (importOriginal) => ({
 
 import { BenchmarkCellsTable } from "@/features/benchmarks/components/BenchmarkCellsTable";
 import type { BenchmarkCell } from "@/features/benchmarks/models/BenchmarkCells";
-import { benchmarkCellFixture, benchmarkTaskItemFixture } from "@/features/benchmarks/test/BenchmarkTestFixtures";
+import {
+	benchmarkCellFixture,
+	benchmarkCellItemFixture,
+	benchmarkTaskItemFixture,
+} from "@/features/benchmarks/test/BenchmarkTestFixtures";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 const cohort = { policyRevision: 1, executionKey: "k", cohortGeneration: 1, rankedCount: 1, totalScored: 2 };
@@ -34,8 +38,8 @@ const complete: BenchmarkCell = benchmarkCellFixture({
 	quality: 75,
 	rank: 1,
 	items: [
-		{ runId: "run-a", taskItemId: "a", taskItemIndex: 0, qualityScore: 80, primaryStopReason: "stop", rankExclusionReason: null },
-		{ runId: "run-b", taskItemId: "b", taskItemIndex: 1, qualityScore: 70, primaryStopReason: "stop", rankExclusionReason: null },
+		benchmarkCellItemFixture({ runId: "run-a", taskItemId: "a", taskItemIndex: 0, qualityScore: 80 }),
+		benchmarkCellItemFixture({ runId: "run-b", taskItemId: "b", taskItemIndex: 1, qualityScore: 70 }),
 	],
 });
 
@@ -45,9 +49,7 @@ const incomplete: BenchmarkCell = benchmarkCellFixture({
 	quality: null,
 	rank: null,
 	rankExclusionReason: "item-incomplete",
-	items: [
-		{ runId: "run-c", taskItemId: "a", taskItemIndex: 0, qualityScore: 90, primaryStopReason: "stop", rankExclusionReason: null },
-	],
+	items: [benchmarkCellItemFixture({ runId: "run-c", taskItemId: "a", taskItemIndex: 0, qualityScore: 90 })],
 });
 
 const render = (props: Partial<Parameters<typeof BenchmarkCellsTable>[0]> = {}) => {
@@ -146,22 +148,22 @@ describe("BenchmarkCellsTable", () => {
 			quality: 80,
 			rank: 1,
 			items: [
-				{
+				benchmarkCellItemFixture({
 					runId: "r1",
 					taskItemId: "n1",
 					taskItemIndex: 0,
 					qualityScore: 31,
 					primaryStopReason: "stop",
 					rankExclusionReason: null,
-				},
-				{
+				}),
+				benchmarkCellItemFixture({
 					runId: "r2",
 					taskItemId: "n2",
 					taskItemIndex: 1,
 					qualityScore: 72,
 					primaryStopReason: "stop",
 					rankExclusionReason: null,
-				},
+				}),
 			],
 		});
 		render({ cells: [withProbes], items: [niahCase("n1"), niahCase("n2")], scorableItemCount: 0 });
@@ -177,22 +179,22 @@ describe("BenchmarkCellsTable", () => {
 		const withProbes = benchmarkCellFixture({
 			cellKey: "cell:niah:2",
 			items: [
-				{
+				benchmarkCellItemFixture({
 					runId: "r1",
 					taskItemId: "n1",
 					taskItemIndex: 0,
 					qualityScore: 100,
 					primaryStopReason: "stop",
 					rankExclusionReason: null,
-				},
-				{
+				}),
+				benchmarkCellItemFixture({
 					runId: "r2",
 					taskItemId: "n2",
 					taskItemIndex: 1,
 					qualityScore: 100,
 					primaryStopReason: "stop",
 					rankExclusionReason: null,
-				},
+				}),
 			],
 		});
 		render({ cells: [withProbes], items: [niahCase("n1"), niahCase("n2")], scorableItemCount: 0 });
@@ -207,22 +209,22 @@ describe("BenchmarkCellsTable", () => {
 		const withProbes = benchmarkCellFixture({
 			cellKey: "cell:niah:3",
 			items: [
-				{
+				benchmarkCellItemFixture({
 					runId: "r1",
 					taskItemId: "n1",
 					taskItemIndex: 0,
 					qualityScore: 100,
 					primaryStopReason: "stop",
 					rankExclusionReason: null,
-				},
-				{
+				}),
+				benchmarkCellItemFixture({
 					runId: "r2",
 					taskItemId: "n2",
 					taskItemIndex: 1,
 					qualityScore: 100,
 					primaryStopReason: "stop",
 					rankExclusionReason: null,
-				},
+				}),
 			],
 		});
 		render({ cells: [withProbes], items: [niahCase("n1"), niahCase("n2")], scorableItemCount: 0 });
@@ -243,14 +245,14 @@ describe("BenchmarkCellsTable", () => {
 			rank: null,
 			rankExclusionReason: "no-score",
 			items: [
-				{
+				benchmarkCellItemFixture({
 					runId: "r1",
 					taskItemId: "n1",
 					taskItemIndex: 0,
 					qualityScore: 100,
 					primaryStopReason: "stop",
 					rankExclusionReason: null,
-				},
+				}),
 			],
 		});
 		render({ cells: [unscored], items: [niahCase("n1")], scorableItemCount: 0 });
@@ -292,6 +294,69 @@ describe("BenchmarkCellsTable", () => {
 
 		expect(screen.queryByRole("columnheader", { name: "Agent" })).toBeNull();
 		expect(screen.queryByTestId("benchmark-cell-agent-cell:one:1")).toBeNull();
+	});
+
+	// A budget sweep gives one model at several budgets; without the column those cells read identically.
+	it("names each combination's thinking budget and its at-budget share once the cells ran more than one budget", () => {
+		const measured = (runId: string, reasoningTokens: number, reasoningAtBudget: boolean | null) =>
+			benchmarkCellItemFixture({
+				runId,
+				reasoningTokens,
+				nonReasoningOutputTokens: 100,
+				durationMs: 2000,
+				reasoningAtBudget,
+			});
+		render({
+			cells: [
+				{ ...complete, reasoningBudgetTokens: 512, items: [measured("run-a", 511, true), measured("run-b", 300, null)] },
+				{ ...incomplete, reasoningBudgetTokens: null, items: [measured("run-c", 900, null)] },
+			],
+		});
+
+		expect(screen.getByTestId("benchmark-cell-budget-cell:one:1").textContent).toBe("512 thinking tokens");
+		expect(screen.getByTestId("benchmark-cell-budget-cell:two:1").textContent).toBe("no budget");
+		// Only one answer has a known flag, so the denominator is 1, not 2: the unknown is never counted as "no".
+		expect(screen.getByTestId("benchmark-cell-at-budget-cell:one:1").textContent).toBe("1 of 1");
+		expect(screen.getByTestId("benchmark-cell-at-budget-cell:two:1").textContent).toBe("—");
+		expect(screen.getByTestId("benchmark-cell-reasoning-cell:one:1").textContent).toBe("406");
+		expect(screen.getByTestId("benchmark-cell-answer-tokens-cell:one:1").textContent).toBe("100");
+		expect(screen.getByTestId("benchmark-cell-duration-cell:one:1").textContent).toBe("2.0s");
+	});
+
+	it("shows each answer's reasoning, answer tokens, time and at-budget reading when a combination is opened", () => {
+		render({
+			cells: [
+				{
+					...complete,
+					items: [
+						benchmarkCellItemFixture({
+							runId: "run-a",
+							taskItemId: "a",
+							reasoningTokens: 1023,
+							nonReasoningOutputTokens: 77,
+							durationMs: 4200,
+							reasoningAtBudget: true,
+						}),
+						// Multi-round: the node reports the flag as unknown, so no badge claims either reading.
+						benchmarkCellItemFixture({ runId: "run-b", taskItemId: "b", reasoningTokens: 300, durationMs: 1500 }),
+					],
+				},
+			],
+		});
+		fireEvent.click(screen.getByTestId("benchmark-cell-toggle-cell:one:1"));
+
+		expect(screen.getByTestId("benchmark-cell-item-reasoning-run-a").textContent).toBe(
+			"1023 reasoning · 77 answer · 4.2sat budget",
+		);
+		expect(screen.getByTestId("benchmark-cell-item-reasoning-run-b").textContent).toBe("300 reasoning · — answer · 1.5s");
+	});
+
+	it("adds no budget or reasoning columns while every cell ran one budget and nothing measured reasoning", () => {
+		render();
+
+		expect(screen.queryByTestId("benchmark-cell-budget-cell:one:1")).toBeNull();
+		expect(screen.queryByTestId("benchmark-cell-at-budget-cell:one:1")).toBeNull();
+		expect(screen.getByTestId("benchmark-cell-duration-cell:one:1").textContent).toBe("—");
 	});
 
 	it("says so when a project has nothing measured yet", () => {

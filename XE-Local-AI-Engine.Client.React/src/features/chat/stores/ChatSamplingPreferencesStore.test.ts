@@ -42,6 +42,11 @@ describe("ChatSamplingPreferencesStore", () => {
 		expect(state.options.seed).toBe(42);
 	});
 
+	it("hydrates a persisted thinking budget", async () => {
+		const useStore = await loadStore(JSON.stringify({ reasoningBudgetTokens: 512 }));
+		expect(useStore.getState().options).toEqual({ reasoningBudgetTokens: 512 });
+	});
+
 	it("falls back to empty object when persisted JSON is malformed", async () => {
 		const useStore = await loadStore("not-valid-json{{");
 		expect(useStore.getState().options).toEqual({});

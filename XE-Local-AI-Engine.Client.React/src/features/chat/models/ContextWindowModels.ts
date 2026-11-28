@@ -37,6 +37,9 @@ export interface ContextWindowSnapshot {
 	providerInputTokens?: number | null;
 	providerOutputTokens?: number | null;
 	providerReasoningTokens?: number | null;
+	// The thinking budget the round asked for, and the one the provider put on the wire (null when none applied one).
+	requestedReasoningBudgetTokens?: number | null;
+	reasoningBudgetTokens?: number | null;
 	estimated?: ContextWindowEstimate | null;
 	tools: ContextWindowTool[];
 	toolsWithheldCount: number;

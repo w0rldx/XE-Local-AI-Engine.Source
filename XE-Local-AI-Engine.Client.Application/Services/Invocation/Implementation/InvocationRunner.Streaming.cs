@@ -60,8 +60,38 @@ public sealed partial class InvocationRunner
         /// <summary>Records one provider round's reported usage as the last round and folds it into the turn totals.</summary>
         public void AddUsage(UsageDetails usage)
         {
-            LastRoundUsage = UsageSnapshot.From(usage);
+            var round = UsageSnapshot.From(usage);
+            // Usage that covers reasoning but carries no count of it (a provider forwarding input/output only) leaves that reasoning uncounted.
+            LastRoundUsage = ReasoningCountPending && round.ReasoningTokens is null ? round.WithReasoningUncounted() : round;
             UsageSnapshot = UsageSnapshot.Accumulate(UsageSnapshot, LastRoundUsage);
+            ReasoningCountPending = false;
+        }
+
+        // Reasoning arrived after the last usage, so its round's count has not been reported; a turn ending now has no measured reasoning total.
+        public bool ReasoningCountPending { get; private set; }
+
+        public void MarkReasoningCountPending() => ReasoningCountPending = true;
+
+        /// <summary>
+        ///     Called before every terminal report: a Stop or failure before the last reasoning round's count leaves the earlier
+        ///     rounds' subtotal, which is not the turn's total, so the turn's reasoning becomes unmeasured.
+        /// </summary>
+        public void SettlePendingReasoningCount()
+        {
+            if (ReasoningCountPending)
+            {
+                MarkReasoningUncounted();
+            }
+        }
+
+        /// <summary>
+        ///     Marks the turn's reasoning as no longer covered by any reported count, in the last round and the turn totals;
+        ///     the terminal telemetry then also reports the last round's context snapshot without its reasoning count.
+        /// </summary>
+        public void MarkReasoningUncounted()
+        {
+            LastRoundUsage = LastRoundUsage?.WithReasoningUncounted();
+            UsageSnapshot = UsageSnapshot?.WithReasoningUncounted();
         }
 
         // Why generation stopped, from the LAST update carrying a reason: a tool-calling turn ends on "stop" after
@@ -230,6 +260,10 @@ public sealed partial class InvocationRunner
 
     internal sealed class UsageSnapshot
     {
+        // Byte-identical to DeferredLlamaServerChatClient.ReasoningUncountedUsageKey, which this assembly cannot see: a
+        // round that emitted reasoning its count failed to measure. Read as > 0 because MEAI sums additional counts.
+        internal const string ReasoningUncountedUsageKey = "xe.llama.reasoning_uncounted";
+
         public required int? InputTokens { get; init; }
 
         public required int? OutputTokens { get; init; }
@@ -237,6 +271,9 @@ public sealed partial class InvocationRunner
         public required int? ReasoningTokens { get; init; }
 
         public required int? TotalTokens { get; init; }
+
+        // Sticky across rounds: once one round's reasoning went uncounted, the turn's reasoning total is unknown, not partial.
+        public bool ReasoningUncounted { get; init; }
 
         public static UsageSnapshot From(UsageDetails usage)
         {
@@ -247,13 +284,16 @@ public sealed partial class InvocationRunner
             // provider paths honor that. A provider-supplied total wins; with neither count reported it stays null.
             var totalTokens = ToNullableInt(usage.TotalTokenCount)
                               ?? SumIfAny(inputTokens, outputTokens);
+            // A usage MEAI already summed across rounds can carry a partial count beside the stamp.
+            var reasoningUncounted = usage.AdditionalCounts?.TryGetValue(ReasoningUncountedUsageKey, out var uncounted) == true && uncounted > 0;
 
             return new UsageSnapshot
             {
                 InputTokens = inputTokens,
                 OutputTokens = outputTokens,
-                ReasoningTokens = reasoningTokens,
-                TotalTokens = totalTokens
+                ReasoningTokens = reasoningUncounted ? null : reasoningTokens,
+                TotalTokens = totalTokens,
+                ReasoningUncounted = reasoningUncounted
             };
         }
 
@@ -262,7 +302,9 @@ public sealed partial class InvocationRunner
         /// </summary>
         /// <remarks>
         ///     Every round after it sums member-wise, null-preserving (a member neither side reported stays null) and
-        ///     saturating at <see cref="int.MaxValue" />, so a pathological count cannot overflow the turn's total.
+        ///     saturating at <see cref="int.MaxValue" />, so a pathological count cannot overflow the turn's total. The
+        ///     reasoning total is null once any round emitted reasoning that went uncounted: a sum of the other rounds
+        ///     would be published as the turn's measurement.
         /// </remarks>
         public static UsageSnapshot Accumulate(UsageSnapshot? total, UsageSnapshot round)
         {
@@ -271,14 +313,26 @@ public sealed partial class InvocationRunner
                 return round;
             }
 
+            var reasoningUncounted = total.ReasoningUncounted || round.ReasoningUncounted;
             return new UsageSnapshot
             {
                 InputTokens = Add(total.InputTokens, round.InputTokens),
                 OutputTokens = Add(total.OutputTokens, round.OutputTokens),
-                ReasoningTokens = Add(total.ReasoningTokens, round.ReasoningTokens),
-                TotalTokens = Add(total.TotalTokens, round.TotalTokens)
+                ReasoningTokens = reasoningUncounted ? null : Add(total.ReasoningTokens, round.ReasoningTokens),
+                TotalTokens = Add(total.TotalTokens, round.TotalTokens),
+                ReasoningUncounted = reasoningUncounted
             };
         }
+
+        public UsageSnapshot WithReasoningUncounted() =>
+            new()
+            {
+                InputTokens = InputTokens,
+                OutputTokens = OutputTokens,
+                ReasoningTokens = null,
+                TotalTokens = TotalTokens,
+                ReasoningUncounted = true
+            };
 
         // Folded onto the saturating Add so a DERIVED total clamps like an accumulated one; a checked sum of two
         // in-range counts past int.MaxValue faults the stream. Null-preserving when neither side reported.

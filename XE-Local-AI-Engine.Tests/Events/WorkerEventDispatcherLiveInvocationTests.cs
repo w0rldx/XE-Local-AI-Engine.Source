@@ -152,6 +152,35 @@ public sealed class WorkerEventDispatcherLiveInvocationTests
         AssertEx.Empty(idle.Live);
     }
 
+    [Test]
+    public async Task TurnTelemetry_MarksWhetherTheTurnTotalsWereReported_SoAnUnmeasuredTotalIsNotReadAsAbsent()
+    {
+        var dispatcher = CreateDispatcher();
+        var reported = Guid.NewGuid();
+        await using (await AssignAsync(dispatcher, reported))
+        {
+            await dispatcher.ReportTurnTelemetryAsync(reported, modelReadinessMs: null, new TurnUsageTotals
+            {
+                InputTokens = 6_000,
+                OutputTokens = 600,
+                TotalTokens = 6_600,
+                ReasoningTokens = null
+            });
+
+            var state = AssertEx.NotNull(dispatcher.CurrentInvocation);
+            AssertEx.True(state.TurnUsageReported);
+            AssertEx.Null(state.TurnReasoningTokens);
+        }
+
+        var absent = Guid.NewGuid();
+        await using (await AssignAsync(dispatcher, absent))
+        {
+            await dispatcher.ReportTurnTelemetryAsync(absent, modelReadinessMs: null, usage: null);
+
+            AssertEx.False(AssertEx.NotNull(dispatcher.CurrentInvocation).TurnUsageReported);
+        }
+    }
+
     private static WorkerEventDispatcher CreateDispatcher()
     {
         return new WorkerEventDispatcher(Substitute.For<IInvocationRunner>(),

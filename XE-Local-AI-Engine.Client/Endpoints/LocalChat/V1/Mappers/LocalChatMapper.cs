@@ -48,7 +48,8 @@ internal static class LocalChatMapper
             FrequencyPenalty = sampling.FrequencyPenalty,
             Seed = sampling.Seed,
             Stop = sampling.Stop,
-            NumCtx = sampling.NumCtx
+            NumCtx = sampling.NumCtx,
+            ReasoningBudgetTokens = sampling.ReasoningBudgetTokens
         };
     }
 
@@ -69,7 +70,8 @@ internal static class LocalChatMapper
             FrequencyPenalty = sampling.FrequencyPenalty,
             Seed = sampling.Seed,
             Stop = sampling.Stop,
-            NumCtx = sampling.NumCtx
+            NumCtx = sampling.NumCtx,
+            ReasoningBudgetTokens = sampling.ReasoningBudgetTokens
         };
     }
 
@@ -205,6 +207,8 @@ internal static class LocalChatMapper
             ProviderInputTokens = contextWindow.ProviderInputTokens,
             ProviderOutputTokens = contextWindow.ProviderOutputTokens,
             ProviderReasoningTokens = contextWindow.ProviderReasoningTokens,
+            RequestedReasoningBudgetTokens = contextWindow.RequestedReasoningBudgetTokens,
+            ReasoningBudgetTokens = contextWindow.ReasoningBudgetTokens,
             Estimated = contextWindow.Estimated is { } estimate
                 ? new NodeChatContextWindowEstimateResponse
                 {

@@ -7,9 +7,6 @@
 
 BaseCheckpointStoreTests|XE-Local-AI-Engine.Tests/ModelLab/ModelLabCheckpointPreflightServiceTests.cs
 BenchmarkPairwiseSuiteEndToEndTests|XE-Local-AI-Engine.Tests/Benchmarks/BenchmarkComparisonExecutorTests.cs
-DeferredLlamaServerResponseSchemaEntryPointTests|XE-Local-AI-Engine.Tests/Providers/LlamaServer/DeferredLlamaServerLogprobsTests.cs
-DeferredLlamaServerResponseSchemaEntryPointTests|XE-Local-AI-Engine.Tests/Providers/LlamaServer/DeferredLlamaServerReasoningControlTests.cs
-DeferredLlamaServerResponseSchemaEntryPointTests|XE-Local-AI-Engine.Tests/Providers/LlamaServer/DeferredLlamaServerSlotPinTests.cs
 DevelopmentEndpointTests|XE-Local-AI-Engine.Tests/Development/DevelopmentAttemptExecutionSupervisorTests.cs
 DevelopmentEndpointTests|XE-Local-AI-Engine.Tests/Endpoints/Development/DevelopmentAttemptHubTests.cs
 DevelopmentManagementServiceTests|XE-Local-AI-Engine.Tests/Development/DevelopmentProjectReadCommandCountTests.cs

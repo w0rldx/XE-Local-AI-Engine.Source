@@ -31,7 +31,6 @@ export function BenchmarkRunResults({ controller }: { readonly controller: Bench
 		detail,
 		chartsOpen,
 		setChartsOpen,
-		selectedRunDetails,
 		isSuite,
 		ranking,
 		setRanking,
@@ -117,7 +116,7 @@ export function BenchmarkRunResults({ controller }: { readonly controller: Bench
 								</Group>
 							}
 						>
-							<BenchmarkCharts runs={runs} selectedRuns={selectedRunDetails.runs} />
+							<BenchmarkCharts runs={runs} />
 						</Suspense>
 					) : null}
 					<SimpleGrid cols={{ base: 1, lg: selectedRunIds.length > 1 ? 2 : 1 }}>

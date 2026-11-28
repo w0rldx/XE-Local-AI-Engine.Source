@@ -17,8 +17,9 @@ import { DirectInferenceSamplingFields } from "@/core/directInference/DirectInfe
 import { DirectInferenceThinkingSwitch } from "@/core/directInference/DirectInferenceThinkingSwitch";
 import { useAbortableRun } from "@/core/directInference/useAbortableRun";
 import { useDirectInferenceModels } from "@/core/directInference/useDirectInferenceModels";
-import { type ChatSamplingOptions, toWireSamplingOptions } from "@/core/runtime/ChatSamplingOptions";
+import { type ChatSamplingOptions, reasoningBudgetField, toWireSamplingOptions } from "@/core/runtime/ChatSamplingOptions";
 import { useStreamCommitScheduler } from "@/core/streaming/useStreamCommitScheduler";
+import { FieldWithInfo } from "@/core/ui/components/FieldInfo/FieldInfo";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { StickyBar } from "@/core/ui/components/StickyBar/StickyBar";
@@ -27,13 +28,14 @@ import { DirectInferenceLogprobs } from "@/features/directInference/components/D
 /** One explicit prompt to one model: no agent, tools, history, persona, memory or knowledge base, and nothing saved. */
 export function DirectInferencePage() {
 	const { t } = useTranslation();
-	const { modelGroups, llamaCppModels, reasoningLlamaCppModels } = useDirectInferenceModels();
+	const { modelGroups, llamaCppModels, reasoningLlamaCppModels, budgetLlamaCppModels } = useDirectInferenceModels();
 	const [modelId, setModelId] = useState<string | null>(null);
 	const [systemPrompt, setSystemPrompt] = useState("");
 	const [prompt, setPrompt] = useState("");
 	const [sampling, setSampling] = useState<ChatSamplingOptions>({});
 	const [topLogprobs, setTopLogprobs] = useState<number | undefined>();
 	const [disableThinking, setDisableThinking] = useState(false);
+	const [reasoningBudget, setReasoningBudget] = useState<number | undefined>();
 	const [result, setResult] = useState<DirectInferenceResult>(emptyDirectInferenceResult);
 	const [lastRequest, setLastRequest] = useState<DirectInferenceRequest | undefined>();
 	const { running, start, stop } = useAbortableRun();
@@ -42,10 +44,12 @@ export function DirectInferencePage() {
 
 	const isLlamaCppModel = modelId !== null && llamaCppModels.has(modelId);
 	const isReasoningLlamaCppModel = modelId !== null && reasoningLlamaCppModels.has(modelId);
+	const showReasoningBudget = modelId !== null && budgetLlamaCppModels.has(modelId) && !disableThinking;
 	// Another model starts from its own default again.
 	const selectModel = (next: string | null): void => {
 		setModelId(next);
 		setDisableThinking(false);
+		setReasoningBudget(undefined);
 	};
 
 	const run = async (): Promise<void> => {
@@ -56,7 +60,9 @@ export function DirectInferencePage() {
 			modelId,
 			prompt,
 			systemPrompt: systemPrompt.trim().length > 0 ? systemPrompt : undefined,
-			samplingOptions: toWireSamplingOptions(sampling),
+			samplingOptions: toWireSamplingOptions(
+				showReasoningBudget ? { ...sampling, reasoningBudgetTokens: reasoningBudget } : sampling,
+			),
 			topLogprobs: isLlamaCppModel ? topLogprobs : undefined,
 			disableThinking: isReasoningLlamaCppModel && disableThinking ? true : undefined,
 		};
@@ -112,6 +118,25 @@ export function DirectInferencePage() {
 					/>
 					{isReasoningLlamaCppModel && (
 						<DirectInferenceThinkingSwitch checked={disableThinking} onChange={setDisableThinking} disabled={running} />
+					)}
+					{showReasoningBudget && (
+						<FieldWithInfo label={t(reasoningBudgetField.labelKey)} text={t(reasoningBudgetField.infoKey)}>
+							<NumberInput
+								label={t(reasoningBudgetField.labelKey)}
+								description={t(reasoningBudgetField.descriptionKey)}
+								min={reasoningBudgetField.min}
+								max={reasoningBudgetField.max}
+								step={reasoningBudgetField.step}
+								allowDecimal={false}
+								// Clamped on blur, not strictly: with a minimum of 128, strict clamping refuses the first digit of 512.
+								disabled={running}
+								placeholder={t("pages.chat.samplingOptions.modelDefault", "Model default")}
+								inputWrapperOrder={["label", "input", "description", "error"]}
+								value={reasoningBudget ?? ""}
+								onChange={(next) => setReasoningBudget(typeof next === "number" ? next : undefined)}
+								data-testid="direct-inference-reasoning-budget"
+							/>
+						</FieldWithInfo>
 					)}
 					<DirectInferenceSamplingFields
 						value={sampling}

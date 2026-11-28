@@ -54,7 +54,8 @@ public sealed class NodeChatSamplingOptionsEndpointTests
                        stop = new[]
                        {
                            "</end>"
-                       }
+                       },
+                       reasoningBudgetTokens = 4096
                    }
                }))
         {
@@ -68,6 +69,7 @@ public sealed class NodeChatSamplingOptionsEndpointTests
         {
             var reloaded = (await ReadJsonAsync(read)).GetProperty("samplingOptions");
             AssertEx.Equal(20, reloaded.GetProperty("topK").GetInt32());
+            AssertEx.Equal(4096, reloaded.GetProperty("reasoningBudgetTokens").GetInt32(), "the pinned thinking budget survives the round trip");
             AssertEx.Equal("</end>", reloaded.GetProperty("stop")[0].GetString());
             AssertEx.Equal(JsonValueKind.Null, reloaded.GetProperty("topP").ValueKind, "An unset knob reads back as null.");
         }
@@ -96,6 +98,8 @@ public sealed class NodeChatSamplingOptionsEndpointTests
     [Arguments("frequencyPenalty", "2.5")]
     [Arguments("numCtx", "511")]
     [Arguments("numCtx", "131073")]
+    [Arguments("reasoningBudgetTokens", "127")]
+    [Arguments("reasoningBudgetTokens", "131073")]
     [Arguments("seed", "\"-2\"")]
     [Arguments("seed", "\"2147483648\"")]
     [Arguments("seed", "\"not-a-number\"")]
@@ -118,6 +122,8 @@ public sealed class NodeChatSamplingOptionsEndpointTests
     [Arguments("topK", "1")]
     [Arguments("repeatLastN", "-1")]
     [Arguments("numCtx", "131072")]
+    [Arguments("reasoningBudgetTokens", "128")]
+    [Arguments("reasoningBudgetTokens", "131072")]
     [Arguments("seed", "\"-1\"")]
     [Arguments("seed", "\"2147483647\"")]
     public async Task Patch_WithAKnobOnItsBound_IsStored(string knob, string jsonValue)

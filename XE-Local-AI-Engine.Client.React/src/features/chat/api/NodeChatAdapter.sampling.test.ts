@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 // timeout — it measured 2.5s on a Windows packaging box and tipped over the limit under coverage
 // instrumentation. At module scope the same cost lands in collection, which is not timeout-bounded.
 import { toStreamRequest } from "@/features/chat/api/NodeChatAdapter";
-import { toWireSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
+import { fromWireSamplingOptions, toWireSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
 
 describe("toWireSamplingOptions", () => {
 	it("returns undefined when all fields are undefined", () => {
@@ -101,6 +101,12 @@ describe("toWireSamplingOptions", () => {
 		const result = toWireSamplingOptions({ seed: 987654321 });
 		expect(result?.seed).toBe("987654321");
 		expect(typeof result?.seed).toBe("string");
+	});
+
+	it("carries the thinking budget to the wire and back from a stored conversation", () => {
+		const wire = toWireSamplingOptions({ reasoningBudgetTokens: 512 });
+		expect(wire).toEqual({ reasoningBudgetTokens: 512 });
+		expect(fromWireSamplingOptions({ ...wire, temperature: null })).toEqual({ reasoningBudgetTokens: 512 });
 	});
 });
 

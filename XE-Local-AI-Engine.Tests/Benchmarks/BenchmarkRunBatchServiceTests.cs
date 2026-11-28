@@ -102,6 +102,49 @@ public sealed class BenchmarkRunBatchServiceTests
         _ = freeze.Received(1).StartAsync(Request("good", 4), Arg.Any<BenchmarkFreezeScope?>(), Arg.Any<CancellationToken>());
     }
 
+    [Test]
+    public async Task StartAsync_CarriesEachItemsBudgetIntoItsFreezeAndEchoesItOnEveryOutcome()
+    {
+        var freeze = Substitute.For<IBenchmarkRunFreezeService>();
+        freeze.StartAsync(Request("model-a", 4) with
+              {
+                  ReasoningBudgetTokens = 256
+              }, Arg.Any<BenchmarkFreezeScope?>(), Arg.Any<CancellationToken>())
+              .Returns([Run()]);
+        freeze.StartAsync(Request("model-a", 5) with
+              {
+                  ReasoningBudgetTokens = 4096
+              }, Arg.Any<BenchmarkFreezeScope?>(), Arg.Any<CancellationToken>())
+              .Returns<IReadOnlyList<BenchmarkRunRecord>>(_ => throw new BenchmarkConflictException("VersionConflict"));
+        var service = new BenchmarkRunBatchService(freeze, TimeProvider.System);
+        var request = new BenchmarkRunBatchRequest
+        {
+            ProjectId = ProjectId,
+            ExpectedProjectVersion = 4,
+            Items =
+            [
+                .. new[] { 256, 4096, 1024 }.Select(static budget => new BenchmarkRunBatchItem
+                {
+                    ModelName = "model-a",
+                    KvCacheType = null,
+                    ReasoningBudgetTokens = budget
+                })
+            ],
+            RepeatCount = 1,
+            Warmup = false,
+            RepeatMode = BenchmarkRepeatMode.Throughput,
+            AnswerVarianceTemperature = null
+        };
+
+        var result = await service.StartAsync(request);
+
+        AssertEx.Equal<int?>(256, result.Started.Single().ReasoningBudgetTokens, "a started item echoes its budget");
+        AssertEx.Equal(BenchmarkRunBatchRejectionKind.Failure, result.Rejected[0].Kind);
+        AssertEx.Equal<int?>(4096, result.Rejected[0].ReasoningBudgetTokens, "a rejected item echoes its budget");
+        AssertEx.Equal(BenchmarkRunBatchRejectionKind.NotAttempted, result.Rejected[1].Kind);
+        AssertEx.Equal<int?>(1024, result.Rejected[1].ReasoningBudgetTokens, "an unattempted item echoes its budget");
+    }
+
     private static BenchmarkRunBatchRequest Batch(params string[] modelNames) =>
         new()
         {

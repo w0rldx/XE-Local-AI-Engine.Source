@@ -22,7 +22,7 @@ public sealed class DeferredLlamaServerReasoningControlTests
     [Test]
     public async Task Streaming_WithABudget_ArmsTheControlAndAdvertisesTheCompletionOnce()
     {
-        using var server = DeferredLlamaServerResponseSchemaEntryPointTests.CapturingServer.Start(ReasoningStream, "text/event-stream");
+        using var server = CapturingServer.Start(ReasoningStream, "text/event-stream");
         using var client = new DeferredLlamaServerChatClient(new FakeProcessSupervisor
         {
             EnsureEndpoint = server.BaseAddress
@@ -50,7 +50,7 @@ public sealed class DeferredLlamaServerReasoningControlTests
     [Test]
     public async Task Streaming_WithoutABudget_NeitherArmsNorAdvertises()
     {
-        using var server = DeferredLlamaServerResponseSchemaEntryPointTests.CapturingServer.Start(ReasoningStream, "text/event-stream");
+        using var server = CapturingServer.Start(ReasoningStream, "text/event-stream");
         using var client = new DeferredLlamaServerChatClient(new FakeProcessSupervisor
         {
             EnsureEndpoint = server.BaseAddress

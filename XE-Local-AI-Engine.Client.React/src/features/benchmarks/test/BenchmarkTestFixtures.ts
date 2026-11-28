@@ -1,4 +1,4 @@
-import type { BenchmarkCell } from "@/features/benchmarks/models/BenchmarkCells";
+import type { BenchmarkCell, BenchmarkCellItem } from "@/features/benchmarks/models/BenchmarkCells";
 import type {
 	BenchmarkRunDetail,
 	BenchmarkRunFidelity,
@@ -77,6 +77,11 @@ export function benchmarkRunSummaryFixture(overrides: Partial<BenchmarkRunSummar
 		taskItemId: null,
 		toolCallCount: null,
 		toolTimeMs: null,
+		reasoningBudgetTokens: null,
+		reasoningTokens: null,
+		appliedReasoningBudgetTokens: null,
+		reasoningAtBudget: null,
+		nonReasoningOutputTokens: null,
 		lastStreamSequence: 2,
 		version: 3,
 		createdAtUtc: 1,
@@ -95,7 +100,6 @@ export function benchmarkRunDetailFixture(overrides: Partial<BenchmarkRunDetail>
 		primaryErrorMessage: null,
 		startedAtUtc: 1,
 		primaryCompletedAtUtc: 2,
-		reasoningBudgetTokens: null,
 		reasoningBudgetApplicable: null,
 		review: null,
 		artifacts: [],
@@ -136,21 +140,30 @@ export function benchmarkCellFixture(overrides: Partial<BenchmarkCell> = {}): Be
 		agentDefinitionId: "agent-1",
 		agentName: "agent",
 		agentVersion: 1,
+		reasoningBudgetTokens: null,
 		repeatGroupId: null,
 		repeatIndex: null,
 		quality: 70,
 		rank: 1,
 		rankExclusionReason: null,
-		items: [
-			{
-				runId: "run-1",
-				taskItemId: "item-1",
-				taskItemIndex: 0,
-				qualityScore: 70,
-				primaryStopReason: "stop",
-				rankExclusionReason: null,
-			},
-		],
+		items: [benchmarkCellItemFixture()],
+		...overrides,
+	};
+}
+
+/** One scored answer inside a cell, with no reasoning measured — the shape every pre-sweep run reads as. */
+export function benchmarkCellItemFixture(overrides: Partial<BenchmarkCellItem> = {}): BenchmarkCellItem {
+	return {
+		runId: "run-1",
+		taskItemId: "item-1",
+		taskItemIndex: 0,
+		qualityScore: 70,
+		primaryStopReason: "stop",
+		rankExclusionReason: null,
+		reasoningTokens: null,
+		durationMs: null,
+		reasoningAtBudget: null,
+		nonReasoningOutputTokens: null,
 		...overrides,
 	};
 }

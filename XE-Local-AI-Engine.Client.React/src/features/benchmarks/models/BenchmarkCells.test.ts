@@ -3,13 +3,100 @@ import { describe, expect, it } from "vitest";
 import {
 	benchmarkCellLabel,
 	benchmarkNiahRecall,
+	benchmarkReasoningReadout,
 	canComparePairedDeltas,
 	hasBenchmarkAgentVariants,
+	hasBenchmarkBudgetVariants,
 	missingBenchmarkCellItems,
 	sortBenchmarkCells,
 	toBenchmarkCell,
 } from "@/features/benchmarks/models/BenchmarkCells";
-import { benchmarkCellFixture, benchmarkTaskItemFixture } from "@/features/benchmarks/test/BenchmarkTestFixtures";
+import {
+	benchmarkCellFixture,
+	benchmarkCellItemFixture,
+	benchmarkTaskItemFixture,
+} from "@/features/benchmarks/test/BenchmarkTestFixtures";
+
+describe("benchmarkReasoningReadout", () => {
+	// "at budget m/n" names its own denominator: an answer whose flag is unknown (multi-round, nothing measured) is
+	// left out of n, never counted as "below budget".
+	it("counts at-budget answers over the answers where the flag is known", () => {
+		const readout = benchmarkReasoningReadout([
+			benchmarkCellItemFixture({
+				reasoningTokens: 1023,
+				nonReasoningOutputTokens: 77,
+				durationMs: 4000,
+				reasoningAtBudget: true,
+			}),
+			benchmarkCellItemFixture({
+				reasoningTokens: 401,
+				nonReasoningOutputTokens: 99,
+				durationMs: 2000,
+				reasoningAtBudget: false,
+			}),
+			// A tool round: the node withholds both derived readings, so this answer counts in neither mean nor denominator.
+			benchmarkCellItemFixture({
+				reasoningTokens: 700,
+				nonReasoningOutputTokens: null,
+				durationMs: 3000,
+				reasoningAtBudget: null,
+			}),
+		]);
+
+		expect(readout).toEqual({
+			meanReasoningTokens: 708,
+			meanNonReasoningTokens: 88,
+			medianDurationMs: 3000,
+			atBudget: 1,
+			atBudgetMeasured: 2,
+		});
+	});
+
+	it("reports nothing rather than zeros when no answer measured reasoning", () => {
+		expect(benchmarkReasoningReadout([benchmarkCellItemFixture()])).toEqual({
+			meanReasoningTokens: null,
+			meanNonReasoningTokens: null,
+			medianDurationMs: null,
+			atBudget: 0,
+			atBudgetMeasured: 0,
+		});
+	});
+});
+
+describe("budget variants", () => {
+	// One model at two budgets is two cells; their picker labels must differ, and a one-budget project reads as before.
+	it("names the budget only when the cells froze more than one", () => {
+		const low = benchmarkCellFixture({ cellKey: "a", primaryModelName: "m", kvCacheType: "f16", reasoningBudgetTokens: 512 });
+		const high = benchmarkCellFixture({ cellKey: "b", primaryModelName: "m", kvCacheType: "f16", reasoningBudgetTokens: 4096 });
+
+		expect(hasBenchmarkBudgetVariants([low, { ...low, cellKey: "c" }])).toBe(false);
+		expect(hasBenchmarkBudgetVariants([low, high])).toBe(true);
+		expect(benchmarkCellLabel(low, "Auto", false, "512 thinking tokens")).toBe("m · f16 · 512 thinking tokens");
+	});
+
+	it("maps the cell's budget and each answer's reasoning measurements from the node", () => {
+		const cell = toBenchmarkCell({
+			cellKey: "c",
+			primaryModelName: "m",
+			modelContentFingerprint: "f",
+			agentName: "a",
+			reasoningBudgetTokens: 2048,
+			items: [
+				{ runId: "r", reasoningTokens: 2047, nonReasoningOutputTokens: 53, durationMs: 900, reasoningAtBudget: true },
+				{ runId: "s", reasoningTokens: 300 },
+			],
+		});
+
+		expect(cell.reasoningBudgetTokens).toBe(2048);
+		expect(cell.items[0]).toMatchObject({
+			reasoningTokens: 2047,
+			nonReasoningOutputTokens: 53,
+			durationMs: 900,
+			reasoningAtBudget: true,
+		});
+		expect(cell.items[1]).toMatchObject({ reasoningTokens: 300, nonReasoningOutputTokens: null, reasoningAtBudget: null });
+	});
+});
 
 describe("toBenchmarkCell", () => {
 	it("orders a cell's answers by their item index, whatever order the node listed them in", () => {
@@ -120,14 +207,14 @@ describe("missingBenchmarkCellItems", () => {
 	it("names the scorable items the cell never answered", () => {
 		const cell = benchmarkCellFixture({
 			items: [
-				{
+				benchmarkCellItemFixture({
 					runId: "r1",
 					taskItemId: "a",
 					taskItemIndex: 0,
 					qualityScore: 80,
 					primaryStopReason: "stop",
 					rankExclusionReason: null,
-				},
+				}),
 			],
 		});
 
@@ -139,14 +226,14 @@ describe("missingBenchmarkCellItems", () => {
 	it("asks nothing of a cell whose runs name no item at all", () => {
 		const legacy = benchmarkCellFixture({
 			items: [
-				{
+				benchmarkCellItemFixture({
 					runId: "r1",
 					taskItemId: null,
 					taskItemIndex: null,
 					qualityScore: 80,
 					primaryStopReason: "stop",
 					rankExclusionReason: null,
-				},
+				}),
 			],
 		});
 
@@ -158,14 +245,8 @@ describe("benchmarkNiahRecall", () => {
 	const niahCase = (id: string) =>
 		benchmarkTaskItemFixture({ id, kind: "niahCase", countsTowardScore: false, verifierConfig: { recall: { expected: "x" } } });
 	const cases = [niahCase("n1"), niahCase("n2"), niahCase("n3")];
-	const answer = (runId: string, taskItemId: string, taskItemIndex: number, qualityScore: number | null) => ({
-		runId,
-		taskItemId,
-		taskItemIndex,
-		qualityScore,
-		primaryStopReason: "stop",
-		rankExclusionReason: null,
-	});
+	const answer = (runId: string, taskItemId: string, taskItemIndex: number, qualityScore: number | null) =>
+		benchmarkCellItemFixture({ runId, taskItemId, taskItemIndex, qualityScore });
 	const verdict = (passed: boolean) => [{ id: "recall", kind: "exact", passed, detail: "" }];
 
 	it("reports found over graded from each case's own recall criterion", () => {

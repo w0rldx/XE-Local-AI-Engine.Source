@@ -25,7 +25,10 @@ public enum BenchmarkRunStreamEventKind
     PrimaryState,
     JudgeState,
     Metrics,
-    TerminalSnapshotAvailable
+    TerminalSnapshotAvailable,
+
+    /// <summary>A reclassification cut the streamed answer back: <c>Content</c> is the answer kept, so a live view trims its output parts to it.</summary>
+    OutputTrimmed
 }
 
 public sealed record BenchmarkRunStreamPayload
@@ -317,6 +320,13 @@ public sealed record BenchmarkRunStartRequest
     ///     in throughput mode, which is deterministic by definition.
     /// </summary>
     public double? AnswerVarianceTemperature { get; init; }
+
+    /// <summary>
+    ///     A thinking budget for this launch only, or <see langword="null" /> for the project's. An override is frozen
+    ///     like the project's pin and forms its own cells; <see cref="BenchmarkRunFreezeService.FreezeAsync" /> refuses
+    ///     one that cannot apply as asked.
+    /// </summary>
+    public int? ReasoningBudgetTokens { get; init; }
 }
 
 /// <summary>One model's freeze, decided but NOT written.</summary>
@@ -361,6 +371,9 @@ public sealed class BenchmarkRunBatchItem
 
     /// <summary>The agent variant of this cell, or <see langword="null" /> for the project's agent.</summary>
     public Guid? AgentDefinitionId { get; init; }
+
+    /// <inheritdoc cref="BenchmarkRunStartRequest.ReasoningBudgetTokens" />
+    public int? ReasoningBudgetTokens { get; init; }
 }
 
 public sealed class BenchmarkRunBatchStartedItem
@@ -371,6 +384,9 @@ public sealed class BenchmarkRunBatchStartedItem
 
     /// <summary>The agent variant of this cell, or <see langword="null" /> for the project's agent.</summary>
     public Guid? AgentDefinitionId { get; init; }
+
+    /// <summary>The item's thinking-budget override, echoed; <see langword="null" /> for the project's budget.</summary>
+    public int? ReasoningBudgetTokens { get; init; }
 
     public required IReadOnlyList<Guid> RunIds { get; init; }
 }
@@ -390,6 +406,9 @@ public sealed class BenchmarkRunBatchRejectedItem
 
     /// <summary>The agent variant of this cell, or <see langword="null" /> for the project's agent.</summary>
     public Guid? AgentDefinitionId { get; init; }
+
+    /// <inheritdoc cref="BenchmarkRunBatchStartedItem.ReasoningBudgetTokens" />
+    public int? ReasoningBudgetTokens { get; init; }
 
     public required BenchmarkRunBatchRejectionKind Kind { get; init; }
 

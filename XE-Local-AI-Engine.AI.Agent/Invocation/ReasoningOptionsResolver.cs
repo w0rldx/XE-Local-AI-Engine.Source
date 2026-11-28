@@ -241,7 +241,9 @@ internal static class ReasoningOptionsResolver
             reasoning = Math.Min(reasoning, Math.Max(room / 2, 1));
         }
 
-        chatOptions.MaxOutputTokens = window is { } limit ? Math.Min(reasoning + cap, limit) : reasoning + cap;
+        // In long: a replayed or pinned budget plus the cap can pass int.MaxValue when no window bounds it.
+        var total = (int)Math.Min((long)reasoning + cap, int.MaxValue);
+        chatOptions.MaxOutputTokens = window is { } limit ? Math.Min(total, limit) : total;
         additionalProperties[InvocationAgentDefinition.DefaultOutputCapMarkerKey] = true;
     }
 }

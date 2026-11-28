@@ -19,6 +19,8 @@ export function useDirectInferenceModels(): {
 	llamaCppModels: Set<string>;
 	/** The llama.cpp models that think by default, so turning thinking off means something. */
 	reasoningLlamaCppModels: Set<string>;
+	/** The llama.cpp models that enforce a thinking budget. */
+	budgetLlamaCppModels: Set<string>;
 	status: "pending" | "error" | "success";
 } {
 	const { t } = useTranslation();
@@ -48,6 +50,9 @@ export function useDirectInferenceModels(): {
 			modelGroups: groups.filter((group) => group.items.length > 0),
 			llamaCppModels: new Set(llamaCppOptions.map((option) => option.value)),
 			reasoningLlamaCppModels: new Set(llamaCppOptions.filter((option) => option.isReasoningModel).map((option) => option.value)),
+			budgetLlamaCppModels: new Set(
+				llamaCppOptions.filter((option) => option.isReasoningControllable).map((option) => option.value),
+			),
 		};
 	}, [data, status, t]);
 }

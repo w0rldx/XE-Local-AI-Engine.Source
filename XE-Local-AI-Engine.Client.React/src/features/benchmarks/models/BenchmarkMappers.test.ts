@@ -228,6 +228,38 @@ describe("toBenchmarkRunSummary", () => {
 		expect(mapped.modelGroupKey).toBe("v1:abc");
 	});
 
+	// The listing carries the reasoning facts, so a sweep's chart and table need no run detail; absent stays null.
+	it("maps the run's frozen and applied budgets and its reasoning measurements", () => {
+		const mapped = toBenchmarkRunSummary(
+			partial({
+				primaryModelName: "m",
+				modelContentFingerprint: "v1",
+				agentName: "a",
+				reasoningBudgetTokens: 4096,
+				reasoningTokens: 1023,
+				appliedReasoningBudgetTokens: 1024,
+				reasoningAtBudget: true,
+				nonReasoningOutputTokens: 80,
+			}),
+		);
+		const legacy = toBenchmarkRunSummary(partial({ primaryModelName: "m", modelContentFingerprint: "v1", agentName: "a" }));
+
+		expect(mapped).toMatchObject({
+			reasoningBudgetTokens: 4096,
+			reasoningTokens: 1023,
+			appliedReasoningBudgetTokens: 1024,
+			reasoningAtBudget: true,
+			nonReasoningOutputTokens: 80,
+		});
+		expect(legacy).toMatchObject({
+			reasoningBudgetTokens: null,
+			reasoningTokens: null,
+			appliedReasoningBudgetTokens: null,
+			reasoningAtBudget: null,
+			nonReasoningOutputTokens: null,
+		});
+	});
+
 	// "Not measured" and "measured as zero" are different facts; the nullable metrics must not collapse into 0.
 	it("keeps unmeasured metrics null rather than zero", () => {
 		const mapped = toBenchmarkRunSummary(partial({ primaryModelName: "m", modelContentFingerprint: "v1", agentName: "a" }));

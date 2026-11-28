@@ -331,6 +331,37 @@ describe("ChatSamplingOptionsDialog", () => {
 		});
 	});
 
+	it("offers the thinking budget only for a budget-capable model, with its help card", async () => {
+		const { ChatSamplingOptionsDialog } = await import("@/features/chat/components/ChatSamplingOptionsDialog");
+
+		renderWithMantine(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} />);
+		expect(screen.queryByTestId("chat-sampling-field-reasoningBudgetTokens")).toBeNull();
+		cleanup();
+
+		renderWithMantine(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} reasoningBudgetSupported={true} />);
+		expect(screen.getByRole("textbox", { name: en.pages.chat.samplingOptions.reasoningBudgetTokens })).toBeDefined();
+		fireEvent.mouseEnter(screen.getByRole("button", { name: `About ${en.pages.chat.samplingOptions.reasoningBudgetTokens}` }));
+		expect((await screen.findByRole("tooltip")).textContent).toContain(en.pages.chat.samplingOptions.reasoningBudgetTokensInfo);
+	});
+
+	it("saves a thinking budget into the conversation's settings", async () => {
+		const { ChatSamplingOptionsDialog } = await import("@/features/chat/components/ChatSamplingOptionsDialog");
+		const onSave = vi.fn().mockResolvedValue(undefined);
+
+		renderWithMantine(
+			<ChatSamplingOptionsDialog
+				opened={true}
+				onClose={vi.fn()}
+				conversation={{ options: { temperature: 0.3 }, loaded: true, onSave }}
+				reasoningBudgetSupported={true}
+			/>,
+		);
+		fireEvent.change(screen.getByTestId("chat-sampling-field-reasoningBudgetTokens"), { target: { value: "512" } });
+		fireEvent.click(screen.getByTestId("chat-sampling-save-button"));
+
+		expect(onSave).toHaveBeenCalledWith({ temperature: 0.3, reasoningBudgetTokens: 512 });
+	});
+
 	it("local model: no field is marked unsupported", async () => {
 		const { ChatSamplingOptionsDialog } = await import("@/features/chat/components/ChatSamplingOptionsDialog");
 

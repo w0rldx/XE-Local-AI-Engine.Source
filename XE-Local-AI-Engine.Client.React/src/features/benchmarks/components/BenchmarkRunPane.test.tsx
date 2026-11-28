@@ -209,6 +209,40 @@ describe("BenchmarkRunPane", () => {
 
 		expect(screen.getByTestId("benchmark-run-sampling").textContent).toContain("2048");
 		expect(screen.queryByTestId("benchmark-run-budget-not-applicable")).toBeNull();
+		// Applied was not recorded (an older run): unknown, never "not applied".
+		expect(screen.getByTestId("benchmark-run-budget-applied").textContent).toBe(" · applied —");
+	});
+
+	// A clamp can lower the frozen budget; the applied value is what the provider actually put on the wire.
+	it("shows the applied budget and the reasoning tokens the run measured", () => {
+		renderPane(
+			run({
+				reasoningBudgetTokens: 4096,
+				reasoningBudgetApplicable: true,
+				appliedReasoningBudgetTokens: 1024,
+				reasoningTokens: 1023,
+				reasoningAtBudget: true,
+			}),
+		);
+
+		expect(screen.getByTestId("benchmark-run-budget-applied").textContent).toBe(" · applied 1024");
+		expect(screen.getByTestId("benchmark-run-reasoning-tokens").textContent).toBe("Reasoning tokens: 1023 · at budget");
+	});
+
+	// An unpinned baseline on a graded model still gets an effort-ladder cap; hiding it hides what the baseline ran with.
+	it("shows the applied budget of a run that froze no pin", () => {
+		renderPane(
+			run({
+				reasoningBudgetTokens: null,
+				reasoningBudgetApplicable: true,
+				appliedReasoningBudgetTokens: 2048,
+				reasoningTokens: 2048,
+				reasoningAtBudget: true,
+			}),
+		);
+
+		expect(screen.getByTestId("benchmark-run-sampling").textContent).toContain("Reasoning budget (tokens): —");
+		expect(screen.getByTestId("benchmark-run-budget-applied").textContent).toBe(" · applied 2048");
 	});
 
 	// Evidence is a download, never inline content: the bytes are the model's own code output.

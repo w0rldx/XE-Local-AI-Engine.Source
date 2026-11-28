@@ -284,6 +284,9 @@ public sealed class AgentRunEnvelopeMetadata
 
     public int? TurnReasoningTokens { get; init; }
 
+    // True when the runner reported the turn totals: a null total is then unmeasured, and the message's count must not stand in for it.
+    public bool TurnUsageReported { get; init; }
+
     // The engine execution that drove the turn, or null for a turn nothing drove and on every thin envelope.
     public ExecutionParent? Parent { get; init; }
 }

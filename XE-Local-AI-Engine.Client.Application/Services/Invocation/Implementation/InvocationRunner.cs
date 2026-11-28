@@ -411,11 +411,12 @@ public sealed partial class InvocationRunner : IInvocationRunner
         var providerBudget = turn.ProviderBudget;
         try
         {
+            turn.Stream?.SettlePendingReasoningCount();
             var efficiency = providerBudget.CaptureEfficiencySnapshot();
             await dispatcher.ReportToolSchemaTokensAsync(invocationId, efficiency.ToolSchemaTokens, efficiency.MaximumToolSchemaTokens);
             if (providerBudget.LastRoundContext is { } roundContext)
             {
-                await dispatcher.ReportTurnContextSnapshotAsync(invocationId, roundContext);
+                await dispatcher.ReportTurnContextSnapshotAsync(invocationId, turn.Stream?.LastRoundUsage is { ReasoningUncounted: true } ? roundContext with { ProviderReasoningTokens = null } : roundContext);
             }
 
             await dispatcher.ReportTurnTelemetryAsync(invocationId,

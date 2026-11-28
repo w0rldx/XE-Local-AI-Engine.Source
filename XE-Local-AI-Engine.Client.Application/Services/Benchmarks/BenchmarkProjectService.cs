@@ -690,7 +690,7 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
     ///     ranking. A coarse prompt reserve is included because the task and the system prompt occupy the same window
     ///     and are not zero.
     /// </remarks>
-    private static void ValidateReasoningBudget(int? reasoningBudgetTokens, int? maxOutputTokens, int contextTokens)
+    internal static void ValidateReasoningBudget(int? reasoningBudgetTokens, int? maxOutputTokens, int contextTokens)
     {
         if (reasoningBudgetTokens is not { } budget)
         {

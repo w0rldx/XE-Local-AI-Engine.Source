@@ -55,16 +55,63 @@ internal sealed class BenchmarkInvocationCapture : IDisposable
 
         lock (_gate)
         {
-            AppendTextDelta(state.StreamedContent, ref _contentLength, BenchmarkOutputParts.OutputKind, BenchmarkRunStreamEventKind.OutputDelta);
+            // Only a reclassification shrinks the answer (IWorkerEventDispatcher.ReportInvocationTextReclassifiedAsync): text it moved to the reasoning must leave the graded output.
+            if (state.StreamedContent.Length < _contentLength)
+            {
+                _contentLength = TrimOutputTo(state.StreamedContent);
+                // Subscribers already hold the cut text, and the deltas below only append.
+                _events.Append(_runId, BenchmarkRunStreamEventKind.OutputTrimmed, new BenchmarkRunStreamPayload
+                {
+                    Content = state.StreamedContent[.._contentLength]
+                });
+            }
+
+            // Reasoning first: in the one event carrying both, the reclassification, the moved text preceded the answer that replaces it.
             AppendTextDelta(state.StreamedThinkingContent,
                 ref _reasoningLength,
                 BenchmarkOutputParts.ReasoningKind,
                 BenchmarkRunStreamEventKind.ReasoningDelta);
+            AppendTextDelta(state.StreamedContent, ref _contentLength, BenchmarkOutputParts.OutputKind, BenchmarkRunStreamEventKind.OutputDelta);
             if (state.Status is InvocationStatus.Completed or InvocationStatus.Failed or InvocationStatus.Cancelled)
             {
                 TerminalState = state;
             }
         }
+    }
+
+    /// <summary>Cuts the captured output parts back to their longest prefix of <paramref name="content" />; returns its length.</summary>
+    /// <remarks>Earlier rounds keep their text and every reasoning and tool part keeps its place; the caller appends the remainder.</remarks>
+    private int TrimOutputTo(string content)
+    {
+        var kept = 0;
+        var diverged = false;
+        List<BenchmarkOutputPart> trimmed = new(_parts.Count);
+        foreach (var part in _parts)
+        {
+            if (!string.Equals(part.Kind, BenchmarkOutputParts.OutputKind, StringComparison.Ordinal))
+            {
+                trimmed.Add(part);
+                continue;
+            }
+
+            var text = part.Content ?? string.Empty;
+            var same = diverged ? 0 : text.AsSpan().CommonPrefixLength(content.AsSpan(kept));
+            kept += same;
+            diverged |= same < text.Length;
+            if (same > 0)
+            {
+                trimmed.Add(same == text.Length
+                    ? part
+                    : part with
+                    {
+                        Content = text[..same]
+                    });
+            }
+        }
+
+        _parts.Clear();
+        _parts.AddRange(trimmed);
+        return kept;
     }
 
     private void AppendTextDelta(string current,

@@ -10,11 +10,7 @@ import {
 } from "@/features/benchmarks/models/BenchmarkChartData";
 import type { BenchmarkRunSummary } from "@/features/benchmarks/models/BenchmarkModels";
 import { noBenchmarkLaunchFacts } from "@/features/benchmarks/models/BenchmarkModels";
-import {
-	benchmarkFidelityFixture,
-	benchmarkRunDetailFixture,
-	benchmarkRunSummaryFixture,
-} from "@/features/benchmarks/test/BenchmarkTestFixtures";
+import { benchmarkFidelityFixture, benchmarkRunSummaryFixture } from "@/features/benchmarks/test/BenchmarkTestFixtures";
 
 // What these assert is not the arithmetic — it is which runs are allowed to become a point. A chart that plots a
 // warm-up, a failed run or two incomparable measurements on one axis is wrong in a way no amount of styling fixes.
@@ -69,6 +65,18 @@ describe("throughputScatterSeries", () => {
 		]);
 
 		expect(series).toHaveLength(2);
+	});
+
+	it("keeps two budgets of one otherwise identical run in separate cohorts, each carrying its budget", () => {
+		const series = throughputScatterSeries([
+			run({ id: "low", reasoningBudgetTokens: 256 }),
+			run({ id: "high", reasoningBudgetTokens: 4096 }),
+		]);
+
+		expect(series.map((cohort) => [cohort.reasoningBudgetTokens, cohort.stats?.count])).toEqual([
+			[256, 1],
+			[4096, 1],
+		]);
 	});
 
 	// The one-sample summary is kept; refusing to PRINT "± 0 (n=1)" is `formatStatSummary`'s job, and keeping the two
@@ -147,7 +155,7 @@ describe("fidelityBarSeries", () => {
 
 describe("reasoningBudgetSeries", () => {
 	const scored = (id: string, budget: number | null, quality: number | null) =>
-		benchmarkRunDetailFixture({ id, reasoningBudgetTokens: budget, qualityScore: quality });
+		benchmarkRunSummaryFixture({ id, reasoningBudgetTokens: budget, qualityScore: quality });
 
 	it("is empty while every run carries the same budget, which is the ordinary case", () => {
 		expect(reasoningBudgetSeries([scored("a", 2048, 70), scored("b", 2048, 80)])).toEqual([]);

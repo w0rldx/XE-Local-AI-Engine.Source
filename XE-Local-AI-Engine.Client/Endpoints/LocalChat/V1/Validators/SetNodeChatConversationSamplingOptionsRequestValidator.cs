@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq.Expressions;
 using FastEndpoints;
 using FluentValidation;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Models;
 
 /// <summary>Bounds every stored sampling knob to the range the chat's sampling dialog offers; a null knob is unset.</summary>
@@ -34,6 +35,7 @@ public sealed class SetNodeChatConversationSamplingOptionsRequestValidator : Val
             Range(static request => request.SamplingOptions!.PresencePenalty, -2f, 2f);
             Range(static request => request.SamplingOptions!.FrequencyPenalty, -2f, 2f);
             Range(static request => request.SamplingOptions!.NumCtx, 512, MaxContextTokens);
+            Range(static request => request.SamplingOptions!.ReasoningBudgetTokens, ReasoningBudgets.MinTokens, ReasoningBudgets.MaxTokens);
             RuleFor(static request => request.SamplingOptions!.Seed)
                 .Must(static seed => SeedValue.TryParse(seed, out var parsed, out _) && parsed is null or (>= -1 and <= int.MaxValue))
                 .WithMessage($"The seed must be a whole number from -1 to {int.MaxValue}.");

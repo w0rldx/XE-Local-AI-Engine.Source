@@ -313,6 +313,16 @@ export interface BenchmarkRunSummary {
 	toolCallCount: number | null;
 	/** Summed execution time of those calls, null when not measured. Display only, never a cell figure. */
 	toolTimeMs: number | null;
+	/** The budget this run was frozen with (a launch override or the project's), or null when none was pinned. */
+	reasoningBudgetTokens: number | null;
+	/** Reasoning tokens the turn produced, counted by the node; null = not measured (cloud route, older run). */
+	reasoningTokens: number | null;
+	/** The budget the provider actually put on the wire (last round), which a clamp can lower; null = unknown. */
+	appliedReasoningBudgetTokens: number | null;
+	/** Whether the reasoning reached the applied budget. Null = unknown or a multi-round turn, never "no". */
+	reasoningAtBudget: boolean | null;
+	/** Decoded tokens that were not reasoning, under the same null rule as {@link BenchmarkRunSummary.reasoningAtBudget}. */
+	nonReasoningOutputTokens: number | null;
 	lastStreamSequence: number;
 	version: number;
 	createdAtUtc: number;
@@ -327,8 +337,6 @@ export interface BenchmarkRunDetail extends BenchmarkRunSummary {
 	primaryErrorMessage: string | null;
 	startedAtUtc: number | null;
 	primaryCompletedAtUtc: number | null;
-	/** The budget this run was frozen with, or null when the project pinned none. */
-	reasoningBudgetTokens: number | null;
 	/**
 	 * Whether the model could actually honor it. False = the run carries a budget the runtime never applied (no
 	 * thinking mode), which is why the run can look as if the budget did nothing; null for a legacy row.

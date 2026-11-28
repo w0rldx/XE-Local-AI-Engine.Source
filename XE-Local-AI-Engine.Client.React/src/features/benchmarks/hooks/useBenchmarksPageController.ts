@@ -11,7 +11,6 @@ import {
 	useBenchmarkComparisons,
 	useBenchmarkProject,
 	useBenchmarkProjects,
-	useBenchmarkRunDetails,
 	useBenchmarkRuns,
 } from "@/features/benchmarks/queries/useBenchmarks";
 import { useBenchmarkTaskItems } from "@/features/benchmarks/queries/useBenchmarkTaskItems";
@@ -52,9 +51,6 @@ export function useBenchmarksPageController({ baseModelName, tunedModelName }: B
 		return fit?.isCurrent ? new Map(fit.scores.map((score) => [score.runId, score])) : undefined;
 	}, [comparisonsQuery.data]);
 	const { selectedRunIds, selectRun, toggleRun } = useBenchmarkRunSelection(runs, baseModelName, tunedModelName);
-	// Already in cache for the compare view and the live panes; read here for the frozen reasoning budget, which the
-	// list projection does not carry.
-	const selectedRunDetails = useBenchmarkRunDetails(selectedRunIds);
 	const [chartsOpen, setChartsOpen] = useState(false);
 	const runActions = useBenchmarkRunActions({ detail, selectedProjectId, runs, selectRun });
 	const { resetKvCacheType } = runActions;
@@ -89,7 +85,6 @@ export function useBenchmarksPageController({ baseModelName, tunedModelName }: B
 		selectedRunIds,
 		toggleRun,
 		selectRun,
-		selectedRunDetails,
 		chartsOpen,
 		setChartsOpen,
 		taskItemsQuery,

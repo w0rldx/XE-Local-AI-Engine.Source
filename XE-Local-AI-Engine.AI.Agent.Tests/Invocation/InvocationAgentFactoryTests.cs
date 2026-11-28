@@ -1734,6 +1734,60 @@ public sealed class InvocationAgentFactoryTests
             "an enforceable budget is the status quo and must report nothing");
     }
 
+    /// <summary>
+    ///     A pinned budget under thinking off must not reach the request: the llama.cpp client would write it over the
+    ///     thinking switch's zero budget and arm the reasoning control, so the model would think after all.
+    /// </summary>
+    [Test]
+    public async Task CreateAsync_ThinkingOffWithAPinnedBudget_SendsNoBudgetMarker()
+    {
+        await using var context = await CreatePinnedAsync("none", pinnedBudget: 4096);
+
+        var additionalProperties = AssertEx.NotNull(ResolveChatOptions(context).AdditionalProperties);
+        AssertEx.False(additionalProperties.ContainsKey(InvocationAgentFactory.LlamaReasoningBudgetMarkerKey));
+        AssertEx.Equal<object?>(true, additionalProperties[InvocationAgentFactory.LlamaDisableThinkingMarkerKey]);
+    }
+
+    [Test]
+    [Arguments("low", 4096)]
+    [Arguments("high", 4096)]
+    // A frozen benchmark replay may carry a budget below the input bound; the apply path keeps any positive pin.
+    [Arguments("medium", 64)]
+    public async Task CreateAsync_GradedEffortWithAPinnedBudget_SendsThePin(string effort, int pinnedBudget)
+    {
+        await using var context = await CreatePinnedAsync(effort, pinnedBudget);
+
+        var additionalProperties = AssertEx.NotNull(ResolveChatOptions(context).AdditionalProperties);
+        AssertEx.True(additionalProperties.TryGetValue<int>(InvocationAgentFactory.LlamaReasoningBudgetMarkerKey, out var budget));
+        AssertEx.Equal(pinnedBudget, budget);
+    }
+
+    [Test]
+    public async Task CreateAsync_AHugePinWithADefaultCapAndNoWindow_ClampsTheOutputLimitInsteadOfOverflowing()
+    {
+        await using var context = await CreatePinnedAsync("high", int.MaxValue, defaultMaxOutputTokens: 16_384);
+
+        AssertEx.Equal(int.MaxValue, ResolveChatOptions(context).MaxOutputTokens);
+    }
+
+    private static async Task<InvocationAgentContext> CreatePinnedAsync(string effort, int pinnedBudget, int? defaultMaxOutputTokens = null)
+    {
+        using var chatClient = new FakeChatClient();
+        return await CreateSut(chatClient).CreateAsync(new InvocationAgentDefinition
+        {
+            ModelId = "qwen3:8b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [],
+            ReasoningEffort = effort,
+            DefaultMaxOutputTokens = defaultMaxOutputTokens,
+            Sampling = new InvocationSamplingOptions
+            {
+                ReasoningBudgetTokens = pinnedBudget
+            }
+        });
+    }
+
     private static ChatOptions ResolveChatOptions(InvocationAgentContext context)
     {
         var runOptions = context.RunOptions as ChatClientAgentRunOptions

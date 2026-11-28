@@ -758,6 +758,10 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkCellItemResponse 
 	qualityScore?: number | null;
 	primaryStopReason?: string | null;
 	rankExclusionReason?: string | null;
+	reasoningTokens?: number | null;
+	durationMs?: number | null;
+	reasoningAtBudget?: boolean | null;
+	nonReasoningOutputTokens?: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkCellResponse = {
@@ -768,6 +772,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkCellResponse = {
 	agentDefinitionId?: string;
 	agentName: string;
 	agentVersion?: number;
+	reasoningBudgetTokens?: number | null;
 	repeatGroupId?: string | null;
 	repeatIndex?: number | null;
 	quality?: number | null;
@@ -1100,7 +1105,6 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunArtifactRouteR
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse =
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryResponse & {
 		outputParts?: unknown;
-		reasoningBudgetTokens?: number | null;
 		reasoningBudgetApplicable?: boolean | null;
 		judgeResult?: unknown;
 		primaryErrorMessage?: string | null;
@@ -1185,6 +1189,11 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryRespons
 	segmentCount?: number | null;
 	toolCallCount?: number | null;
 	toolTimeMs?: number | null;
+	reasoningBudgetTokens?: number | null;
+	reasoningTokens?: number | null;
+	appliedReasoningBudgetTokens?: number | null;
+	reasoningAtBudget?: boolean | null;
+	nonReasoningOutputTokens?: number | null;
 	userScore?: number | null;
 	lastStreamSequence?: number;
 	version?: number;
@@ -1392,6 +1401,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1RejectedBenchmarkRunBatchI
 	modelName: string;
 	kvCacheType?: string | null;
 	agentDefinitionId?: string | null;
+	reasoningBudgetTokens?: number | null;
 	code: string;
 	message: string;
 };
@@ -1418,6 +1428,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunBatchItem
 	modelName?: string;
 	kvCacheType?: string | null;
 	agentDefinitionId?: string | null;
+	reasoningBudgetTokens?: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunBatchRequest = {
@@ -1444,6 +1455,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunRequest =
 	warmup?: boolean;
 	repeatMode?: XeLocalAiEngineClientPersistenceEntitiesBenchmarkRepeatMode;
 	answerVarianceTemperature?: number | null;
+	reasoningBudgetTokens?: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1StartRunFidelityRequest = {
@@ -1454,6 +1466,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1StartedBenchmarkRunBatchIt
 	modelName: string;
 	kvCacheType?: string | null;
 	agentDefinitionId?: string | null;
+	reasoningBudgetTokens?: number | null;
 	runIds?: Array<string>;
 };
 
@@ -3624,6 +3637,8 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatContextWindowRespon
 	providerInputTokens?: number | null;
 	providerOutputTokens?: number | null;
 	providerReasoningTokens?: number | null;
+	requestedReasoningBudgetTokens?: number | null;
+	reasoningBudgetTokens?: number | null;
 	estimated?: XeLocalAiEngineClientEndpointsLocalChatV1NodeChatContextWindowEstimateResponse | null;
 	tools: Array<XeLocalAiEngineClientEndpointsLocalChatV1NodeChatContextWindowToolResponse>;
 	toolsWithheldCount: number;
@@ -3815,6 +3830,7 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatSamplingOptionsDto 
 	seed?: string | null;
 	stop?: Array<string> | null;
 	numCtx?: number | null;
+	reasoningBudgetTokens?: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatSelectedPathResponse = {

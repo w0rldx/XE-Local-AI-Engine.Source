@@ -1085,6 +1085,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                 TurnOutputTokens = state.TurnOutputTokens,
                 TurnTotalTokens = state.TurnTotalTokens,
                 TurnReasoningTokens = state.TurnReasoningTokens,
+                TurnUsageReported = state.TurnUsageReported,
                 Parent = new ExecutionParent
                 {
                     Kind = ExecutionParentKinds.IntegrationExecution,

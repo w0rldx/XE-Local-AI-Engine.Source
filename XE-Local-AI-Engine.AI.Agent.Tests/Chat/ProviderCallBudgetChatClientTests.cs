@@ -294,6 +294,140 @@ public sealed class ProviderCallBudgetChatClientTests
         AssertEx.Null(snapshot.ProviderReasoningTokens);
     }
 
+    /// <summary>
+    ///     Requested is the marker the hop received; applied is only what the consuming provider stamped on that round's
+    ///     usage, so a llama.cpp round shows both while a cloud round with the same inert marker shows no applied budget.
+    /// </summary>
+    [Test]
+    [Arguments(true, true)]
+    [Arguments(true, false)]
+    [Arguments(false, true)]
+    [Arguments(false, false)]
+    public async Task ARound_CarriesTheRequestedBudget_AndTheAppliedOneOnlyWhenTheProviderReportsIt(bool streaming, bool providerStampsIt)
+    {
+        using var inner = new CapturingChatClient
+        {
+            UsageFor = options => StampingUsage(options, providerStampsIt)
+        };
+        using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
+
+        var snapshot = await RunOneRoundAsync(sut, BudgetOptions(4096), streaming);
+
+        AssertEx.Equal(expected: 4096, snapshot.RequestedReasoningBudgetTokens);
+        AssertEx.Equal(providerStampsIt ? 2048 : (int?)null, snapshot.ReasoningBudgetTokens);
+    }
+
+    [Test]
+    public async Task ARoundWithoutABudget_RecordsNeitherBudget()
+    {
+        using var inner = new CapturingChatClient
+        {
+            UsageFor = options => StampingUsage(options, stamps: true)
+        };
+        using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
+
+        var snapshot = await RunOneRoundAsync(sut, LargeWindowOptions(), streaming: true);
+
+        AssertEx.Null(snapshot.RequestedReasoningBudgetTokens);
+        AssertEx.Null(snapshot.ReasoningBudgetTokens);
+    }
+
+    [Test]
+    public async Task ARoundAfterThinkingIsTurnedOff_ShowsTheRequestedBudgetButNoneApplied()
+    {
+        using var inner = new CapturingChatClient
+        {
+            UsageFor = options => StampingUsage(options, stamps: true)
+        };
+        using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
+
+        ProviderCallBudget budget;
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions()))
+        {
+            budget = AssertEx.NotNull(ProviderCallBudget.Current);
+            budget.TurnThinkingOff();
+            _ = await DrainAsync(sut.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hi")], BudgetOptions(4096)));
+        }
+
+        var snapshot = AssertEx.NotNull(budget.LastRoundContext);
+        AssertEx.Equal(expected: 4096, snapshot.RequestedReasoningBudgetTokens);
+        AssertEx.Null(snapshot.ReasoningBudgetTokens, "the thinking-off resend carries no budget marker, so the provider applied none");
+    }
+
+    [Test]
+    public async Task AContextSizeResend_CarriesTheResentRoundsAppliedBudget()
+    {
+        var store = new RecordingCalibrationStore();
+        using var inner = new RejectingThenStreamingChatClient(rejections: 1, LlamaOverflowBody)
+        {
+            Usage = new UsageDetails
+            {
+                OutputTokenCount = 5,
+                AdditionalCounts = new AdditionalPropertiesDictionary<long>
+                {
+                    [ProviderCallBudgetChatClient.AppliedReasoningBudgetUsageKey] = 900
+                }
+            }
+        };
+        using var sut = OverflowRecoveringClient(inner, store);
+        ProviderCallBudget budget;
+
+        using (ProviderCallBudget.BeginScope(ReportedContextBudgetOptions()))
+        {
+            budget = AssertEx.NotNull(ProviderCallBudget.Current);
+            _ = await DrainAsync(sut.GetStreamingResponseAsync(LongRound(), BudgetOptions(4096)));
+        }
+
+        AssertEx.Equal(expected: 2, inner.Calls);
+        var snapshot = AssertEx.NotNull(budget.LastRoundContext);
+        AssertEx.Equal(expected: 4096, snapshot.RequestedReasoningBudgetTokens);
+        AssertEx.Equal(expected: 900, snapshot.ReasoningBudgetTokens, "the resent round's usage lands on the snapshot that replaced the rejected one");
+    }
+
+    private static async Task<ProviderRoundContextSnapshot> RunOneRoundAsync(ProviderCallBudgetChatClient sut, ChatOptions options, bool streaming)
+    {
+        ProviderCallBudget budget;
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions()))
+        {
+            budget = AssertEx.NotNull(ProviderCallBudget.Current);
+            if (streaming)
+            {
+                _ = await DrainAsync(sut.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hi")], options));
+            }
+            else
+            {
+                _ = await sut.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options);
+            }
+        }
+
+        return AssertEx.NotNull(budget.LastRoundContext);
+    }
+
+    private static ChatOptions BudgetOptions(int budgetTokens)
+    {
+        var options = LargeWindowOptions();
+        options.AdditionalProperties![ReasoningOptionsResolver.LlamaReasoningBudgetMarkerKey] = budgetTokens;
+        return options;
+    }
+
+    // Stands in for the llama.cpp client: it stamps half the received marker as the budget it applied, and only when it got one.
+    private static UsageDetails StampingUsage(ChatOptions? options, bool stamps)
+    {
+        var usage = new UsageDetails
+        {
+            OutputTokenCount = 10
+        };
+        if (stamps && options?.AdditionalProperties?.TryGetValue<int>(ReasoningOptionsResolver.LlamaReasoningBudgetMarkerKey, out var marker) == true)
+        {
+            usage.AdditionalCounts = new AdditionalPropertiesDictionary<long>
+            {
+                [ProviderCallBudgetChatClient.AppliedReasoningBudgetUsageKey] = marker / 2
+            };
+        }
+
+        return usage;
+    }
+
     /// <summary>Streams one round per <paramref name="usagePerRound" /> entry (one round with the fake's usage when null) and returns the last snapshot.</summary>
     private static async Task<ProviderRoundContextSnapshot> StreamRoundsAsync(ProviderCallBudgetChatClient sut, CapturingChatClient inner, UsageDetails?[]? usagePerRound)
     {
@@ -1255,6 +1389,9 @@ public sealed class ProviderCallBudgetChatClientTests
 
         public int Calls { get; private set; }
 
+        /// <summary>Usage the accepted stream reports on a final update; null (the default) reports none.</summary>
+        public UsageDetails? Usage { get; init; }
+
         public List<ProviderRejectionException> Thrown { get; } = [];
 
         public List<int> MessageCounts { get; } = [];
@@ -1286,6 +1423,10 @@ public sealed class ProviderCallBudgetChatClientTests
 
             yield return new ChatResponseUpdate(ChatRole.Assistant, "first");
             yield return new ChatResponseUpdate(ChatRole.Assistant, "second");
+            if (Usage is { } usage)
+            {
+                yield return new ChatResponseUpdate(ChatRole.Assistant, (IList<AIContent>)[new UsageContent(usage)]);
+            }
         }
 
         public object? GetService(Type serviceType, object? serviceKey = null)
@@ -1495,13 +1636,16 @@ public sealed class ProviderCallBudgetChatClientTests
         /// </summary>
         public UsageDetails? ResponseUsage { get; set; }
 
+        /// <summary>When set, the usage reported for the options actually received, in place of <see cref="ResponseUsage" />.</summary>
+        public Func<ChatOptions?, UsageDetails?>? UsageFor { get; set; }
+
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
         {
             ReceivedMessageSets.Add([.. messages]);
             ReceivedOptions.Add(options);
             return Task.FromResult(new ChatResponse
             {
-                Usage = ResponseUsage
+                Usage = UsageFor is { } usageFor ? usageFor(options) : ResponseUsage
             });
         }
 
@@ -1512,7 +1656,7 @@ public sealed class ProviderCallBudgetChatClientTests
             ReceivedMessageSets.Add([.. messages]);
             ReceivedOptions.Add(options);
             await Task.Yield();
-            if (ResponseUsage is { } usage)
+            if ((UsageFor is { } usageFor ? usageFor(options) : ResponseUsage) is { } usage)
             {
                 yield return new ChatResponseUpdate(ChatRole.Assistant, (IList<AIContent>)[new UsageContent(usage)]);
             }

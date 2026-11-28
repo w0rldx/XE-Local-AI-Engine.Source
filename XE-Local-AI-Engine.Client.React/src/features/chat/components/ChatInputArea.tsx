@@ -9,6 +9,7 @@ import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStor
 import { DESKTOP_NAV_MIN_HEIGHT, isCompactViewport } from "@/core/layout/constants/LayoutBreakpoints";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import type { ModelOption } from "@/core/models/ModelOption";
+import { effectiveReasoningBudget, type ReasoningBudgetSettings } from "@/core/models/ReasoningBudgetDefaults";
 import { isImeComposing } from "@/core/ui/models/ImeComposition";
 import { usePendingComposerTextStore } from "@/core/ui/stores/PendingComposerTextStore";
 import { ChatAttachmentChips } from "@/features/chat/components/ChatAttachmentChips";
@@ -26,10 +27,12 @@ import type {
 	KnowledgeCollectionPicker,
 	ReasoningEffort,
 } from "@/features/chat/models/ChatModels";
+import { turnSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
 import { evaluateComposerSize, toDisplayKb } from "@/features/chat/models/ComposerSizeLimit";
 import { fitComposerToolbar } from "@/features/chat/models/ComposerToolbarFit";
 import type { ChatCommandOption } from "@/features/chat/models/SlashCommandModels";
 import { resolveSlashCommand } from "@/features/chat/models/SlashCommandResolver";
+import { useChatSamplingPreferencesStore } from "@/features/chat/stores/ChatSamplingPreferencesStore";
 
 // Before the composer has been measured (the first frame), the context-usage badge is dropped below this window
 // width: it is the least essential control and the composer needs the space more on very narrow phones. Once
@@ -75,6 +78,8 @@ interface ChatInputAreaProps {
 	// The open conversation's own sampling settings and their save; absent (a draft, a scoped or remote chat), the
 	// sampling dialog edits this browser's defaults instead.
 	conversationSampling?: ConversationSamplingTarget;
+	// The node's stored thinking-budget ladder; unset entries (or no settings yet) fall back to the shipped defaults.
+	reasoningBudgetSettings?: ReasoningBudgetSettings;
 	toolsEnabled?: boolean;
 	// Whether the active model has a local mmproj vision projector. Combined with the node-wide capability
 	// (showImageAttachmentControls) to gate whether the composer accepts image attachments — mirrors
@@ -138,6 +143,7 @@ export function ChatInputArea({
 	activeModelToolCapable = false,
 	conversationId = "",
 	conversationSampling,
+	reasoningBudgetSettings,
 	toolsEnabled = false,
 	activeModelMultimodal = false,
 	knowledgeBaseEnabled = false,
@@ -174,6 +180,22 @@ export function ChatInputArea({
 	const [isDragActive, setDragActive] = useState(false);
 	// Read developer mode directly from the global store — avoids prop-drilling through ChatDisplayShell.
 	const developerMode = useDeveloperModeStore((state) => state.developerMode);
+	const browserSamplingDefaults = useChatSamplingPreferencesStore((state) => state.options);
+	// The thinking budget each graded level requests on an enforceable llama.cpp model: the pin that rides the turn
+	// (turnSamplingOptions, the send path's rule) replaces the node's ladder on every level.
+	const budgetCapableModel = modelOptions.find((option) => option.value === selectedModel)?.isReasoningControllable === true;
+	const pinnedBudget = turnSamplingOptions(
+		conversationSampling?.options,
+		browserSamplingDefaults,
+		developerMode,
+	)?.reasoningBudgetTokens;
+	const reasoningBudgets: Partial<Record<ReasoningEffort, number>> | undefined = budgetCapableModel
+		? {
+				low: pinnedBudget ?? effectiveReasoningBudget(reasoningBudgetSettings, "low"),
+				medium: pinnedBudget ?? effectiveReasoningBudget(reasoningBudgetSettings, "medium"),
+				high: pinnedBudget ?? effectiveReasoningBudget(reasoningBudgetSettings, "high"),
+			}
+		: undefined;
 	// Same reasoning for the pending composer text: it is written by a page in another feature (a transcript sent
 	// from a transcription session) and arrives across a navigation, so there is no prop path to drill it down.
 	const pendingComposerText = usePendingComposerTextStore((state) => state.pendingText);
@@ -383,6 +405,7 @@ export function ChatInputArea({
 			reasoningEffort={reasoningEffort}
 			reasoningEnabled={reasoningEnabled}
 			reasoningMenuDisabled={reasoningMenuDisabled}
+			reasoningBudgets={reasoningBudgets}
 			onReasoningEffortChange={onReasoningEffortChange}
 			showLocalToolControls={showLocalToolControls}
 			conversationId={conversationId}
@@ -439,6 +462,7 @@ export function ChatInputArea({
 					/* The cloud sections of the model picker are the same list the model-selection hook resolves the
 					   selection against, so membership here needs no extra prop threaded down. */
 					cloudModelSelected={cloudModelOptions?.some((option) => option.value === selectedModel) === true}
+					reasoningBudgetSupported={budgetCapableModel}
 				/>
 			) : null}
 			{attachmentControlsAvailable ? (

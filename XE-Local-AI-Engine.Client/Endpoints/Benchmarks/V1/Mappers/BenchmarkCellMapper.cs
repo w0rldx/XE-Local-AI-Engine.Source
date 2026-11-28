@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.Mappers;
 
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 internal static class BenchmarkCellMapper
 {
@@ -18,6 +19,7 @@ internal static class BenchmarkCellMapper
                     AgentDefinitionId = cell.AgentDefinitionId,
                     AgentName = cell.AgentName,
                     AgentVersion = cell.AgentVersion,
+                    ReasoningBudgetTokens = cell.ReasoningBudgetTokens,
                     RepeatGroupId = cell.RepeatGroupId,
                     RepeatIndex = cell.RepeatIndex,
                     Quality = cell.Quality,
@@ -32,7 +34,11 @@ internal static class BenchmarkCellMapper
                             TaskItemIndex = item.TaskItemIndex,
                             QualityScore = item.QualityScore,
                             PrimaryStopReason = item.PrimaryStopReason,
-                            RankExclusionReason = item.RankExclusionReason
+                            RankExclusionReason = item.RankExclusionReason,
+                            ReasoningTokens = item.ReasoningTokens,
+                            DurationMs = item.DurationMs,
+                            ReasoningAtBudget = BenchmarkReasoningReadout.ReasoningAtBudget(item.ReasoningTokens, item.AppliedReasoningBudgetTokens, item.ToolCallCount, item.SegmentCount),
+                            NonReasoningOutputTokens = BenchmarkReasoningReadout.NonReasoningOutputTokens(item.GenerationTokens, item.ReasoningTokens, item.ToolCallCount, item.SegmentCount)
                         })
                     ]
                 })

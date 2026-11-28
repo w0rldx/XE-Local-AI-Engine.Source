@@ -190,6 +190,12 @@ public sealed partial class InvocationRunner
             sawReasoning: thinkingBuilder is { Length: > 0 },
             sawAnswer: !string.IsNullOrEmpty(textChunk) || update.FinishReason is not null);
 
+        // Marked before the usage below: an update's usage covers the reasoning it carries.
+        if (thinkingBuilder is { Length: > 0 })
+        {
+            stream.MarkReasoningCountPending();
+        }
+
         if (usage is not null)
         {
             // ACCUMULATED, not assigned — same reason as AddSegmentTimings above: one UsageContent arrives per
@@ -661,6 +667,12 @@ public sealed partial class InvocationRunner
 
         stream.ResponseBuilder.Clear().Append(content);
         stream.ReasoningBuilder.Append(reasoningSuffix);
+        if (leaked.Length > 0)
+        {
+            // The provider's count covers its reasoning channel only, never the text moved here.
+            stream.MarkReasoningUncounted();
+        }
+
         await transport.Dispatcher.ReportInvocationTextReclassifiedAsync(transport.InvocationId, content, reasoningSuffix);
         return answer.Length > 0;
     }

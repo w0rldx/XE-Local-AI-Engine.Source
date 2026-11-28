@@ -1,7 +1,10 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using System.Runtime.CompilerServices;
+using System.Text;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -53,6 +56,17 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     // In-process marker, duplicated from InvocationAgentDefinition.DefaultOutputCapMarkerKey for the same reason: MaxOutputTokens is the node's default limit.
     internal const string DefaultOutputCapMarkerKey = "xe.default_output_cap";
 
+    // UsageDetails.AdditionalCounts key carrying the thinking budget this client put on the wire, duplicated in
+    // ProviderCallBudgetChatClient.AppliedReasoningBudgetUsageKey, which reads it per round. See wiki 03.
+    internal const string AppliedReasoningBudgetUsageKey = "xe.llama.reasoning_budget_applied";
+
+    // UsageDetails.AdditionalCounts key set to 1 on a round that emitted reasoning but has no count, duplicated in
+    // InvocationRunner.UsageSnapshot.ReasoningUncountedUsageKey, so a turn total never sums only the counted rounds.
+    internal const string ReasoningUncountedUsageKey = "xe.llama.reasoning_uncounted";
+
+    // Bounds the /tokenize call that counts a round's reasoning; it sits before the final usage update, so it must stay short.
+    private static readonly TimeSpan ReasoningCountTimeout = TimeSpan.FromSeconds(2);
+
     // The OpenAI schema wrapper requires a name and llama-server ignores it, so an unnamed MEAI response format needs
     // any valid one rather than a meaningful one.
     private const string DefaultResponseSchemaName = "response";
@@ -72,16 +86,21 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     private readonly ITokenEstimatorCalibrationScheduler _calibrationScheduler;
     private readonly ILlamaServerEndpointBinding? _endpointBinding;
     private readonly ModelResidencyIntent _residencyIntent;
+    private readonly ILlamaServerNativeClient? _nativeClient;
+    private readonly ILogger _logger;
 
     private IChatClient? _inner;
     private Uri? _innerEndpoint;
 
+    /// <summary>Creates the deferred client; a null <paramref name="nativeClient" /> leaves an unreported reasoning token count null.</summary>
     public DeferredLlamaServerChatClient(ILlamaServerProcessSupervisor supervisor,
         string modelName,
         TimeSpan networkTimeout,
         ITokenEstimatorCalibrationScheduler? calibrationScheduler = null,
         ILlamaServerEndpointBinding? endpointBinding = null,
-        ModelResidencyIntent residencyIntent = ModelResidencyIntent.Interactive)
+        ModelResidencyIntent residencyIntent = ModelResidencyIntent.Interactive,
+        ILlamaServerNativeClient? nativeClient = null,
+        ILogger? logger = null)
     {
         ArgumentNullException.ThrowIfNull(supervisor);
         _supervisor = supervisor;
@@ -91,12 +110,15 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         _calibrationScheduler = calibrationScheduler ?? new NullTokenEstimatorCalibrationScheduler();
         _endpointBinding = endpointBinding;
         _residencyIntent = residencyIntent;
+        _nativeClient = nativeClient;
+        _logger = logger ?? NullLogger.Instance;
     }
 
     public async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
+        var appliedBudget = ResolveAppliedReasoningBudget(options);
         options = ApplyToolSchemaCompatibility(ApplyResponseSchemaPassthrough(ApplySamplingPassthrough(ApplyReasoningBudget(ApplyThinkingSwitch(options)))));
         var healed = false;
         var profilingReEnsures = 0;
@@ -138,9 +160,16 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
 
             try
             {
-                return StripLeadingThinkTags(await resolved.Client
-                                                           .GetResponseAsync(messages, ApplySlotPin(options, _residencyIntent, resolved.ParallelSlots), cancellationToken)
-                                                           .ConfigureAwait(false));
+                var response = StripLeadingThinkTags(await resolved.Client
+                                                                   .GetResponseAsync(messages, ApplySlotPin(options, _residencyIntent, resolved.ParallelSlots), cancellationToken)
+                                                                   .ConfigureAwait(false));
+                if (response.Usage is { } usage)
+                {
+                    var reasoning = string.Concat(response.Messages.SelectMany(static message => message.Contents).OfType<TextReasoningContent>().Select(static content => content.Text));
+                    await CompleteRoundUsageAsync(usage, reasoning, appliedBudget, resolved.BaseAddress, cancellationToken).ConfigureAwait(false);
+                }
+
+                return response;
             }
             catch (Exception ex) when (!cancellationToken.IsCancellationRequested && LlamaServerConnectionFailure.IsServerGone(ex))
             {
@@ -173,6 +202,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         ChatOptions? options = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        var appliedBudget = ResolveAppliedReasoningBudget(options);
         options = ApplyToolSchemaCompatibility(ApplyResponseSchemaPassthrough(ApplySamplingPassthrough(ApplyReasoningControl(ApplyReasoningBudget(ApplyThinkingSwitch(options))))));
         var reasoningControlArmed = IsReasoningControlArmed(options);
         var healed = false;
@@ -219,6 +249,8 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             var retry = false;
             var reasoningControlAdvertised = false;
             var stripper = new LeadingThinkTagStripper();
+            var reasoning = new StringBuilder();
+            var usageSeen = false;
             ChatResponseUpdate? lastUpdate = null;
             try
             {
@@ -268,6 +300,21 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
                             };
                         }
 
+                        // A round without a usage chunk still ends on its own usage: its count or the uncounted marker, the applied budget, and null
+                        // counts, so the turn never attributes an earlier round's usage to this one. That includes a round that streamed nothing.
+                        if (!usageSeen)
+                        {
+                            var roundUsage = new UsageDetails();
+                            await CompleteRoundUsageAsync(roundUsage, reasoning.ToString(), appliedBudget, resolved.BaseAddress, cancellationToken).ConfigureAwait(false);
+                            yield return new ChatResponseUpdate(lastUpdate?.Role ?? ChatRole.Assistant, [new UsageContent(roundUsage)])
+                            {
+                                ResponseId = lastUpdate?.ResponseId,
+                                MessageId = lastUpdate?.MessageId,
+                                ModelId = lastUpdate?.ModelId,
+                                CreatedAt = lastUpdate?.CreatedAt
+                            };
+                        }
+
                         yield break;
                     }
 
@@ -275,9 +322,19 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
                     lastUpdate = update;
                     foreach (var content in update.Contents)
                     {
-                        if (content is TextContent text)
+                        switch (content)
                         {
-                            text.Text = stripper.Push(text.Text);
+                            case TextContent text:
+                                text.Text = stripper.Push(text.Text);
+                                break;
+                            case TextReasoningContent thought:
+                                reasoning.Append(thought.Text);
+                                break;
+                            // llama.cpp reports usage on its final chunk, so the reasoning text is complete here.
+                            case UsageContent usage:
+                                usageSeen = true;
+                                await CompleteRoundUsageAsync(usage.Details, reasoning.ToString(), appliedBudget, resolved.BaseAddress, cancellationToken).ConfigureAwait(false);
+                                break;
                         }
                     }
 
@@ -406,14 +463,69 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     /// </remarks>
     internal static ChatOptions? ApplyReasoningBudget(ChatOptions? options)
     {
-        if (ReadInt32OrNull(options?.AdditionalProperties, ReasoningBudgetMarkerKey) is not { } markerTokens || markerTokens <= 0)
+        if (ResolveAppliedReasoningBudget(options) is not { } budgetTokens)
         {
             return options;
         }
 
-        var budgetTokens = ClampToGenerationRoom(markerTokens, options!);
         return OpenAICompatibleRequestBody.Chain(options!,
             body => OpenAICompatibleRequestBody.SetField(body, "$.reasoning_budget_tokens", budgetTokens));
+    }
+
+    /// <summary>
+    ///     The thinking budget <see cref="ApplyReasoningBudget" /> puts on the wire for <paramref name="options" />: the
+    ///     positive marker clamped to the generation room, or <see langword="null" /> when the turn carries none.
+    /// </summary>
+    internal static int? ResolveAppliedReasoningBudget(ChatOptions? options) =>
+        ReadInt32OrNull(options?.AdditionalProperties, ReasoningBudgetMarkerKey) is { } markerTokens && markerTokens > 0
+            ? ClampToGenerationRoom(markerTokens, options!)
+            : null;
+
+    /// <summary>
+    ///     Completes one round's usage in place: stamps the applied thinking budget under
+    ///     <see cref="AppliedReasoningBudgetUsageKey" />, and counts the round's reasoning text with the same server's
+    ///     <c>/tokenize</c> when the provider reported no reasoning token count.
+    /// </summary>
+    /// <remarks>
+    ///     The count is best effort: empty reasoning stays unmeasured (null, not 0), and a missing native client, the
+    ///     short timeout, a failed call or an unreadable body leave it null without failing the turn. Only the caller's
+    ///     own cancellation propagates. A round whose reasoning stays uncounted is stamped with
+    ///     <see cref="ReasoningUncountedUsageKey" />. It counts the text the parser emitted, without the closing think tag. See wiki 03.
+    /// </remarks>
+    private async Task CompleteRoundUsageAsync(UsageDetails usage, string reasoning, int? appliedBudget, Uri baseAddress, CancellationToken cancellationToken)
+    {
+        if (appliedBudget is { } applied)
+        {
+            (usage.AdditionalCounts ??= [])[AppliedReasoningBudgetUsageKey] = applied;
+        }
+
+        if (usage.ReasoningTokenCount is not null || reasoning.Length == 0)
+        {
+            return;
+        }
+
+        if (_nativeClient is not null)
+        {
+            try
+            {
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                timeout.CancelAfter(ReasoningCountTimeout);
+                using var response = await _nativeClient.TokenizeAsync(baseAddress, reasoning, timeout.Token).ConfigureAwait(false);
+                usage.ReasoningTokenCount = response.IsSuccessStatusCode ? await response.ReadTokenCountAsync(timeout.Token).ConfigureAwait(false) : null;
+            }
+            catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+            {
+                // Any failure but the caller's own cancellation leaves the count unmeasured: a Stop must still end the turn as cancelled.
+                _logger.LogDebug(exception, "Could not count the reasoning tokens of a {ModelName} round; the count stays unreported.", _modelName);
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+
+        if (usage.ReasoningTokenCount is null)
+        {
+            (usage.AdditionalCounts ??= [])[ReasoningUncountedUsageKey] = 1;
+        }
     }
 
     /// <summary>

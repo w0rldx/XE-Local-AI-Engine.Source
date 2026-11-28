@@ -142,6 +142,7 @@ public sealed class NodeChatInvocationPump : INodeChatInvocationPump
             TurnOutputTokens = state.TurnOutputTokens,
             TurnTotalTokens = state.TurnTotalTokens,
             TurnReasoningTokens = state.TurnReasoningTokens,
+            TurnUsageReported = state.TurnUsageReported,
             Parent = parent
         };
 
@@ -213,6 +214,8 @@ public sealed class NodeChatInvocationPump : INodeChatInvocationPump
             ProviderInputTokens = snapshot.ProviderInputTokens,
             ProviderOutputTokens = snapshot.ProviderOutputTokens,
             ProviderReasoningTokens = snapshot.ProviderReasoningTokens,
+            RequestedReasoningBudgetTokens = snapshot.RequestedReasoningBudgetTokens,
+            ReasoningBudgetTokens = snapshot.ReasoningBudgetTokens,
             Estimated = new NodeChatContextWindowEstimate
             {
                 SystemPromptTokens = snapshot.SystemPromptTokens,

@@ -23,6 +23,9 @@ public sealed class BenchmarkCellRecord
     /// <summary>The frozen agent's definition version, read from the cell's first run.</summary>
     public required long AgentVersion { get; init; }
 
+    /// <summary>The thinking budget the cell's runs were frozen with, read from its first run; two budgets of one model are two cells.</summary>
+    public required int? ReasoningBudgetTokens { get; init; }
+
     public required Guid? RepeatGroupId { get; init; }
 
     public required int? RepeatIndex { get; init; }
@@ -51,6 +54,19 @@ public sealed class BenchmarkCellItemRecord
     public required string? PrimaryStopReason { get; init; }
 
     public required string? RankExclusionReason { get; init; }
+
+    public required int? ReasoningTokens { get; init; }
+
+    public required int? AppliedReasoningBudgetTokens { get; init; }
+
+    public required int? GenerationTokens { get; init; }
+
+    public required int? ToolCallCount { get; init; }
+
+    /// <summary>Provider requests that reported timings; the readouts need exactly one.</summary>
+    public required int? SegmentCount { get; init; }
+
+    public required long? DurationMs { get; init; }
 }
 
 public sealed class BenchmarkCellPage

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.NodeSettings;
 
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
@@ -263,10 +264,10 @@ public sealed record StoredNodeSettings
     public const int MaxWebFetchMaxContentChars = 100_000;
 
     /// <summary>Lower bound for each per-effort reasoning budget; the shipped defaults are <c>ReasoningBudgets.Default</c>.</summary>
-    public const int MinReasoningBudgetTokens = 128;
+    public const int MinReasoningBudgetTokens = ReasoningBudgets.MinTokens;
 
     /// <summary>Upper bound for each per-effort reasoning budget; the launched window narrows it further per turn.</summary>
-    public const int MaxReasoningBudgetTokens = 131_072;
+    public const int MaxReasoningBudgetTokens = ReasoningBudgets.MaxTokens;
 
     /// <summary>Chat output-cap variant: cap the answer and say when it stopped at length (the shipped default).</summary>
     public const string ChatOutputCapModeCap = "cap";

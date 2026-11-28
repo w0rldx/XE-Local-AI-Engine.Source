@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
+using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
@@ -139,11 +140,12 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             throw new NodeChatInvalidRequestException("Message content must be provided.");
         }
 
-        // The per-send sampling seed rides the wire as a string (precision-safe). Reject a malformed value here, before
-        // any streaming begins, rather than silently dropping the override deeper in the invocation mapping.
-        if (!SeedValue.TryParse(request.SamplingOptions?.Seed, out _, out var seedError))
+        // A malformed seed (a precision-safe string) or an out-of-range thinking budget is refused before streaming, never dropped in the mapping.
+        if ((SeedValue.TryParse(request.SamplingOptions?.Seed, out _, out var seedError)
+                ? InvocationSamplingRules.ValidateReasoningBudget(request.SamplingOptions?.ReasoningBudgetTokens)
+                : seedError) is { } samplingError)
         {
-            throw new NodeChatInvalidRequestException(seedError);
+            throw new NodeChatInvalidRequestException(samplingError);
         }
 
         // Absent is "All collections"; anything else must normalise, because a hard pick is the knowledge isolation boundary.

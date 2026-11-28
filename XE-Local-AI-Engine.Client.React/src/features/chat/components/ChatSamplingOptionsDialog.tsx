@@ -7,7 +7,12 @@ import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { FieldInfo, FieldWithInfo } from "@/core/ui/components/FieldInfo/FieldInfo";
 import { chatErrorMessage } from "@/features/chat/models/ChatErrorMessage";
 import type { ChatSamplingOptions, SamplingFieldMeta } from "@/features/chat/models/ChatSamplingOptions";
-import { clampFieldMax, samplingFieldGroups, toWireSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
+import {
+	clampFieldMax,
+	reasoningBudgetField,
+	samplingFieldGroups,
+	toWireSamplingOptions,
+} from "@/features/chat/models/ChatSamplingOptions";
 import { useChatSamplingPreferencesStore } from "@/features/chat/stores/ChatSamplingPreferencesStore";
 
 // The open conversation's own settings (undefined: it follows this browser's defaults) and how to store them;
@@ -34,6 +39,8 @@ interface ChatSamplingOptionsDialogProps {
 	// True when the selected model is a cloud (Codex/Azure) one. Those requests never reach the local chat clients, so
 	// the knobs marked localRuntimeOnly have no wire field there and are disabled rather than silently ignored.
 	cloudModelSelected?: boolean;
+	// True when the selected model is a llama.cpp model that enforces a thinking budget; only then is the budget offered.
+	reasoningBudgetSupported?: boolean;
 }
 
 interface SamplingFieldRowProps {
@@ -151,6 +158,7 @@ export function ChatSamplingOptionsDialog({
 	conversation,
 	maxContextTokens,
 	cloudModelSelected = false,
+	reasoningBudgetSupported = false,
 }: ChatSamplingOptionsDialogProps) {
 	const { t } = useTranslation();
 	const defaults = useChatSamplingPreferencesStore((state) => state.options);
@@ -311,6 +319,23 @@ export function ChatSamplingOptionsDialog({
 						})}
 					</Stack>
 				))}
+
+				{reasoningBudgetSupported ? (
+					<Stack gap="md">
+						<Divider />
+						<Title order={2} size="h5">
+							{t("pages.chat.samplingOptions.groupReasoning", "Reasoning")}
+						</Title>
+						<SamplingFieldRow
+							meta={reasoningBudgetField}
+							numValue={options.reasoningBudgetTokens}
+							cappedMax={reasoningBudgetField.max}
+							unsupported={false}
+							onCommit={(val) => commitField(reasoningBudgetField.key, val)}
+							onReset={() => setField("reasoningBudgetTokens", undefined)}
+						/>
+					</Stack>
+				) : null}
 
 				{/* Stop sequences: one entry per line */}
 				<FieldWithInfo

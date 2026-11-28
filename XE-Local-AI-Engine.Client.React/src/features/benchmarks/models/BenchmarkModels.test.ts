@@ -38,6 +38,25 @@ describe("benchmark output mapping", () => {
 		]);
 	});
 
+	it("replays a reclassified final round to the parts the capture stored", () => {
+		// The event sequence BenchmarkInvocationCaptureTests.Reclassified_LiveEvents_ReplayToTheCapturedParts publishes.
+		const events = [
+			{ kind: "ReasoningDelta", payload: { content: "plan" } },
+			{ kind: "OutputDelta", payload: { content: "Let me look. " } },
+			{ kind: "ToolCall", payload: { toolCallId: "call-1", toolName: "web_search", arguments: "{}" } },
+			{ kind: "ToolResult", payload: { toolCallId: "call-1", toolName: "web_search", result: "results" } },
+			{ kind: "ReasoningDelta", payload: { content: "weigh" } },
+			{ kind: "OutputDelta", payload: { content: "scratch</think>The answer is 42." } },
+			{ kind: "OutputTrimmed", payload: { content: "Let me look. " } },
+			{ kind: "ReasoningDelta", payload: { content: "\n\nscratch" } },
+			{ kind: "OutputDelta", payload: { content: "The answer is 42." } },
+		].map((event, index) => benchmarkRunEventSchema.parse({ runId: "r", sequence: index + 1, ...event }));
+		const parts = events.reduce<BenchmarkOutputPart[]>(applyBenchmarkEvent, []);
+		expect(parts.map((part) => `${part.kind}:${part.content ?? part.toolCallId}`).join("|")).toBe(
+			"reasoning:plan|output:Let me look. |tool_call:call-1|tool_result:call-1|reasoning:weigh\n\nscratch|output:The answer is 42.",
+		);
+	});
+
 	it("combines tool request and result into the existing MessageParts contract", () => {
 		const parts: BenchmarkOutputPart[] = [
 			{ kind: "tool_call", toolCallId: "call-1", toolName: "clock", arguments: "{}" },

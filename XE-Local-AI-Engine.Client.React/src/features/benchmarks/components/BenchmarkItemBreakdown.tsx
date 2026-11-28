@@ -1,6 +1,7 @@
 import { Checkbox, Group, Stack, Table, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
+import { formatDurationSeconds } from "@/core/formatting/TimeFormatting";
 import { StatusBadge } from "@/core/ui/components/StatusBadge/StatusBadge";
 import type { BenchmarkCell } from "@/features/benchmarks/models/BenchmarkCells";
 import { missingBenchmarkCellItems } from "@/features/benchmarks/models/BenchmarkCells";
@@ -116,6 +117,29 @@ export function BenchmarkItemBreakdown({ cell, items, selectedRunIds, onToggleRu
 										</Group>
 										{detail === undefined ? null : <VerifierEvidence verifiers={detail.judge.verifiers} runId={answer.runId} />}
 									</Stack>
+								</Table.Td>
+								<Table.Td width={220}>
+									<Group gap={4} wrap="nowrap" justify="flex-end" data-testid={`benchmark-cell-item-reasoning-${answer.runId}`}>
+										<Text size="xs" c="dimmed">
+											{answer.reasoningTokens === null
+												? formatDurationSeconds(answer.durationMs)
+												: `${t("pages.benchmarks.cells.itemTokens", "{{reasoning}} reasoning · {{answer}} answer", {
+														reasoning: answer.reasoningTokens,
+														answer: answer.nonReasoningOutputTokens ?? "—",
+													})} · ${formatDurationSeconds(answer.durationMs)}`}
+										</Text>
+										{/* Unknown renders nothing: it is neither at nor below the budget. */}
+										{answer.reasoningAtBudget === null ? null : (
+											<StatusBadge
+												color={answer.reasoningAtBudget ? "yellow" : "gray"}
+												label={
+													answer.reasoningAtBudget
+														? t("pages.benchmarks.cells.atBudgetBadge", "at budget")
+														: t("pages.benchmarks.cells.belowBudgetBadge", "below budget")
+												}
+											/>
+										)}
+									</Group>
 								</Table.Td>
 								<Table.Td width={80} align="right">
 									<Text size="sm" fw={700} data-testid={`benchmark-cell-item-score-${answer.runId}`}>

@@ -905,7 +905,7 @@ XE-Local-AI-Engine.Tests/Providers/LlamaServer/DeferredLlamaServerEmbeddingGener
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/DeferredLlamaServerReasoningBudgetTests.cs|run|3
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/DeferredLlamaServerReasoningBudgetTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/DeferredLlamaServerResponseSchemaEntryPointTests.cs|block|1
-XE-Local-AI-Engine.Tests/Providers/LlamaServer/DeferredLlamaServerResponseSchemaEntryPointTests.cs|summary|2
+XE-Local-AI-Engine.Tests/Providers/LlamaServer/DeferredLlamaServerResponseSchemaEntryPointTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/DeferredLlamaServerStructuredOutputTests.cs|block|1
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/DeferredLlamaServerStructuredOutputTests.cs|run|1
 XE-Local-AI-Engine.Tests/Providers/LlamaServer/DeferredLlamaServerStructuredOutputTests.cs|summary|3

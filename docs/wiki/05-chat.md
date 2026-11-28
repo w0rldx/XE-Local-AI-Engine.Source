@@ -459,16 +459,12 @@ outbound body as `reasoning_budget_tokens` (clamped to the launched window by `C
 unspecified effort gets the rung of the default-effort node setting, shipped `low` (model matrix, 2026-10-04). Explicit `none` turns thinking off: `enable_thinking=false` plus `reasoning_budget_tokens: 0`, see
 [Agent Mode](04-agent-mode.md) ("The reasoning-effort matrix and the thinking budget").
 
-**Answer now.** A streaming request that carries the budget also carries `reasoning_control: true`
-(`DeferredLlamaServerChatClient.ApplyReasoningControl`), which arms llama-server's realtime reasoning control (pin
-b10201). The client stamps the stream's first update with the server address (`LlamaServerReasoningControl`); its
-`ResponseId` is the `chatcmpl-…` id. `InvocationRunner` tracks the turn under its assistant message id in
-`InvocationReasoningControl` and records whether the armed completion is still reasoning. The composer's "Answer
-now" button (shown beside Stop while a Thoughts segment streams on a local llama.cpp model whose template is
-budget-enforceable) posts `chat/messages/{messageId}/answer-now`, which sends
-`{"id", "action": "reasoning_end"}` to `/v1/chat/completions/control`: 204 ended, 404 no running turn, 409 not
-reasoning, not armed, or refused (the server's own text is logged, never returned). The turn keeps streaming; the
-model closes its reasoning and answers.
+**Shown, pinned, counted.** The reasoning menu shows "up to N tokens" per level on an enforceable model. A developer-mode
+per-conversation pin (`NodeChatSamplingOptionsDto.ReasoningBudgetTokens`, 128 to 131072, enforced on the PATCH, hub
+send, regenerate and Direct Inference) replaces the ladder budget, only while reasoning is on. Reasoning tokens are
+counted by `/tokenize`, since llama-server reports none. **Answer now** (`reasoning_control`, the "Answer now"
+button, `chat/messages/{messageId}/answer-now`) ends the reasoning early. All of it:
+[thinking budget reference](reference/05-thinking-budget.md).
 
 When a turn still ends with no answer after its final round reasoned, the `EmptyAnswer` notice reads
 "The model stopped while thinking before it could answer; its thoughts are kept above." — the reasoning is

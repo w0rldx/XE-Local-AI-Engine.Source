@@ -83,6 +83,7 @@ public sealed class BenchmarkEndpointTests
                            AgentDefinitionId = Guid.Parse("00000000-0000-0000-0000-0000000000cc"),
                            AgentName = "Variant agent",
                            AgentVersion = 7,
+                           ReasoningBudgetTokens = 512,
                            RepeatGroupId = null,
                            RepeatIndex = null,
                            Quality = 72,
@@ -90,15 +91,9 @@ public sealed class BenchmarkEndpointTests
                            RankExclusionReason = null,
                            Items =
                            [
-                               new BenchmarkCellItemRecord
-                               {
-                                   RunId = runId,
-                                   TaskItemId = itemId,
-                                   TaskItemIndex = 0,
-                                   QualityScore = 72,
-                                   PrimaryStopReason = "stop",
-                                   RankExclusionReason = null
-                               }
+                               CellItem(runId, itemId, reasoningTokens: 400, generationTokens: 900, toolCallCount: 2),
+                               CellItem(Guid.NewGuid(), Guid.NewGuid(), reasoningTokens: 511, generationTokens: 900, toolCallCount: 0),
+                               CellItem(Guid.NewGuid(), Guid.NewGuid(), reasoningTokens: null, generationTokens: 900, toolCallCount: 0)
                            ]
                        }
                    ],
@@ -129,7 +124,40 @@ public sealed class BenchmarkEndpointTests
         AssertEx.Contains(body, "\"agentDefinitionId\":\"00000000-0000-0000-0000-0000000000cc\"", StringComparison.Ordinal);
         AssertEx.Contains(body, "\"agentName\":\"Variant agent\"", StringComparison.Ordinal);
         AssertEx.Contains(body, "\"agentVersion\":7", StringComparison.Ordinal);
+
+        // The budget is a cell axis too. The applied budget is per round while the counts are turn sums, so an item that
+        // called a tool, or lacks a count, has neither an at-budget verdict nor an answer-token count.
+        AssertEx.Contains(body, "\"reasoningBudgetTokens\":512", StringComparison.Ordinal);
+        using var document = JsonDocument.Parse(body);
+        var items = document.RootElement.GetProperty("cells")[0].GetProperty("items");
+        AssertEx.Equal(expected: 400, items[0].GetProperty("reasoningTokens").GetInt32());
+        AssertEx.Equal(JsonValueKind.Null, items[0].GetProperty("reasoningAtBudget").ValueKind, "a tool round");
+        AssertEx.Equal(JsonValueKind.Null, items[0].GetProperty("nonReasoningOutputTokens").ValueKind, "a tool round");
+        AssertEx.True(items[1].GetProperty("reasoningAtBudget").GetBoolean(), "a single round at its budget");
+        AssertEx.Equal(expected: 389, items[1].GetProperty("nonReasoningOutputTokens").GetInt32(), "a single round");
+        AssertEx.Equal(JsonValueKind.Null, items[2].GetProperty("reasoningAtBudget").ValueKind, "an unknown reasoning count");
+        AssertEx.Equal(JsonValueKind.Null, items[2].GetProperty("nonReasoningOutputTokens").ValueKind, "an unknown reasoning count");
+
+        // The raw turn-sum generation count stays off the item so a reader cannot subtract past the single-round rule.
+        AssertEx.False(items[0].TryGetProperty("generationTokens", out _));
     }
+
+    private static BenchmarkCellItemRecord CellItem(Guid runId, Guid itemId, int? reasoningTokens, int? generationTokens, int toolCallCount) =>
+        new()
+        {
+            RunId = runId,
+            TaskItemId = itemId,
+            TaskItemIndex = 0,
+            QualityScore = 72,
+            PrimaryStopReason = "stop",
+            RankExclusionReason = null,
+            ReasoningTokens = reasoningTokens,
+            AppliedReasoningBudgetTokens = 512,
+            GenerationTokens = generationTokens,
+            ToolCallCount = toolCallCount,
+            SegmentCount = toolCallCount + 1,
+            DurationMs = 7000
+        };
 
     [Test]
     public async Task ListCells_ForAnUnknownProject_Is404()
@@ -251,6 +279,73 @@ public sealed class BenchmarkEndpointTests
         AssertEx.Equal(2, run.GetProperty("segmentCount").GetInt32());
         AssertEx.Equal(123 * 1000d / 456.5, run.GetProperty("promptTokensPerSecond").GetDouble());
         AssertEx.Equal(89 * 1000d / 1011.5, run.GetProperty("generationTokensPerSecond").GetDouble());
+    }
+
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task GetRunAndListRuns_SerializeTheReasoningFieldsOnceWithTheDerivedReadout(bool populated)
+    {
+        await using var context = CreateContext();
+        var run = Run(BenchmarkPrimaryStatus.Succeeded,
+                      throughput: new BenchmarkRunThroughput
+                      {
+                          GenerationTokens = 556,
+                          SegmentCount = 1
+                      }) with
+                  {
+                      ToolCallCount = 0,
+                      ReasoningBudgetTokens = populated ? 256 : null,
+                      ReasoningTokens = populated ? 255 : null,
+                      AppliedReasoningBudgetTokens = populated ? 256 : null
+                  };
+        context.Stores.Runs.GetRunAsync(RunId, Arg.Any<CancellationToken>()).Returns(run);
+        context.Stores.Projects.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project(isFrozen: true));
+        context.Stores.Runs.ListRunsAsync(ProjectId, 0, 50, null, true, Arg.Any<CancellationToken>())
+               .Returns(new BenchmarkRunPage
+               {
+                   Items = [run],
+                   TotalCount = 1,
+                   RankCohort = new BenchmarkRankCohort
+                   {
+                       PolicyRevision = null,
+                       ExecutionKey = null,
+                       CohortGeneration = null,
+                       RankedCount = 0,
+                       TotalScored = 0
+                   }
+               });
+        using var client = context.Factory.CreateClient();
+        using var detailRequest = Authorized(context.Factory, HttpMethod.Get, Api + $"/runs/{RunId}");
+        using var listRequest = Authorized(context.Factory, HttpMethod.Get, Api + $"/projects/{ProjectId}/runs?page=1&pageSize=50");
+        using var detailResponse = await client.SendAsync(detailRequest);
+        using var listResponse = await client.SendAsync(listRequest);
+        var detailBody = await detailResponse.Content.ReadAsStringAsync();
+        var listBody = await listResponse.Content.ReadAsStringAsync();
+
+        AssertEx.Equal(HttpStatusCode.OK, detailResponse.StatusCode, detailBody);
+        AssertEx.Equal(HttpStatusCode.OK, listResponse.StatusCode, listBody);
+        using var detail = JsonDocument.Parse(detailBody);
+        using var list = JsonDocument.Parse(listBody);
+        foreach (var read in new[] { detail.RootElement, list.RootElement.GetProperty("items")[0] })
+        {
+            AssertEx.Equal(1, read.EnumerateObject().Count(static property => property.Name == "reasoningBudgetTokens"), "declared once, inherited by the detail");
+            if (populated)
+            {
+                AssertEx.Equal(256, read.GetProperty("reasoningBudgetTokens").GetInt32());
+                AssertEx.Equal(255, read.GetProperty("reasoningTokens").GetInt32());
+                AssertEx.Equal(256, read.GetProperty("appliedReasoningBudgetTokens").GetInt32());
+                AssertEx.True(read.GetProperty("reasoningAtBudget").GetBoolean());
+                AssertEx.Equal(301, read.GetProperty("nonReasoningOutputTokens").GetInt32());
+            }
+            else
+            {
+                foreach (var name in new[] { "reasoningBudgetTokens", "reasoningTokens", "appliedReasoningBudgetTokens", "reasoningAtBudget", "nonReasoningOutputTokens" })
+                {
+                    AssertEx.Equal(JsonValueKind.Null, read.GetProperty(name).ValueKind, name + " is unknown on a historical run");
+                }
+            }
+        }
     }
 
     [Test]
@@ -430,6 +525,83 @@ public sealed class BenchmarkEndpointTests
             Arg.Any<BenchmarkFreezeScope?>(),
             Arg.Any<CancellationToken>());
         _ = context.RunFreeze.Received(1).StartAsync(Arg.Is<BenchmarkRunStartRequest>(start => start.AgentDefinitionId == variant && start.ExpectedProjectVersion == 5),
+            Arg.Any<BenchmarkFreezeScope?>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task StartRun_WithABudgetOverride_PassesItToTheFreeze()
+    {
+        await using var context = CreateContext();
+        context.RunFreeze.StartAsync(new BenchmarkRunStartRequest
+            {
+                ProjectId = ProjectId,
+                PrimaryModelName = "model",
+                ExpectedProjectVersion = 4,
+                KvCacheType = null,
+                RepeatCount = 1,
+                Warmup = false,
+                ReasoningBudgetTokens = 2048
+            },
+            Arg.Any<BenchmarkFreezeScope?>(),
+            Arg.Any<CancellationToken>()).Returns(Runs());
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs",
+            new
+            {
+                modelName = "model",
+                expectedProjectVersion = 4,
+                reasoningBudgetTokens = 2048
+            });
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode, "The freeze stub answers only the request that carries the override.");
+    }
+
+    [Test]
+    public async Task StartRunBatch_WithBudgetsAndAnInvalidOneBetween_StartsTheValidItemsAndEchoesEveryBudget()
+    {
+        await using var context = CreateContext();
+        context.RunFreeze.StartAsync(Arg.Is<BenchmarkRunStartRequest>(start => start.ReasoningBudgetTokens == 256), Arg.Any<BenchmarkFreezeScope?>(),
+                   Arg.Any<CancellationToken>())
+               .Returns(Runs(Run(), Run(), Run()));
+        context.RunFreeze.StartAsync(Arg.Is<BenchmarkRunStartRequest>(start => start.ReasoningBudgetTokens == 127), Arg.Any<BenchmarkFreezeScope?>(),
+                   Arg.Any<CancellationToken>())
+               .Returns<IReadOnlyList<BenchmarkRunRecord>>(_ => throw new BenchmarkValidationException("The reasoning budget override must be from 128 to 131072 tokens."));
+        context.RunFreeze.StartAsync(Arg.Is<BenchmarkRunStartRequest>(start => start.ReasoningBudgetTokens == 1024), Arg.Any<BenchmarkFreezeScope?>(),
+                   Arg.Any<CancellationToken>())
+               .Returns(Runs(Run(), Run(), Run()));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs/batch",
+            new
+            {
+                expectedProjectVersion = 4,
+                repeatCount = 2,
+                warmup = true,
+                items = new[] { 256, 127, 1024 }.Select(static budget => new
+                {
+                    modelName = "model-a",
+                    reasoningBudgetTokens = budget
+                }).ToArray()
+            });
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, body);
+        using var document = JsonDocument.Parse(body);
+        var started = document.RootElement.GetProperty("started");
+        AssertEx.Equal(expected: 2, started.GetArrayLength());
+        AssertEx.Equal(expected: 256, started[0].GetProperty("reasoningBudgetTokens").GetInt32());
+        AssertEx.Equal(expected: 1024, started[1].GetProperty("reasoningBudgetTokens").GetInt32());
+        var rejected = document.RootElement.GetProperty("rejected").EnumerateArray().Single();
+        AssertEx.Equal(expected: 127, rejected.GetProperty("reasoningBudgetTokens").GetInt32());
+        AssertEx.Equal(BenchmarkErrorCode.InvalidRequest.ToString(), rejected.GetProperty("code").GetString());
+        AssertEx.Contains(rejected.GetProperty("message").GetString() ?? string.Empty, "from 128 to 131072");
+        AssertEx.Equal(expected: 10L, document.RootElement.GetProperty("projectVersion").GetInt64(), "two items of three runs each; the refused one consumes no version");
+        _ = context.RunFreeze.Received(1).StartAsync(Arg.Is<BenchmarkRunStartRequest>(start => start.ReasoningBudgetTokens == 1024
+                                                                                                && start.ExpectedProjectVersion == 7
+                                                                                                && start.RepeatCount == 2
+                                                                                                && start.Warmup),
             Arg.Any<BenchmarkFreezeScope?>(),
             Arg.Any<CancellationToken>());
     }

@@ -30,6 +30,7 @@ const NUMERIC_SAMPLING_KEYS: ReadonlyArray<keyof Omit<ChatSamplingOptions, "stop
 	"frequencyPenalty",
 	"seed",
 	"numCtx",
+	"reasoningBudgetTokens",
 ];
 
 function readStoredOptions(): ChatSamplingOptions {

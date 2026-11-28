@@ -202,6 +202,8 @@ public sealed partial class BenchmarkStore
             ApplyThroughput(run, throughput: null);
             run.ToolCallCount = null;
             run.ToolTimeMs = null;
+            run.ReasoningTokens = null;
+            run.AppliedReasoningBudgetTokens = null;
             run.PrimaryCompletedAtUtc = cancelledAt;
             run.Version++;
             run.UpdatedAtUtc = cancelledAt;
@@ -224,6 +226,8 @@ public sealed partial class BenchmarkStore
         ApplyThroughput(run, command.Throughput);
         run.ToolCallCount = command.ToolCallCount;
         run.ToolTimeMs = command.ToolTimeMs;
+        run.ReasoningTokens = command.ReasoningTokens;
+        run.AppliedReasoningBudgetTokens = command.AppliedReasoningBudgetTokens;
         run.PrimaryCompletedAtUtc = now;
         run.Version++;
         run.UpdatedAtUtc = now;

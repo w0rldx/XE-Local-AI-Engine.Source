@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Events.Implementation;
@@ -21,6 +22,7 @@ using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Client.Services.Inference.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Testing.Fakes;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -381,6 +383,33 @@ public sealed class DirectInferenceServiceTests
     }
 
     [Test]
+    public async Task StreamAsync_StoppedWhileAProviderFinishesWithoutObservingTheStop_EndsCancelled_AndNeverDone()
+    {
+        // The provider's post-generation count waited out the Stop and then ended its stream normally.
+        var harness = new Harness(_ => IgnoringCancellation(Text("first"), Usage(), Finish()));
+        using var cancellation = new CancellationTokenSource();
+        List<DirectInferenceEvent> received = [];
+
+        await AssertEx.ThrowsAsync<OperationCanceledException>(async () =>
+        {
+            await foreach (var streamEvent in harness.Service.StreamAsync(new DirectInferenceRequest
+                           {
+                               ModelId = ModelId,
+                               Prompt = "Hi"
+                           }, cancellation.Token))
+            {
+                received.Add(streamEvent);
+                await cancellation.CancelAsync();
+            }
+        });
+
+        AssertEx.False(received.Exists(static streamEvent => streamEvent.Type == DirectInferenceEventTypes.Done), "a stopped request never reports Done");
+        var terminal = harness.Recorded.Single(static state => state.CompletedAt is not null);
+        AssertEx.Equal(InvocationStatus.Cancelled, terminal.Status);
+        AssertEx.Equal(FailureCategory.Cancelled, terminal.FailureCategory);
+    }
+
+    [Test]
     public async Task StreamAsync_PastTheDeadline_EndsWithOneTimeoutError_AndFreesTheSlot()
     {
         var harness = new Harness(null);
@@ -722,6 +751,66 @@ public sealed class DirectInferenceServiceTests
     }
 
     [Test]
+    public async Task StreamAsync_ABudgetForAnEnforceableThinkingLlamaModel_SendsTheMarkerAndAddsItToTheDefaultCap()
+    {
+        var harness = new Harness(Updates(Text("x"), Finish()));
+        harness.Capabilities.ResolveOrNullAsync(ModelId, Arg.Any<CancellationToken>()).Returns(new GgufModelCapabilities(SupportsThinking: true, SupportsTools: true, SupportsVision: false));
+
+        _ = await harness.Service.StreamAsync(BudgetRequest(ModelId, 512), CancellationToken.None).ToListAsync();
+
+        var options = AssertEx.NotNull(harness.SentOptions);
+        AssertEx.True(AssertEx.NotNull(options.AdditionalProperties).TryGetValue<int>(ReasoningOptionsResolver.LlamaReasoningBudgetMarkerKey, out var budget));
+        AssertEx.Equal(512, budget);
+        AssertEx.Equal(512 + 16_384, options.MaxOutputTokens, "the default cap holds the budget plus the answer");
+    }
+
+    [Test]
+    public async Task StreamAsync_ABudgetWithThinkingOff_SendsNoMarker()
+    {
+        var harness = new Harness(Updates(Text("x"), Finish()));
+        harness.Capabilities.ResolveOrNullAsync(ModelId, Arg.Any<CancellationToken>()).Returns(new GgufModelCapabilities(SupportsThinking: true, SupportsTools: true, SupportsVision: false));
+
+        _ = await harness.Service.StreamAsync(BudgetRequest(ModelId, 512, disableThinking: true), CancellationToken.None).ToListAsync();
+
+        var properties = AssertEx.NotNull(AssertEx.NotNull(harness.SentOptions).AdditionalProperties);
+        AssertEx.False(properties.ContainsKey(ReasoningOptionsResolver.LlamaReasoningBudgetMarkerKey));
+        AssertEx.Equal<object?>(true, properties[InvocationAgentFactory.LlamaDisableThinkingMarkerKey]);
+    }
+
+    [Test]
+    [Arguments("direct-inference-unenforceable-budget-model", true)]
+    [Arguments("direct-inference-non-thinking-budget-model", false)]
+    [Arguments("direct-inference-unknown-capabilities-budget-model", null)]
+    public async Task StreamAsync_ABudgetThatCannotBeEnforced_SendsNoMarkerAndReportsTheSkip(string modelId, bool? supportsThinking)
+    {
+        var harness = new Harness(Updates(Text("x"), Finish()), installedModelId: modelId);
+        if (supportsThinking is { } thinking)
+        {
+            harness.Capabilities.ResolveOrNullAsync(modelId, Arg.Any<CancellationToken>())
+                   .Returns(new GgufModelCapabilities(thinking, SupportsTools: true, SupportsVision: false, ReasoningBudgetEnforceable: !thinking));
+        }
+
+        _ = await harness.Service.StreamAsync(BudgetRequest(modelId, 512), CancellationToken.None).ToListAsync();
+
+        AssertEx.False(AssertEx.NotNull(AssertEx.NotNull(harness.SentOptions).AdditionalProperties).ContainsKey(ReasoningOptionsResolver.LlamaReasoningBudgetMarkerKey));
+        AssertEx.True(harness.Logger.Entries.Any(entry => entry.Message.Contains("cannot enforce a per-request thinking budget", StringComparison.Ordinal)
+                                                          && entry.Message.Contains(modelId, StringComparison.Ordinal)));
+    }
+
+    [Test]
+    [Arguments(100)]
+    [Arguments(131_073)]
+    public void StreamAsync_ABudgetOutsideTheSharedRange_IsRefused(int budgetTokens)
+    {
+        var harness = new Harness(Updates(Text("x"), Finish()));
+
+        var exception = AssertEx.Throws<DirectInferenceInvalidRequestException>(() => _ = harness.Service.StreamAsync(BudgetRequest(ModelId, budgetTokens), CancellationToken.None));
+
+        AssertEx.Equal("Reasoning budget must be from 128 to 131072.", exception.Message);
+        AssertEx.Equal(0, harness.ProviderCalls);
+    }
+
+    [Test]
     [Arguments(null)]
     [Arguments(false)]
     public async Task StreamAsync_ThinkingNotTurnedOff_SendsNoMarker(bool? disableThinking)
@@ -893,6 +982,18 @@ public sealed class DirectInferenceServiceTests
             RawRepresentation = ModelReaderWriter.Read<StreamingChatCompletionUpdate>(BinaryData.FromString(chunkJson))
         };
 
+    private static DirectInferenceRequest BudgetRequest(string modelId, int budgetTokens, bool? disableThinking = null) =>
+        new()
+        {
+            ModelId = modelId,
+            Prompt = "Hi",
+            DisableThinking = disableThinking,
+            SamplingOptions = new SamplingOptions
+            {
+                ReasoningBudgetTokens = budgetTokens
+            }
+        };
+
     private static ChatResponseUpdate Text(string text) =>
         new(ChatRole.Assistant, text);
 
@@ -919,6 +1020,16 @@ public sealed class DirectInferenceServiceTests
     private static Func<CancellationToken, IAsyncEnumerable<ChatResponseUpdate>> Failing(Exception exception) =>
         _ => Throwing(exception);
 
+    // Takes no token at all, so nothing in it can observe a cancellation.
+    private static async IAsyncEnumerable<ChatResponseUpdate> IgnoringCancellation(params ChatResponseUpdate[] updates)
+    {
+        foreach (var update in updates)
+        {
+            await Task.Yield();
+            yield return update;
+        }
+    }
+
     private static async IAsyncEnumerable<ChatResponseUpdate> Throwing(Exception exception)
     {
         await Task.Yield();
@@ -934,7 +1045,8 @@ public sealed class DirectInferenceServiceTests
     {
         private int _providerCalls;
 
-        public Harness(Func<CancellationToken, IAsyncEnumerable<ChatResponseUpdate>>? stream)
+        // The installed id is overridable because the budget-skip notice is once per model per process.
+        public Harness(Func<CancellationToken, IAsyncEnumerable<ChatResponseUpdate>>? stream, string installedModelId = ModelId)
         {
             Stream = stream ?? (_ => AsyncEnumerable.Empty<ChatResponseUpdate>());
             Gate = new GpuWorkGate(Broker);
@@ -954,11 +1066,16 @@ public sealed class DirectInferenceServiceTests
                 TimeProvider.System);
             // The gate is real over its seams: only ModelId is installed, and an unmapped id routes to llamacpp as in production.
             var models = Substitute.For<IGgufModelStore>();
-            models.ExistsAsync(ModelId, Arg.Any<CancellationToken>()).Returns(true);
+            models.ExistsAsync(installedModelId, Arg.Any<CancellationToken>()).Returns(true);
             Providers.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(LlamaServerProviderConstants.ProviderName);
             var trust = new FakeModelTrustResolver().Register("lan", "qwen3").Register("hosted", "qwen3", ExternalProviderLocality.Cloud);
-            Service = new DirectInferenceService(chatClient, Dispatcher, Gate, Broker, Settings, models, trust, Providers, Time, NullLogger<DirectInferenceService>.Instance);
+            Service = new DirectInferenceService(chatClient, Dispatcher, Gate, Broker, Settings, models, trust, Providers, Capabilities, Time, Logger);
         }
+
+        /// <summary>Unstubbed, it reports no GGUF capabilities (null), the safe case for a budget.</summary>
+        public IGgufModelCapabilityResolver Capabilities { get; } = Substitute.For<IGgufModelCapabilityResolver>();
+
+        public RecordingLogger<DirectInferenceService> Logger { get; } = new();
 
         /// <summary>The real broker the gate and the service share; empty, it behaves as a node that never warms a holder.</summary>
         public GpuIdleHolderBroker Broker { get; } = new();

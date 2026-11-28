@@ -40,6 +40,7 @@ public sealed class DirectInferenceService : IDirectInferenceService
     internal const int MaxTopLogprobs = 20;
 
     private readonly IChatClient _chatClient;
+    private readonly IGgufModelCapabilityResolver _capabilityResolver;
     private readonly IWorkerEventDispatcher _dispatcher;
     private readonly IGgufModelStore _ggufModelStore;
     private readonly IGpuWorkGate _gpuWorkGate;
@@ -58,10 +59,13 @@ public sealed class DirectInferenceService : IDirectInferenceService
         IGgufModelStore ggufModelStore,
         IModelTrustResolver modelTrustResolver,
         ILocalModelProviderResolver localModelProviderResolver,
+        IGgufModelCapabilityResolver capabilityResolver,
         TimeProvider timeProvider,
         ILogger<DirectInferenceService> logger)
     {
         ArgumentNullException.ThrowIfNull(chatClient);
+        ArgumentNullException.ThrowIfNull(capabilityResolver);
+        _capabilityResolver = capabilityResolver;
         ArgumentNullException.ThrowIfNull(dispatcher);
         ArgumentNullException.ThrowIfNull(gpuWorkGate);
         ArgumentNullException.ThrowIfNull(idlePreemption);
@@ -105,7 +109,7 @@ public sealed class DirectInferenceService : IDirectInferenceService
             AdditionalProperties = additionalProperties
         };
         InvocationSamplingRules.Apply(options, additionalProperties, sampling);
-        return StreamCoreAsync(modelId, messages, options, additionalProperties, request.TopLogprobs, request.DisableThinking == true, cancellationToken);
+        return StreamCoreAsync(modelId, messages, options, additionalProperties, request.TopLogprobs, request.DisableThinking == true, sampling?.ReasoningBudgetTokens, cancellationToken);
     }
 
     private static InvocationSamplingOptions? ValidateAndMapSampling(DirectInferenceRequest request)
@@ -146,6 +150,7 @@ public sealed class DirectInferenceService : IDirectInferenceService
         AdditionalPropertiesDictionary additionalProperties,
         int? topLogprobs,
         bool disableThinking,
+        int? reasoningBudgetTokens,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var invocationId = Guid.NewGuid();
@@ -170,6 +175,20 @@ public sealed class DirectInferenceService : IDirectInferenceService
         // An unknown id takes no default either: it is not installed, so the provider refuses it before generating anything.
         if (await NodeLocalModelGate.IsInstalledNodeLocalLlamaModelAsync(modelId, _ggufModelStore, _modelTrustResolver, _localModelProviderResolver, cancellationToken))
         {
+            // Before the cap, which adds the budget to the answer cap. The chat path's rule: thinking on, and a template
+            // llama.cpp can enforce a budget on; anything else is reported once and sent without one.
+            if (reasoningBudgetTokens is { } budgetTokens && !disableThinking)
+            {
+                if (await _capabilityResolver.ResolveOrNullAsync(modelId, cancellationToken) is { SupportsThinking: true, ReasoningBudgetEnforceable: true })
+                {
+                    additionalProperties[ReasoningOptionsResolver.LlamaReasoningBudgetMarkerKey] = budgetTokens;
+                }
+                else
+                {
+                    ReasoningBudgetSkipLog.ReportBudgetSkipped(_logger, modelId);
+                }
+            }
+
             ReasoningOptionsResolver.ApplyDefaultOutputCap(options, additionalProperties, DefaultMaxOutputTokens);
             if (disableThinking)
             {
@@ -304,6 +323,9 @@ public sealed class DirectInferenceService : IDirectInferenceService
                     }
                 }
             }
+
+            // A Stop the provider answered by ending its stream is still a Stop: the finally reports it cancelled, never Done.
+            cancellationToken.ThrowIfCancellationRequested();
 
             // A provider may answer its cancelled token by simply ending the enumeration: that is a timeout, not a finished answer.
             if (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)

@@ -1474,6 +1474,96 @@ public sealed class BenchmarkStoreTests : IDisposable
         AssertEx.Null(readBack.ToolTimeMs);
     }
 
+    [Test]
+    public async Task ReasoningColumns_RoundTripThroughEveryRunReadAndTheCells()
+    {
+        var databasePath = GetDatabasePath("reasoning-columns.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
+        var project = await store.CreateProjectAsync(CreateProject());
+        var run = await store.StartRunAsync(CreateRun(project) with
+        {
+            ReasoningBudgetTokens = 256
+        });
+        var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
+        _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand
+        {
+            RunId = run.Id,
+            ExpectedWorkVersion = claimed.Run.Version,
+            OutputPartsJson = Encoding.UTF8.GetBytes("[]"),
+            LastStreamSequence = 1,
+            EffectiveContextTokens = 4096,
+            DurationMs = 5000,
+            TotalTokens = null,
+            TokensPerSecond = null,
+            ToolCallCount = 0,
+            ReasoningTokens = 255,
+            AppliedReasoningBudgetTokens = 256,
+            Throughput = new BenchmarkRunThroughput
+            {
+                SegmentCount = 1
+            }
+        });
+
+        var detail = AssertEx.NotNull(await store.GetRunAsync(run.Id));
+        var paged = (await store.ListRunsAsync(project.Id, skip: 0, take: 10)).Items.Single(item => item.Id == run.Id);
+        var exported = (await store.ListAllRunsAsync(project.Id)).Items.Single(item => item.Id == run.Id);
+        var cell = (await store.ListCellsAsync(project.Id)).Cells.Single();
+
+        foreach (var read in new[] { detail, paged, exported })
+        {
+            AssertEx.Equal<int?>(256, read.ReasoningBudgetTokens, "every run read carries the frozen budget flat");
+            AssertEx.Equal<int?>(255, read.ReasoningTokens);
+            AssertEx.Equal<int?>(256, read.AppliedReasoningBudgetTokens);
+        }
+
+        AssertEx.Equal<int?>(256, cell.ReasoningBudgetTokens, "a cell names the budget its runs were frozen with");
+        var item = cell.Items.Single();
+        AssertEx.Equal<int?>(255, item.ReasoningTokens);
+        AssertEx.Equal<int?>(256, item.AppliedReasoningBudgetTokens);
+        AssertEx.Equal<int?>(0, item.ToolCallCount);
+        AssertEx.Equal<int?>(1, item.SegmentCount, "the readouts gate on it");
+        AssertEx.Equal<long?>(5000, item.DurationMs);
+    }
+
+    [Test]
+    public async Task ReasoningColumns_ACancelledPrimaryKeepsTheFrozenBudgetAndNoMeasurement()
+    {
+        var databasePath = GetDatabasePath("reasoning-columns-cancel.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
+        var project = await store.CreateProjectAsync(CreateProject());
+        var run = await store.StartRunAsync(CreateRun(project) with
+        {
+            ReasoningBudgetTokens = 512
+        });
+        var primary = AssertEx.NotNull(await store.ClaimNextAsync());
+
+        _ = await store.CancelAsync(run.Id, primary.Run.Version);
+        var completed = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand
+        {
+            RunId = run.Id,
+            ExpectedWorkVersion = primary.Version,
+            OutputPartsJson = Encoding.UTF8.GetBytes("[]"),
+            LastStreamSequence = 9,
+            EffectiveContextTokens = 4096,
+            DurationMs = 10,
+            TotalTokens = null,
+            TokensPerSecond = null,
+            ReasoningTokens = 300,
+            AppliedReasoningBudgetTokens = 512
+        });
+
+        AssertEx.Equal(BenchmarkPrimaryStatus.Cancelled, completed.PrimaryStatus);
+        AssertEx.Equal<int?>(512, completed.ReasoningBudgetTokens, "the frozen budget is an input, not a measurement");
+        AssertEx.Null(completed.ReasoningTokens);
+        AssertEx.Null(completed.AppliedReasoningBudgetTokens);
+    }
+
     private NodeChatDbContext CreateContext(string path) =>
         AgentDefinitionTestContextFactory.Create(path, _keyHolder);
 

@@ -134,6 +134,7 @@ describe("BenchmarkLaunchMatrix", () => {
 					modelName: "owner/Repo:Q8_0",
 					kvCacheType: "q4_0",
 					agentDefinitionId: null,
+					reasoningBudgetTokens: null,
 					code: "UnsupportedKvCacheType",
 					message: "Needs a GPU build.",
 				},
@@ -205,6 +206,7 @@ describe("BenchmarkLaunchMatrix", () => {
 					modelName: "owner/Repo:Q8_0",
 					kvCacheType: null,
 					agentDefinitionId: "agent-variant",
+					reasoningBudgetTokens: null,
 					code: "InvalidRequest",
 					message: "Not a single agent.",
 				},
@@ -213,6 +215,72 @@ describe("BenchmarkLaunchMatrix", () => {
 
 		expect(screen.getByTestId("benchmark-matrix-rejected").textContent).toContain(
 			"owner/Repo:Q8_0 · auto · Assistant (terse) — Not a single agent.",
+		);
+	});
+
+	const addBudget = (value: string): void => {
+		// TagsInput commits on Enter only while its own combobox is open, so open it first.
+		fireEvent.click(screen.getByTestId("benchmark-matrix-budgets"));
+		fireEvent.change(screen.getByTestId("benchmark-matrix-budgets"), { target: { value } });
+		fireEvent.keyDown(screen.getByTestId("benchmark-matrix-budgets"), { key: "Enter" });
+	};
+
+	// Each budget runs every model × KV × agent combination again; the project's budget rides as an OMITTED field.
+	it("multiplies the combinations by the thinking budgets and sends a budget only when one is typed", () => {
+		const { onSubmit } = renderMatrix({ leafItemCount: 2 });
+
+		fireEvent.click(screen.getByTestId("benchmark-matrix-model-owner/Repo:Q4_K_M"));
+		fireEvent.click(screen.getByTestId("benchmark-matrix-start"));
+		expect(onSubmit.mock.calls[0]?.[0].items).toEqual([{ modelName: "owner/Repo:Q4_K_M" }]);
+
+		addBudget("512");
+		addBudget("4096");
+
+		expect(screen.getByTestId("benchmark-matrix-summary").textContent).toBe("2 combinations × 2 task items × 1 runs = 4 runs");
+
+		fireEvent.click(screen.getByTestId("benchmark-matrix-start"));
+
+		expect(onSubmit.mock.calls[1]?.[0].items).toEqual([
+			{ modelName: "owner/Repo:Q4_K_M", reasoningBudgetTokens: 512 },
+			{ modelName: "owner/Repo:Q4_K_M", reasoningBudgetTokens: 4096 },
+		]);
+	});
+
+	// The node refuses a budget outside 128..131072, so the dialog drops it and says why rather than sending it.
+	it("refuses a budget outside the node's bounds", () => {
+		renderMatrix();
+
+		addBudget("127");
+		addBudget("131073");
+		addBudget("2048");
+
+		const input = screen.getByTestId("benchmark-matrix-budgets").closest(".mantine-InputWrapper-root");
+		expect(input?.textContent).toContain("2048");
+		expect(input?.textContent).not.toContain("131073");
+		fireEvent.click(screen.getByTestId("benchmark-matrix-model-owner/Repo:Q4_K_M"));
+		expect(screen.getByTestId("benchmark-matrix-summary").textContent).toBe("1 combinations × 1 task items × 1 runs = 1 runs");
+
+		addBudget("100");
+
+		expect(input?.textContent).toContain("A budget is a whole number from 128 to 131072.");
+	});
+
+	it("names the thinking budget of a refused combination", () => {
+		renderMatrix({
+			rejected: [
+				{
+					modelName: "owner/Repo:Q8_0",
+					kvCacheType: null,
+					agentDefinitionId: null,
+					reasoningBudgetTokens: 4096,
+					code: "InvalidRequest",
+					message: "The model cannot enforce a thinking budget.",
+				},
+			],
+		});
+
+		expect(screen.getByTestId("benchmark-matrix-rejected").textContent).toContain(
+			"owner/Repo:Q8_0 · auto · 4096 thinking tokens — The model cannot enforce a thinking budget.",
 		);
 	});
 

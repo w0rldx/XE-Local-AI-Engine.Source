@@ -297,15 +297,34 @@ export function BenchmarkRunPane({
 					<Text size="sm">
 						{t("pages.benchmarks.run.samplingSeed", "Seed")}: <b>{run.samplingSeed ?? "—"}</b>
 					</Text>
-					{run.reasoningBudgetTokens === null ? null : (
+					{/* An unpinned run can still get an effort-ladder budget, so the applied value alone keeps the row. */}
+					{run.reasoningBudgetTokens === null && run.appliedReasoningBudgetTokens === null ? null : (
 						<Text size="sm">
-							{t("pages.benchmarks.project.reasoningBudget", "Reasoning budget (tokens)")}: <b>{run.reasoningBudgetTokens}</b>
+							{t("pages.benchmarks.project.reasoningBudget", "Reasoning budget (tokens)")}:{" "}
+							<b>{run.reasoningBudgetTokens ?? "—"}</b>
 							{/* A budget the runtime never applied is why the run can look as if it did nothing. Saying so
 							    beats letting the operator raise a number that was never read. */}
-							{run.reasoningBudgetApplicable === false ? (
+							{run.reasoningBudgetApplicable === false && run.appliedReasoningBudgetTokens === null ? (
 								<Text span={true} c="dimmed" data-testid="benchmark-run-budget-not-applicable">
 									{" "}
 									{t("pages.benchmarks.run.reasoningBudgetNotApplicable", "not applied — model has no thinking mode")}
+								</Text>
+							) : (
+								// What the provider put on the wire, which a clamp can lower; "—" when it was not recorded.
+								<Text span={true} c="dimmed" data-testid="benchmark-run-budget-applied">
+									{` · ${t("pages.benchmarks.run.reasoningBudgetApplied", "applied {{tokens}}", {
+										tokens: run.appliedReasoningBudgetTokens ?? "—",
+									})}`}
+								</Text>
+							)}
+						</Text>
+					)}
+					{run.reasoningTokens === null ? null : (
+						<Text size="sm" data-testid="benchmark-run-reasoning-tokens">
+							{t("pages.benchmarks.run.reasoningTokens", "Reasoning tokens")}: <b>{run.reasoningTokens}</b>
+							{run.reasoningAtBudget === true ? (
+								<Text span={true} c="dimmed">
+									{` · ${t("pages.benchmarks.cells.atBudgetBadge", "at budget")}`}
 								</Text>
 							) : null}
 						</Text>

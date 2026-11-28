@@ -3,14 +3,18 @@ import { IconChevronDown, IconChevronRight, IconRocket } from "@tabler/icons-rea
 import { Fragment, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { formatDurationSeconds } from "@/core/formatting/TimeFormatting";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { StatusBadge } from "@/core/ui/components/StatusBadge/StatusBadge";
 import { BenchmarkItemBreakdown } from "@/features/benchmarks/components/BenchmarkItemBreakdown";
 import type { BenchmarkCell, BenchmarkNiahRecall } from "@/features/benchmarks/models/BenchmarkCells";
 import {
 	benchmarkCellAgentLabel,
+	benchmarkCellBudgetLabel,
 	benchmarkNiahRecall,
+	benchmarkReasoningReadout,
 	hasBenchmarkAgentVariants,
+	hasBenchmarkBudgetVariants,
 	missingBenchmarkCellItems,
 	sortBenchmarkCells,
 } from "@/features/benchmarks/models/BenchmarkCells";
@@ -116,6 +120,10 @@ export function BenchmarkCellsTable({
 	const displayOnly = scorableItemCount === 0;
 	// The agent column appears only once the cells ran more than one agent definition; otherwise it repeats one name.
 	const showAgent = hasBenchmarkAgentVariants(cells);
+	// Same rule for the budget column; the reasoning columns appear once any answer reported a reasoning count.
+	const showBudget = hasBenchmarkBudgetVariants(cells);
+	const showReasoning = cells.some((cell) => cell.items.some((item) => item.reasoningTokens !== null));
+	const columnCount = 8 + (showAgent ? 1 : 0) + (showBudget ? 1 : 0) + (showReasoning ? 3 : 0);
 
 	if (cells.length === 0) {
 		return <EmptyState message={t("pages.benchmarks.cells.empty", "No measured combinations yet.")} size="sm" />;
@@ -138,7 +146,7 @@ export function BenchmarkCellsTable({
 					items: scorableItemCount,
 				})}
 			</Text>
-			<Table.ScrollContainer minWidth={760}>
+			<Table.ScrollContainer minWidth={showReasoning ? 1040 : 840}>
 				<Table striped={true} highlightOnHover={true} verticalSpacing="sm" data-testid="benchmark-cells-table">
 					<Table.Thead>
 						<Table.Tr>
@@ -146,9 +154,18 @@ export function BenchmarkCellsTable({
 							<Table.Th>{t("pages.benchmarks.rank.rank", "Rank")}</Table.Th>
 							<Table.Th>{t("pages.benchmarks.rank.model", "Model")}</Table.Th>
 							{showAgent ? <Table.Th>{t("pages.benchmarks.cells.agent", "Agent")}</Table.Th> : null}
+							{showBudget ? <Table.Th>{t("pages.benchmarks.cells.budget", "Thinking budget")}</Table.Th> : null}
 							<Table.Th>{t("pages.benchmarks.cells.quality", "Suite mean")}</Table.Th>
 							<Table.Th>{t("pages.benchmarks.cells.items", "Items")}</Table.Th>
 							<Table.Th>{t("pages.benchmarks.cells.recall", "Recall")}</Table.Th>
+							{showReasoning ? (
+								<>
+									<Table.Th>{t("pages.benchmarks.cells.reasoningTokens", "Reasoning tokens (mean)")}</Table.Th>
+									<Table.Th>{t("pages.benchmarks.cells.answerTokens", "Answer tokens (mean)")}</Table.Th>
+									<Table.Th>{t("pages.benchmarks.cells.atBudget", "At budget")}</Table.Th>
+								</>
+							) : null}
+							<Table.Th>{t("pages.benchmarks.cells.medianDuration", "Median time")}</Table.Th>
 							<Table.Th>{t("pages.benchmarks.rank.actions", "Actions")}</Table.Th>
 						</Table.Tr>
 					</Table.Thead>
@@ -158,6 +175,7 @@ export function BenchmarkCellsTable({
 							const quant = benchmarkQuantTag(cell.primaryModelName);
 							const recall = benchmarkNiahRecall(cell, items, verifiersByRunId);
 							const answered = scorable.length - missingBenchmarkCellItems(cell, scorable).length;
+							const reasoning = benchmarkReasoningReadout(cell.items);
 							return (
 								<Fragment key={cell.cellKey}>
 									<Table.Tr data-testid={`benchmark-cell-row-${cell.cellKey}`}>
@@ -252,6 +270,13 @@ export function BenchmarkCellsTable({
 												</Text>
 											</Table.Td>
 										) : null}
+										{showBudget ? (
+											<Table.Td>
+												<Text size="sm" data-testid={`benchmark-cell-budget-${cell.cellKey}`}>
+													{benchmarkCellBudgetLabel(cell, t)}
+												</Text>
+											</Table.Td>
+										) : null}
 										<Table.Td>
 											<Text size="sm" fw={700} data-testid={`benchmark-cell-quality-${cell.cellKey}`}>
 												{cell.quality ?? "—"}
@@ -269,6 +294,36 @@ export function BenchmarkCellsTable({
 											{/* Reported, never averaged in: the mean beside it is a mean of answer quality. */}
 											<RecallCell recall={recall} cellKey={cell.cellKey} />
 										</Table.Td>
+										{showReasoning ? (
+											<>
+												<Table.Td>
+													<Text size="sm" data-testid={`benchmark-cell-reasoning-${cell.cellKey}`}>
+														{reasoning.meanReasoningTokens === null ? "—" : Math.round(reasoning.meanReasoningTokens)}
+													</Text>
+												</Table.Td>
+												<Table.Td>
+													<Text size="sm" data-testid={`benchmark-cell-answer-tokens-${cell.cellKey}`}>
+														{reasoning.meanNonReasoningTokens === null ? "—" : Math.round(reasoning.meanNonReasoningTokens)}
+													</Text>
+												</Table.Td>
+												<Table.Td>
+													{/* The denominator is the answers where it is known; an unknown is never read as "no". */}
+													<Text size="sm" data-testid={`benchmark-cell-at-budget-${cell.cellKey}`}>
+														{reasoning.atBudgetMeasured === 0
+															? "—"
+															: t("pages.benchmarks.cells.atBudgetValue", "{{count}} of {{measured}}", {
+																	count: reasoning.atBudget,
+																	measured: reasoning.atBudgetMeasured,
+																})}
+													</Text>
+												</Table.Td>
+											</>
+										) : null}
+										<Table.Td>
+											<Text size="sm" data-testid={`benchmark-cell-duration-${cell.cellKey}`}>
+												{formatDurationSeconds(reasoning.medianDurationMs)}
+											</Text>
+										</Table.Td>
 										<Table.Td>
 											<Button
 												variant="subtle"
@@ -284,7 +339,7 @@ export function BenchmarkCellsTable({
 									</Table.Tr>
 									{isOpen ? (
 										<Table.Tr>
-											<Table.Td colSpan={showAgent ? 8 : 7}>
+											<Table.Td colSpan={columnCount}>
 												<BenchmarkItemBreakdown
 													cell={cell}
 													items={items}

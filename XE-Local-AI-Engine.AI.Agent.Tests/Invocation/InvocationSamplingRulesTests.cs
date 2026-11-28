@@ -101,7 +101,7 @@ public sealed class InvocationSamplingRulesTests
             Seed = -1,
             NumCtx = 512,
             MaxOutputTokens = 1024,
-            ReasoningBudgetTokens = 1
+            ReasoningBudgetTokens = ReasoningBudgets.MinTokens
         };
         var options = new ChatOptions();
         AdditionalPropertiesDictionary additionalProperties = [];
@@ -131,6 +131,23 @@ public sealed class InvocationSamplingRulesTests
         AssertEx.Equal(3, errors.Count);
         AssertEx.Contains(errors, "Temperature must be between 0 and 2.");
         AssertEx.Contains(errors, "Top K must be greater than 0.");
-        AssertEx.Contains(errors, "Reasoning budget must be greater than 0.");
+        AssertEx.Contains(errors, "Reasoning budget must be from 128 to 131072.");
+    }
+
+    [Test]
+    [Arguments(127, false)]
+    [Arguments(128, true)]
+    [Arguments(131_072, true)]
+    [Arguments(131_073, false)]
+    public void Validate_BoundsTheReasoningBudgetToTheSharedRange(int budgetTokens, bool valid)
+    {
+        // Tighter than the apply path on purpose: InvocationAgentFactory still applies a frozen replay's smaller budget.
+        var errors = InvocationSamplingRules.Validate(new InvocationSamplingOptions
+        {
+            ReasoningBudgetTokens = budgetTokens
+        });
+
+        AssertEx.Equal(valid ? 0 : 1, errors.Count);
+        AssertEx.Equal<string?>(valid ? null : "Reasoning budget must be from 128 to 131072.", InvocationSamplingRules.ValidateReasoningBudget(budgetTokens));
     }
 }

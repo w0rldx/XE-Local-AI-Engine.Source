@@ -89,6 +89,24 @@ public sealed class BenchmarkCompareEndpointTests
     }
 
     [Test]
+    public async Task Compare_TwoBudgetsOfOneModel_NameTheirBudgetsAndDiff()
+    {
+        await using var context = Seeded([
+            Cell("cell:low", 70, [Item(0, 70), Item(1, 60), Item(2, 80), Item(3, 50)], reasoningBudgetTokens: 256),
+            Cell("cell:high", 76, [Item(0, 76), Item(1, 66), Item(2, 86), Item(3, 56)], reasoningBudgetTokens: 4096)
+        ]);
+
+        var (status, content) = await GetAsync(context, "cellKeys=cell:low&cellKeys=cell:high");
+
+        AssertEx.Equal(HttpStatusCode.OK, status);
+        using var document = JsonDocument.Parse(content);
+        var cells = document.RootElement.GetProperty("cells");
+        AssertEx.Equal(256, cells[0].GetProperty("reasoningBudgetTokens").GetInt32());
+        AssertEx.Equal(4096, cells[1].GetProperty("reasoningBudgetTokens").GetInt32());
+        AssertEx.Equal(-6d, document.RootElement.GetProperty("pairedDeltas")[0].GetProperty("delta").GetDouble(), "two budgets of one model diff like two models");
+    }
+
+    [Test]
     public async Task Compare_ExcludedRuns_LeaveTheirItemsOutOfTheSharedSet()
     {
         // Item 3 was excluded in A (item-revised) and item 0 in B. A shared item needs a rankable score on BOTH
@@ -426,7 +444,8 @@ public sealed class BenchmarkCompareEndpointTests
         int? quality,
         IReadOnlyList<BenchmarkCellItemRecord> items,
         string? exclusion = null,
-        Guid? agentDefinitionId = null) =>
+        Guid? agentDefinitionId = null,
+        int? reasoningBudgetTokens = null) =>
         new()
         {
             CellKey = key,
@@ -436,6 +455,7 @@ public sealed class BenchmarkCompareEndpointTests
             AgentDefinitionId = agentDefinitionId ?? AgentId,
             AgentName = agentDefinitionId is null ? "Agent" : "Variant",
             AgentVersion = 1,
+            ReasoningBudgetTokens = reasoningBudgetTokens,
             RepeatGroupId = null,
             RepeatIndex = null,
             Quality = quality,
@@ -453,7 +473,13 @@ public sealed class BenchmarkCompareEndpointTests
             TaskItemIndex = index,
             QualityScore = quality,
             PrimaryStopReason = "stop",
-            RankExclusionReason = exclusion
+            RankExclusionReason = exclusion,
+            ReasoningTokens = null,
+            AppliedReasoningBudgetTokens = null,
+            GenerationTokens = null,
+            ToolCallCount = null,
+            SegmentCount = null,
+            DurationMs = null
         };
 
     private static Guid ItemId(int index) =>

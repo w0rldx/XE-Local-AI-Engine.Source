@@ -29431,6 +29431,24 @@
           "rankExclusionReason": {
             "type": "string",
             "nullable": true
+          },
+          "reasoningTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "durationMs": {
+            "type": "integer",
+            "nullable": true
+          },
+          "reasoningAtBudget": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "nonReasoningOutputTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
           }
         }
       },
@@ -29466,6 +29484,11 @@
           },
           "agentVersion": {
             "type": "integer"
+          },
+          "reasoningBudgetTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
           },
           "repeatGroupId": {
             "type": "string",
@@ -30702,11 +30725,6 @@
               "outputParts": {
                 "nullable": true
               },
-              "reasoningBudgetTokens": {
-                "type": "integer",
-                "format": "int32",
-                "nullable": true
-              },
               "reasoningBudgetApplicable": {
                 "type": "boolean",
                 "nullable": true
@@ -31055,6 +31073,30 @@
           },
           "toolTimeMs": {
             "type": "integer",
+            "nullable": true
+          },
+          "reasoningBudgetTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "reasoningTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "appliedReasoningBudgetTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "reasoningAtBudget": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "nonReasoningOutputTokens": {
+            "type": "integer",
+            "format": "int32",
             "nullable": true
           },
           "userScore": {
@@ -31685,6 +31727,11 @@
             "format": "guid",
             "nullable": true
           },
+          "reasoningBudgetTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
           "code": {
             "type": "string"
           },
@@ -31761,6 +31808,11 @@
           "agentDefinitionId": {
             "type": "string",
             "format": "guid",
+            "nullable": true
+          },
+          "reasoningBudgetTokens": {
+            "type": "integer",
+            "format": "int32",
             "nullable": true
           }
         }
@@ -31853,6 +31905,11 @@
             "type": "number",
             "format": "double",
             "nullable": true
+          },
+          "reasoningBudgetTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
           }
         }
       },
@@ -31877,6 +31934,11 @@
           "agentDefinitionId": {
             "type": "string",
             "format": "guid",
+            "nullable": true
+          },
+          "reasoningBudgetTokens": {
+            "type": "integer",
+            "format": "int32",
             "nullable": true
           },
           "runIds": {
@@ -39807,6 +39869,16 @@
             "format": "int32",
             "nullable": true
           },
+          "requestedReasoningBudgetTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "reasoningBudgetTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
           "estimated": {
             "nullable": true,
             "oneOf": [
@@ -40586,6 +40658,11 @@
             }
           },
           "numCtx": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "reasoningBudgetTokens": {
             "type": "integer",
             "format": "int32",
             "nullable": true

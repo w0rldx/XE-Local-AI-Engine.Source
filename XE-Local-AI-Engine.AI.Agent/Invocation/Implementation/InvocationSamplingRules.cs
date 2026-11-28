@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 
+using System.Globalization;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
@@ -10,6 +11,9 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 /// </remarks>
 internal static class InvocationSamplingRules
 {
+    private static readonly string ReasoningBudgetRangeMessage =
+        string.Create(CultureInfo.InvariantCulture, $"Reasoning budget must be from {ReasoningBudgets.MinTokens} to {ReasoningBudgets.MaxTokens}.");
+
     /// <summary>
     ///     Applies the developer-gated per-send sampling overrides onto the turn's <see cref="ChatOptions" />.
     /// </summary>
@@ -118,9 +122,25 @@ internal static class InvocationSamplingRules
         Check(errors, sampling.Seed, IsValidSeed, "Seed must be -1 or greater.");
         Check(errors, sampling.NumCtx, IsPositive, "Context size must be greater than 0.");
         Check(errors, sampling.MaxOutputTokens, IsPositive, "Max output tokens must be greater than 0.");
-        Check(errors, sampling.ReasoningBudgetTokens, IsPositive, "Reasoning budget must be greater than 0.");
+        if (ValidateReasoningBudget(sampling.ReasoningBudgetTokens) is { } budgetError)
+        {
+            errors.Add(budgetError);
+        }
+
         return errors;
     }
+
+    /// <summary>
+    ///     The shared bound for a user-set thinking budget (<see cref="ReasoningBudgets.MinTokens" /> to
+    ///     <see cref="ReasoningBudgets.MaxTokens" />), or <see langword="null" /> when the value is unset or in range.
+    /// </summary>
+    /// <remarks>
+    ///     The one exception to "Validate refuses what Apply skips": the apply path (<c>InvocationAgentFactory</c>) keeps
+    ///     any positive budget, because a frozen benchmark replay may carry one below the bound and must still run with
+    ///     it. Every input path (Direct Inference, the hub send and regenerate, the conversation PATCH) checks it here.
+    /// </remarks>
+    public static string? ValidateReasoningBudget(int? budgetTokens) =>
+        budgetTokens is < ReasoningBudgets.MinTokens or > ReasoningBudgets.MaxTokens ? ReasoningBudgetRangeMessage : null;
 
     private static void Check<T>(List<string> errors, T? value, Func<T?, bool> isValid, string message)
         where T : struct

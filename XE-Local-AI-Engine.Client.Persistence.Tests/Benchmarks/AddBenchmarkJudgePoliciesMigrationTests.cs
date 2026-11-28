@@ -232,9 +232,9 @@ public sealed class AddBenchmarkJudgePoliciesMigrationTests
         await probe.ExecuteAsync(atHead
                 ? """
                   INSERT INTO benchmark_runs (id, project_id, runtime_snapshot_json, primary_model_name, model_content_fingerprint, agent_name,
-                                              agent_version, requested_context_tokens, primary_status, last_stream_sequence,
+                                              agent_version, agent_definition_id, cell_key, requested_context_tokens, primary_status, last_stream_sequence,
                                               version, created_at_utc, updated_at_utc)
-                  VALUES ($id, $project, X'00', 'model.gguf', 'v1:aa', 'Agent', 1, 4096, 'Succeeded', 0, 1, 1, 1);
+                  VALUES ($id, $project, X'00', 'model.gguf', 'v1:aa', 'Agent', 1, $agent, 'run:seed', 4096, 'Succeeded', 0, 1, 1, 1);
                   """
                 : """
                   INSERT INTO benchmark_runs (id, project_id, runtime_snapshot_json, primary_model_name, model_content_fingerprint, agent_name,
@@ -246,6 +246,8 @@ public sealed class AddBenchmarkJudgePoliciesMigrationTests
             {
                 command.Parameters.AddWithValue("$id", RunId.ToString());
                 command.Parameters.AddWithValue("$project", ProjectId.ToString());
+                // The agent and cell stamps are named at head: a later table rebuild drops their migration-only defaults.
+                command.Parameters.AddWithValue("$agent", Guid.NewGuid().ToString());
             });
     }
 

@@ -191,6 +191,44 @@ describe("ContextUsagePopover", () => {
 		expect(within(dropdown).getByTestId("context-usage-footer").textContent).toContain(strings.footer.reported);
 	});
 
+	it("says the last round's reasoning tokens were not reported and hides a thinking budget none applied", async () => {
+		renderPopover(usage({ contextWindow: { ...lastRound, requestedReasoningBudgetTokens: 2048 } }));
+		const dropdown = await open();
+
+		expect(within(dropdown).getByTestId("context-usage-reasoning-tokens").textContent).toBe(
+			`${strings.reasoningTokens}${strings.notReported}`,
+		);
+		expect(within(dropdown).queryByTestId("context-usage-thinking-budget")).toBeNull();
+	});
+
+	it("shows the reasoning tokens and the applied thinking budget, with the request when the node lowered it", async () => {
+		renderPopover(
+			usage({
+				contextWindow: {
+					...lastRound,
+					providerReasoningTokens: 1_023,
+					requestedReasoningBudgetTokens: 24_576,
+					reasoningBudgetTokens: 1_024,
+				},
+			}),
+		);
+		const dropdown = await open();
+
+		expect(within(dropdown).getByTestId("context-usage-reasoning-tokens").textContent).toBe(`${strings.reasoningTokens}1,023`);
+		expect(within(dropdown).getByTestId("context-usage-thinking-budget").textContent).toBe(
+			`${strings.thinkingBudget}24,576 → 1,024`,
+		);
+	});
+
+	it("shows one thinking budget when the provider applied what was requested", async () => {
+		renderPopover(
+			usage({ contextWindow: { ...lastRound, requestedReasoningBudgetTokens: 2_048, reasoningBudgetTokens: 2_048 } }),
+		);
+		const dropdown = await open();
+
+		expect(within(dropdown).getByTestId("context-usage-thinking-budget").textContent).toBe(`${strings.thinkingBudget}2,048`);
+	});
+
 	it("loads the pre-send estimate for the model and agent and labels it estimated", async () => {
 		let requested: URL | undefined;
 		server.use(

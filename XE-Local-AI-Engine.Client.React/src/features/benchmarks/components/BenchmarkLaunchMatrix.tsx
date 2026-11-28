@@ -1,8 +1,21 @@
-import { Alert, Button, Checkbox, Group, NumberInput, ScrollArea, SimpleGrid, Stack, Switch, Text } from "@mantine/core";
+import {
+	Alert,
+	Button,
+	Checkbox,
+	Group,
+	NumberInput,
+	ScrollArea,
+	SimpleGrid,
+	Stack,
+	Switch,
+	TagsInput,
+	Text,
+} from "@mantine/core";
 import { IconAlertTriangle, IconRocket } from "@tabler/icons-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { FieldWithInfo } from "@/core/ui/components/FieldInfo/FieldInfo";
 import { StatusBadge } from "@/core/ui/components/StatusBadge/StatusBadge";
 import { BenchmarkRepeatModePicker } from "@/features/benchmarks/components/BenchmarkRepeatModePicker";
 import type {
@@ -23,6 +36,14 @@ const kvChoices: KvChoice[] = [autoKvCacheType, ...benchmarkKvCacheTypes];
 
 // Mirrors the node's BenchmarkRunFreezeService.MaxRepeatCount, so the dialog refuses what the node would.
 const repeatCountLimits = { min: 1, max: 10 } as const;
+// Mirrors ReasoningBudgets.MinTokens / MaxTokens, the bounds the node checks a launch override against.
+const reasoningBudgetLimits = { min: 128, max: 131_072 } as const;
+
+/** A typed budget the dialog accepts: a whole number inside the node's bounds. */
+const isReasoningBudget = (value: string): boolean => {
+	const tokens = Number(value);
+	return Number.isInteger(tokens) && tokens >= reasoningBudgetLimits.min && tokens <= reasoningBudgetLimits.max;
+};
 
 interface BenchmarkLaunchMatrixProps {
 	models: readonly BenchmarkEligibleModel[];
@@ -69,8 +90,12 @@ export function BenchmarkLaunchMatrix({
 	const [warmup, setWarmup] = useState(false);
 	const [repeatMode, setRepeatMode] = useState<BenchmarkRepeatMode>("Throughput");
 	const [answerVarianceTemperature, setAnswerVarianceTemperature] = useState<number | null>(null);
+	const [budgets, setBudgets] = useState<string[]>([]);
+	const [budgetRefused, setBudgetRefused] = useState(false);
+	// No budget typed = one pass at the project's own budget, sent as an omitted `reasoningBudgetTokens`.
+	const budgetAxis: (number | null)[] = budgets.length === 0 ? [null] : budgets.map(Number);
 
-	const cellCount = selectedModels.length * selectedKvTypes.length * selectedAgents.length;
+	const cellCount = selectedModels.length * selectedKvTypes.length * selectedAgents.length * budgetAxis.length;
 	const estimate = benchmarkRunEstimate({ cellCount, leafItemCount, repeatCount, warmup }, medianRunMs);
 	const totalRuns = estimate.totalRuns;
 	// The node refuses the whole freeze above its per-request cap, so the dialog refuses it here rather than sending a
@@ -102,13 +127,17 @@ export function BenchmarkLaunchMatrix({
 		onSubmit({
 			items: selectedModels.flatMap((modelName) =>
 				selectedKvTypes.flatMap((kvCacheType) =>
-					selectedAgents.map((agentDefinitionId) => ({
-						modelName,
-						// Omitted rather than sent as null: an absent type is Auto, which the node resolves at freeze.
-						...(kvCacheType === autoKvCacheType ? {} : { kvCacheType }),
-						// Omitted for the project's own agent, which is what the node runs when no variant is named.
-						...(agentDefinitionId === projectAgentId ? {} : { agentDefinitionId }),
-					})),
+					selectedAgents.flatMap((agentDefinitionId) =>
+						budgetAxis.map((reasoningBudgetTokens) => ({
+							modelName,
+							// Omitted rather than sent as null: an absent type is Auto, which the node resolves at freeze.
+							...(kvCacheType === autoKvCacheType ? {} : { kvCacheType }),
+							// Omitted for the project's own agent, which is what the node runs when no variant is named.
+							...(agentDefinitionId === projectAgentId ? {} : { agentDefinitionId }),
+							// Omitted for the project's own budget, which the node freezes when no override is named.
+							...(reasoningBudgetTokens === null ? {} : { reasoningBudgetTokens }),
+						})),
+					),
 				),
 			),
 			repeatCount,
@@ -205,6 +234,41 @@ export function BenchmarkLaunchMatrix({
 				</Stack>
 			</Checkbox.Group>
 
+			<FieldWithInfo
+				label={t("pages.benchmarks.matrix.budgets", "Thinking budgets")}
+				text={t(
+					"pages.benchmarks.matrix.budgetsInfo",
+					"Caps how many tokens the model may think before it answers. Each budget you add runs every combination again with that cap, so the table can compare quality, reasoning length and time across budgets. Empty runs once with the project's own budget. A lower budget answers faster but may cut hard reasoning short; a higher one gives hard tasks room. Typical sweeps are 512, 2048 and 8192. The node refuses a budget the model cannot enforce, one above half the project's pinned output, and one its agent's effort turns off.",
+				)}
+				testId="benchmark-matrix-budgets-info"
+			>
+				<TagsInput
+					label={t("pages.benchmarks.matrix.budgets", "Thinking budgets")}
+					description={t(
+						"pages.benchmarks.matrix.budgetsHelp",
+						"Tokens, {{min}} to {{max}}. Empty = the project's budget. Each budget multiplies the combinations.",
+						{ min: reasoningBudgetLimits.min, max: reasoningBudgetLimits.max },
+					)}
+					placeholder={t("pages.benchmarks.matrix.budgetsPlaceholder", "Type a budget and press Enter")}
+					value={budgets}
+					// A non-number or out-of-range entry is dropped and named, rather than sent for the node to refuse.
+					onChange={(value) => {
+						const accepted = value.filter(isReasoningBudget);
+						setBudgetRefused(accepted.length < value.length);
+						setBudgets(accepted);
+					}}
+					error={
+						budgetRefused
+							? t("pages.benchmarks.matrix.budgetsInvalid", "A budget is a whole number from {{min}} to {{max}}.", {
+									min: reasoningBudgetLimits.min,
+									max: reasoningBudgetLimits.max,
+								})
+							: undefined
+					}
+					data-testid="benchmark-matrix-budgets"
+				/>
+			</FieldWithInfo>
+
 			<BenchmarkRepeatModePicker
 				mode={repeatMode}
 				temperature={answerVarianceTemperature}
@@ -267,7 +331,7 @@ export function BenchmarkLaunchMatrix({
 					<Text size="sm" c="red" data-testid="benchmark-matrix-over-cap">
 						{t(
 							"pages.benchmarks.matrix.overCap",
-							"The node refuses more than {{max}} runs in one request. Pick fewer models, KV types, agent variants or repeats, or split the matrix.",
+							"The node refuses more than {{max}} runs in one request. Pick fewer models, KV types, agent variants, budgets or repeats, or split the matrix.",
 							{ max: benchmarkTaskItemLimits.maxRunsPerRequest },
 						)}
 					</Text>
@@ -282,11 +346,15 @@ export function BenchmarkLaunchMatrix({
 						</Text>
 						{rejected.map((item) => (
 							<Text
-								key={`${item.modelName}-${item.kvCacheType ?? autoKvCacheType}-${item.agentDefinitionId ?? projectAgentId}`}
+								key={`${item.modelName}-${item.kvCacheType ?? autoKvCacheType}-${item.agentDefinitionId ?? projectAgentId}-${item.reasoningBudgetTokens ?? ""}`}
 								size="xs"
 							>
 								{`${item.modelName} · ${item.kvCacheType ?? autoKvCacheType}${
 									item.agentDefinitionId === null ? "" : ` · ${agentName(item.agentDefinitionId)}`
+								}${
+									item.reasoningBudgetTokens === null
+										? ""
+										: ` · ${t("pages.benchmarks.cells.budgetValue", "{{tokens}} thinking tokens", { tokens: item.reasoningBudgetTokens })}`
 								} — ${item.message}`}
 							</Text>
 						))}

@@ -62,7 +62,8 @@ public sealed class BenchmarkRunBatchService
                     RepeatCount = request.RepeatCount,
                     Warmup = request.Warmup,
                     RepeatMode = request.RepeatMode,
-                    AnswerVarianceTemperature = request.AnswerVarianceTemperature
+                    AnswerVarianceTemperature = request.AnswerVarianceTemperature,
+                    ReasoningBudgetTokens = item.ReasoningBudgetTokens
                 }, scope, cancellationToken);
                 expectedVersion += created.Count;
                 started.Add(new BenchmarkRunBatchStartedItem
@@ -70,6 +71,7 @@ public sealed class BenchmarkRunBatchService
                     ModelName = item.ModelName,
                     KvCacheType = kvCacheType,
                     AgentDefinitionId = item.AgentDefinitionId,
+                    ReasoningBudgetTokens = item.ReasoningBudgetTokens,
                     RunIds = [.. created.Select(static run => run.Id)]
                 });
             }
@@ -113,6 +115,7 @@ public sealed class BenchmarkRunBatchService
             ModelName = item.ModelName,
             KvCacheType = item.KvCacheType,
             AgentDefinitionId = item.AgentDefinitionId,
+            ReasoningBudgetTokens = item.ReasoningBudgetTokens,
             Kind = BenchmarkRunBatchRejectionKind.Failure,
             Message = exception.Message,
             Failure = exception
@@ -132,6 +135,7 @@ public sealed class BenchmarkRunBatchService
                 ModelName = item.ModelName,
                 KvCacheType = item.KvCacheType,
                 AgentDefinitionId = item.AgentDefinitionId,
+                ReasoningBudgetTokens = item.ReasoningBudgetTokens,
                 Kind = kind,
                 Message = message
             });

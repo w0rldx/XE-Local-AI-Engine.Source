@@ -56,6 +56,13 @@ public sealed class StartBenchmarkRunRequest
 
     /// <summary>The temperature an <c>AnswerVariance</c> group samples at; omitted takes 0.7. Range above 0 to 2.</summary>
     public double? AnswerVarianceTemperature { get; init; }
+
+    /// <summary>A thinking budget for this launch only, 128..131072; omitted takes the project's. The runs form their own cells.</summary>
+    /// <remarks>
+    ///     Refused (400) when it breaks the project's budget rule, exceeds half a pinned output budget, the model
+    ///     cannot enforce a budget, or the agent's effort turns thinking off.
+    /// </remarks>
+    public int? ReasoningBudgetTokens { get; init; }
 }
 
 /// <summary>One cell of the launch matrix: a model, optionally pinned to a KV-cache type and an agent variant.</summary>
@@ -68,6 +75,9 @@ public sealed class StartBenchmarkRunBatchItem
 
     /// <inheritdoc cref="StartBenchmarkRunRequest.AgentDefinitionId" />
     public Guid? AgentDefinitionId { get; init; }
+
+    /// <inheritdoc cref="StartBenchmarkRunRequest.ReasoningBudgetTokens" />
+    public int? ReasoningBudgetTokens { get; init; }
 }
 
 /// <summary>Enqueues a whole model × KV-type matrix in one call.</summary>
@@ -106,6 +116,9 @@ public sealed class StartedBenchmarkRunBatchItemResponse
     /// <summary>The agent variant the item named, echoed; null for the project's agent.</summary>
     public Guid? AgentDefinitionId { get; init; }
 
+    /// <summary>The thinking-budget override the item named, echoed; null for the project's budget.</summary>
+    public int? ReasoningBudgetTokens { get; init; }
+
     /// <summary>Warm-up first when one was requested, then the measured repeats.</summary>
     public IReadOnlyList<Guid> RunIds { get; init; } = [];
 }
@@ -118,6 +131,9 @@ public sealed class RejectedBenchmarkRunBatchItemResponse
 
     /// <inheritdoc cref="StartedBenchmarkRunBatchItemResponse.AgentDefinitionId" />
     public Guid? AgentDefinitionId { get; init; }
+
+    /// <inheritdoc cref="StartedBenchmarkRunBatchItemResponse.ReasoningBudgetTokens" />
+    public int? ReasoningBudgetTokens { get; init; }
 
     /// <summary>A <see cref="BenchmarkErrorCode" /> name — the same vocabulary a single-run failure uses.</summary>
     public required string Code { get; init; }
@@ -358,6 +374,25 @@ public class BenchmarkRunSummaryResponse
     /// <summary>The sum of the tools' own execution times in milliseconds; null when not measured. Display only, never a cell figure.</summary>
     public long? ToolTimeMs { get; init; }
 
+    /// <summary>The thinking budget frozen onto this run (the launch's override, else the project's), or null when none was pinned.</summary>
+    public int? ReasoningBudgetTokens { get; init; }
+
+    /// <summary>The primary turn's reasoning tokens, or null when unmeasured (no reasoning, no count, or a run recorded before the column).</summary>
+    public int? ReasoningTokens { get; init; }
+
+    /// <summary>The thinking budget the provider put on the wire for the turn's last round, or null when none was applied or it is unknown.</summary>
+    public int? AppliedReasoningBudgetTokens { get; init; }
+
+    /// <summary>
+    ///     Derived, never stored: whether <see cref="ReasoningTokens" /> reached <see cref="AppliedReasoningBudgetTokens" />
+    ///     within a small slack. Null when either is null or the turn called a tool (the applied budget is per round).
+    /// </summary>
+    /// <remarks>"At budget", not "cut off": a count just under the threshold cannot prove a forced end.</remarks>
+    public bool? ReasoningAtBudget { get; init; }
+
+    /// <summary>Derived: <see cref="GenerationTokens" /> minus <see cref="ReasoningTokens" />, under the same null rule as <see cref="ReasoningAtBudget" />.</summary>
+    public int? NonReasoningOutputTokens { get; init; }
+
     public int? UserScore { get; init; }
     public long LastStreamSequence { get; init; }
     public long Version { get; init; }
@@ -399,9 +434,6 @@ public class BenchmarkRunSummaryResponse
 public sealed class BenchmarkRunDetailResponse : BenchmarkRunSummaryResponse
 {
     public JsonElement? OutputParts { get; init; }
-
-    /// <summary>The thinking budget frozen onto this run, or null when none was pinned.</summary>
-    public int? ReasoningBudgetTokens { get; init; }
 
     /// <summary>
     ///     False when a budget WAS pinned and the frozen model cannot honor it — it does not reason, or its chat

@@ -143,6 +143,7 @@ public sealed partial class WorkerEventDispatcher
                 state.TurnOutputTokens = usage?.OutputTokens;
                 state.TurnTotalTokens = usage?.TotalTokens;
                 state.TurnReasoningTokens = usage?.ReasoningTokens;
+                state.TurnUsageReported = usage is not null;
                 return state;
             });
 

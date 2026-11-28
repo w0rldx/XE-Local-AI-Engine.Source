@@ -17,6 +17,17 @@ public sealed class BenchmarkCellItemResponse
 
     public string? PrimaryStopReason { get; init; }
     public string? RankExclusionReason { get; init; }
+
+    /// <inheritdoc cref="BenchmarkRunSummaryResponse.ReasoningTokens" />
+    public int? ReasoningTokens { get; init; }
+
+    public long? DurationMs { get; init; }
+
+    /// <inheritdoc cref="BenchmarkRunSummaryResponse.ReasoningAtBudget" />
+    public bool? ReasoningAtBudget { get; init; }
+
+    /// <inheritdoc cref="BenchmarkRunSummaryResponse.NonReasoningOutputTokens" />
+    public int? NonReasoningOutputTokens { get; init; }
 }
 
 /// <summary>
@@ -39,6 +50,9 @@ public sealed class BenchmarkCellResponse
 
     /// <summary>The frozen agent's definition version.</summary>
     public long AgentVersion { get; init; }
+
+    /// <summary>The thinking budget the cell's runs were frozen with, or null when none was pinned; two budgets of one model are two cells.</summary>
+    public int? ReasoningBudgetTokens { get; init; }
 
     public Guid? RepeatGroupId { get; init; }
     public int? RepeatIndex { get; init; }

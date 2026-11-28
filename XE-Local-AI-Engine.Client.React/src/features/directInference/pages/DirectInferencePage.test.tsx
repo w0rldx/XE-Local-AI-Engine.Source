@@ -71,7 +71,7 @@ vi.mock("@/core/api/signalr/SharedHubConnection", () => ({
 
 setupMswServer();
 
-function stubModels(reasoningModels: readonly string[] = []): void {
+function stubModels(reasoningModels: readonly string[] = [], budgetUnenforceable = false): void {
 	server.use(
 		http.get(localApiPath("models"), () =>
 			HttpResponse.json({
@@ -88,6 +88,7 @@ function stubModels(reasoningModels: readonly string[] = []): void {
 					detectedKind: "Chat",
 					capabilities: [],
 					isReasoningCapable: modelName !== undefined && reasoningModels.includes(modelName),
+					reasoningBudgetEnforceable: !budgetUnenforceable,
 					isToolCapable: true,
 					isOverridden: false,
 					provider,
@@ -173,6 +174,55 @@ describe("DirectInferencePage", () => {
 
 		await waitFor(() => expect(hub.state.requests).toHaveLength(1));
 		expect(hub.state.requests[0]).toMatchObject({ modelId: "qwen3", disableThinking: true });
+	});
+
+	it("offers a thinking budget for a budget-capable llama.cpp model while thinking is on, resets it per model, and sends it", async () => {
+		stubModels(["qwen3", "gpt-6"]);
+		renderWithProviders(<DirectInferencePage />);
+		const pick = async (name: string): Promise<void> => {
+			fireEvent.click(screen.getByTestId("direct-inference-model"));
+			fireEvent.click(await screen.findByRole("option", { name, hidden: true }));
+		};
+		const budget = (): HTMLInputElement | null => screen.queryByTestId("direct-inference-reasoning-budget");
+
+		await pick("gpt-6");
+		expect(budget()).toBeNull();
+		await pick("qwen3");
+		fireEvent.change(budget() as HTMLInputElement, { target: { value: "512" } });
+		fireEvent.click(screen.getByTestId("direct-inference-thinking-off"));
+		expect(budget()).toBeNull();
+		fireEvent.click(screen.getByTestId("direct-inference-thinking-off"));
+		expect(budget()?.value).toBe("512");
+		await pick("gpt-6");
+		await pick("qwen3");
+		expect(budget()?.value).toBe("");
+
+		fireEvent.change(budget() as HTMLInputElement, { target: { value: "512" } });
+		fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "Hi" } });
+		fireEvent.click(screen.getByRole("button", { name: "Send" }));
+		await waitFor(() => expect(hub.state.requests).toHaveLength(1));
+		expect(hub.state.requests[0]).toMatchObject({ modelId: "qwen3", samplingOptions: { reasoningBudgetTokens: 512 } });
+	});
+
+	it("sends no thinking budget while thinking is off, and offers none for a model that cannot enforce one", async () => {
+		stubModels(["qwen3"]);
+		renderWithProviders(<DirectInferencePage />);
+		fireEvent.click(screen.getByTestId("direct-inference-model"));
+		fireEvent.click(await screen.findByRole("option", { name: "qwen3", hidden: true }));
+		fireEvent.change(screen.getByTestId("direct-inference-reasoning-budget"), { target: { value: "512" } });
+		fireEvent.click(screen.getByTestId("direct-inference-thinking-off"));
+		fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "Hi" } });
+		fireEvent.click(screen.getByRole("button", { name: "Send" }));
+		await waitFor(() => expect(hub.state.requests).toHaveLength(1));
+		expect(hub.state.requests[0]).toMatchObject({ disableThinking: true, samplingOptions: undefined });
+		cleanup();
+
+		stubModels(["qwen3"], true);
+		renderWithProviders(<DirectInferencePage />);
+		fireEvent.click(screen.getByTestId("direct-inference-model"));
+		fireEvent.click(await screen.findByRole("option", { name: "qwen3", hidden: true }));
+		expect(screen.getByTestId("direct-inference-thinking-off")).toBeTruthy();
+		expect(screen.queryByTestId("direct-inference-reasoning-budget")).toBeNull();
 	});
 
 	it("offers token probabilities for a llama.cpp model only, and does not send a value kept from one", async () => {

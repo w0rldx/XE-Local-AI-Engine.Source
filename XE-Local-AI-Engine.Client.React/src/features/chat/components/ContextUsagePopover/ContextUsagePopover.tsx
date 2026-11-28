@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 
 import { nodeChatQueryKeys } from "@/core/chat/queries/NodeChatQueryKeys";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
+import { formatCount } from "@/core/formatting/NumberFormatting";
 
 import { ContextUsageBadge } from "@/features/chat/components/ContextUsageBadge";
 import {
@@ -153,6 +154,29 @@ function SnapshotDetails({ snapshot }: { snapshot: ContextWindowSnapshot }) {
 					value={remaining === undefined ? unknown : formatTokenCount(remaining)}
 					testId="context-usage-remaining"
 				/>
+				{snapshot.kind === "LastRound" ? (
+					<TokenRow
+						label={t("pages.chat.contextUsage.reasoningTokens", "Reasoning tokens")}
+						value={
+							snapshot.providerReasoningTokens == null
+								? t("pages.chat.contextUsage.notReported", "not reported")
+								: formatCount(snapshot.providerReasoningTokens)
+						}
+						testId="context-usage-reasoning-tokens"
+					/>
+				) : null}
+				{snapshot.kind === "LastRound" && snapshot.reasoningBudgetTokens != null ? (
+					<TokenRow
+						label={t("pages.chat.contextUsage.thinkingBudget", "Thinking budget")}
+						value={
+							snapshot.requestedReasoningBudgetTokens != null &&
+							snapshot.requestedReasoningBudgetTokens !== snapshot.reasoningBudgetTokens
+								? `${formatCount(snapshot.requestedReasoningBudgetTokens)} → ${formatCount(snapshot.reasoningBudgetTokens)}`
+								: formatCount(snapshot.reasoningBudgetTokens)
+						}
+						testId="context-usage-thinking-budget"
+					/>
+				) : null}
 			</Stack>
 			{toolGroups.length > 0 ? (
 				<details data-testid="context-usage-tools">

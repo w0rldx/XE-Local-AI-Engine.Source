@@ -51,6 +51,12 @@ public sealed record NodeChatContextWindowDto
 
     public int? ProviderReasoningTokens { get; init; }
 
+    /// <summary>The thinking budget the round asked for; <see langword="null" /> when it carried none.</summary>
+    public int? RequestedReasoningBudgetTokens { get; init; }
+
+    /// <summary>The thinking budget the provider applied on the wire; <see langword="null" /> when none was applied or it is unknown.</summary>
+    public int? ReasoningBudgetTokens { get; init; }
+
     /// <summary>Heuristic per-category split of the input; <see langword="null" /> when no estimate was taken.</summary>
     public NodeChatContextWindowEstimate? Estimated { get; init; }
 

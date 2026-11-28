@@ -53,7 +53,8 @@ public sealed class StartBenchmarkRunEndpoint : Endpoint<StartBenchmarkRunReques
                 RepeatCount = req.RepeatCount,
                 Warmup = req.Warmup,
                 RepeatMode = req.RepeatMode,
-                AnswerVarianceTemperature = req.AnswerVarianceTemperature
+                AnswerVarianceTemperature = req.AnswerVarianceTemperature,
+                ReasoningBudgetTokens = req.ReasoningBudgetTokens
             }, scope: null, ct);
             await Send.ResultAsync(Results.Accepted(value: created[0].ToDetail()));
         }

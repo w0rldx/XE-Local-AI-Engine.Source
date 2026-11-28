@@ -42,17 +42,21 @@ export function benchmarkRunEstimate(input: BenchmarkRunEstimateInput, medianRun
  * Warm-ups are excluded: they are the slow launch the repeats after them are measured without.
  */
 export function medianBenchmarkRunDurationMs(runs: readonly BenchmarkRunSummary[]): number | null {
-	const durations = runs
-		.filter((run) => !run.isWarmup && run.primaryStatus === "Succeeded" && run.durationMs !== null)
-		.map((run) => run.durationMs as number)
-		.sort((left, right) => left - right);
-	if (durations.length === 0) {
+	return medianOf(
+		runs
+			.filter((run) => !run.isWarmup && run.primaryStatus === "Succeeded" && run.durationMs !== null)
+			.map((run) => run.durationMs as number),
+	);
+}
+
+/** The median of the values, or null when there are none. */
+export function medianOf(values: readonly number[]): number | null {
+	const sorted = [...values].sort((left, right) => left - right);
+	if (sorted.length === 0) {
 		return null;
 	}
-	const middle = Math.floor(durations.length / 2);
-	return durations.length % 2 === 1
-		? (durations[middle] as number)
-		: ((durations[middle - 1] as number) + (durations[middle] as number)) / 2;
+	const middle = Math.floor(sorted.length / 2);
+	return sorted.length % 2 === 1 ? (sorted[middle] as number) : ((sorted[middle - 1] as number) + (sorted[middle] as number)) / 2;
 }
 
 /** `1h 12m`, `12m 30s`, `45s` — coarse on purpose: an extrapolation is not precise enough to print seconds of an hour. */

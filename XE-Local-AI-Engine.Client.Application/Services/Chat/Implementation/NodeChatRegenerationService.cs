@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
+using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
@@ -129,6 +130,11 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         if (!SeedValue.TryParse(samplingOptions?.Seed, out _, out var seedError))
         {
             throw new NodeChatInvalidRequestException(seedError);
+        }
+
+        if (InvocationSamplingRules.ValidateReasoningBudget(samplingOptions?.ReasoningBudgetTokens) is { } budgetError)
+        {
+            throw new NodeChatInvalidRequestException(budgetError);
         }
 
         // The send path's rule: absent is "All collections", a hard pick must normalise.

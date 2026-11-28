@@ -1717,6 +1717,7 @@ internal static partial class NodeChatStreamServiceTestSupport
                 CurrentInvocation.TurnOutputTokens = usage?.OutputTokens;
                 CurrentInvocation.TurnTotalTokens = usage?.TotalTokens;
                 CurrentInvocation.TurnReasoningTokens = usage?.ReasoningTokens;
+                CurrentInvocation.TurnUsageReported = usage is not null;
             }
 
             return Task.CompletedTask;

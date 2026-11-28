@@ -1,4 +1,4 @@
-import { ActionIcon, Button, FileButton, Group, Menu, Tooltip } from "@mantine/core";
+import { ActionIcon, Button, FileButton, Group, Menu, Text, Tooltip } from "@mantine/core";
 import {
 	IconAdjustments,
 	IconBooks,
@@ -17,6 +17,7 @@ import { useTranslation } from "react-i18next";
 import type { AgentOption } from "@/core/agents/models/AgentOption";
 import { AgentSelectorCard } from "@/core/chat/components/AgentSelectorCard";
 import classes from "@/core/chat/components/ChatComposerToolbar.module.css";
+import { formatCount } from "@/core/formatting/NumberFormatting";
 import type { ModelOption } from "@/core/models/ModelOption";
 import { toNodeChatRequestModel } from "@/core/models/NodeChatModelSelection";
 import { DisabledReasonTooltip } from "@/core/ui/components/DisabledReasonTooltip/DisabledReasonTooltip";
@@ -53,6 +54,8 @@ interface ChatComposerToolbarProps {
 	reasoningEffort: ReasoningEffort;
 	reasoningEnabled: boolean;
 	reasoningMenuDisabled: boolean;
+	/** The thinking budget each level requests, shown beside it as an upper bound; a level without one shows nothing. */
+	reasoningBudgets?: Partial<Record<ReasoningEffort, number>>;
 	onReasoningEffortChange: (effort: ReasoningEffort) => void;
 	showLocalToolControls: boolean;
 	conversationId: string;
@@ -111,6 +114,7 @@ export function ChatComposerToolbar({
 	reasoningEffort,
 	reasoningEnabled,
 	reasoningMenuDisabled,
+	reasoningBudgets,
 	onReasoningEffortChange,
 	showLocalToolControls,
 	conversationId,
@@ -178,17 +182,28 @@ export function ChatComposerToolbar({
 	const reasoningItems = (
 		<>
 			<Menu.Label>{reasoningLabel}</Menu.Label>
-			{availableReasoningEfforts.map((effort) => (
-				<Menu.Item
-					key={effort}
-					data-testid={`chat-reasoning-effort-option-${effort}`}
-					disabled={reasoningMenuDisabled}
-					onClick={() => onReasoningEffortChange(effort)}
-					color={effort === reasoningEffort && effort !== "none" ? "primary" : undefined}
-				>
-					{t(`pages.chat.reasoningEffortOptions.${effort}`, effort)}
-				</Menu.Item>
-			))}
+			{availableReasoningEfforts.map((effort) => {
+				const budget = reasoningBudgets?.[effort];
+				return (
+					<Menu.Item
+						key={effort}
+						data-testid={`chat-reasoning-effort-option-${effort}`}
+						disabled={reasoningMenuDisabled}
+						onClick={() => onReasoningEffortChange(effort)}
+						color={effort === reasoningEffort && effort !== "none" ? "primary" : undefined}
+						rightSection={
+							budget === undefined ? undefined : (
+								// Exact, not compact: nearby budgets (a 2,000 pin beside a 2,048 rung) must not read alike.
+								<Text size="xs" c="dimmed" data-testid={`chat-reasoning-budget-${effort}`}>
+									{t("pages.chat.reasoningBudgetUpTo", "up to {{tokens}} tokens", { tokens: formatCount(budget) })}
+								</Text>
+							)
+						}
+					>
+						{t(`pages.chat.reasoningEffortOptions.${effort}`, effort)}
+					</Menu.Item>
+				);
+			})}
 		</>
 	);
 	const sendControls = (

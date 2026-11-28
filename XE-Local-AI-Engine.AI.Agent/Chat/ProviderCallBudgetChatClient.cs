@@ -41,6 +41,12 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
     private static readonly Counter<long> ContextWindowRetriedCounter = Meter.CreateCounter<long>("xe.agent.budget.context_window_retried",
         description: "Provider rounds resent once after the provider rejected them for context size before the first update.");
 
+    /// <summary>
+    ///     The <see cref="UsageDetails.AdditionalCounts" /> key under which the llama.cpp chat client reports the thinking
+    ///     budget it put on the wire; duplicated from <c>DeferredLlamaServerChatClient</c>, which this assembly does not reference.
+    /// </summary>
+    internal const string AppliedReasoningBudgetUsageKey = "xe.llama.reasoning_budget_applied";
+
     /// <summary>The correction a context-size rejection without counts multiplies the model's current one by.</summary>
     internal const double UncountedOverflowCorrectionFactor = 1.25;
 
@@ -273,7 +279,8 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
     /// </summary>
     /// <remarks>
     ///     A round that reported nothing keeps null provider counts. The swap is conditional, so a later round's
-    ///     snapshot recorded meanwhile is never overwritten by this one.
+    ///     snapshot recorded meanwhile is never overwritten by this one. The applied thinking budget is read from this
+    ///     round's usage only: MEAI sums additional counts when usages are added, so no aggregate may read it.
     /// </remarks>
     private static void AttachRoundUsage(ProviderCallBudget? budget, in BudgetedRound round, UsageDetails? usage)
     {
@@ -287,7 +294,8 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
             {
                 ProviderInputTokens = ToNullableInt(usage.InputTokenCount),
                 ProviderOutputTokens = ToNullableInt(usage.OutputTokenCount),
-                ProviderReasoningTokens = ToNullableInt(usage.ReasoningTokenCount)
+                ProviderReasoningTokens = ToNullableInt(usage.ReasoningTokenCount),
+                ReasoningBudgetTokens = usage.AdditionalCounts?.TryGetValue(AppliedReasoningBudgetUsageKey, out var applied) == true ? ToNullableInt(applied) : null
             });
     }
 
@@ -520,7 +528,8 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
                 ToolSchemaTokens = schemaOnlyTokens,
                 PreambleTokens = preambleTokens
             },
-            toolTokens);
+            toolTokens,
+            ReadReasoningBudgetMarker(options));
         budget.RecordRoundContext(roundContext);
 
         var sendOptions = NarrowReasoningBudget(options, window, result.EstimatedTokensAfter);
@@ -568,7 +577,8 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
     private static ProviderRoundContextSnapshot CaptureRoundContext(ProviderBudgetResult result,
         int charsPerToken,
         RoundFixedCosts fixedCosts,
-        List<ProviderRoundToolTokens> toolTokens)
+        List<ProviderRoundToolTokens> toolTokens,
+        int? requestedReasoningBudget)
     {
         int system = 0, knowledge = 0, attachment = 0, compaction = 0, conversation = 0;
         foreach (var message in result.Messages)
@@ -616,7 +626,8 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
             ToolsWithheldCount = ToolRelevanceScope.Current?.LastRoundWithheldCount ?? 0,
             MessagesDropped = result.MessagesDropped,
             ToolResultsTruncated = result.ToolResultsTruncated,
-            ReasoningStripped = result.ReasoningStripped
+            ReasoningStripped = result.ReasoningStripped,
+            RequestedReasoningBudgetTokens = requestedReasoningBudget
         };
     }
 
@@ -657,10 +668,7 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
     /// </remarks>
     private static ChatOptions? NarrowReasoningBudget(ChatOptions? options, int window, int estimatedInputTokens)
     {
-        if (options?.AdditionalProperties is not { } properties
-            || !properties.TryGetValue(ReasoningOptionsResolver.LlamaReasoningBudgetMarkerKey, out var raw)
-            || !TryToInt(raw, out var budgetTokens)
-            || budgetTokens <= 0)
+        if (ReadReasoningBudgetMarker(options) is not { } budgetTokens)
         {
             return options;
         }
@@ -672,13 +680,22 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
             return options;
         }
 
-        var narrowed = options.Clone();
-        narrowed.AdditionalProperties = new AdditionalPropertiesDictionary(properties)
+        var narrowed = options!.Clone();
+        narrowed.AdditionalProperties = new AdditionalPropertiesDictionary(options.AdditionalProperties!)
         {
             [ReasoningOptionsResolver.LlamaReasoningBudgetMarkerKey] = allowed
         };
         return narrowed;
     }
+
+    /// <summary>The positive llama.cpp thinking-budget marker <paramref name="options" /> carries, or <see langword="null" />.</summary>
+    private static int? ReadReasoningBudgetMarker(ChatOptions? options) =>
+        options?.AdditionalProperties is { } properties
+        && properties.TryGetValue(ReasoningOptionsResolver.LlamaReasoningBudgetMarkerKey, out var raw)
+        && TryToInt(raw, out var budgetTokens)
+        && budgetTokens > 0
+            ? budgetTokens
+            : null;
 
     /// <summary>The same switch effort none sets (<c>InvocationAgentFactory</c>), on a clone: think off, the llama.cpp marker on, no budget.</summary>
     private static ChatOptions DisableThinking(ChatOptions? options)

@@ -643,6 +643,50 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         AssertEx.Equal(expected: 3_038L, tokens.TotalTokens);
     }
 
+    [Test]
+    public async Task TerminalizeAsync_WhenTheReportedTurnReasoningIsUnmeasured_StoresNullOnTheEnvelope_WhileTheMessageKeepsItsCount()
+    {
+        // A tool round reasoned uncounted and the last round counted 255: the turn's cost is unknown, not 255.
+        await using var provider = await BuildProviderAsync("envelope-turn-reasoning-unmeasured.sqlite");
+        var persistence = CreateService(provider);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Unmeasured",
+            UserId = "node",
+            CreatedAtUtc = 1
+        });
+        var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId);
+        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2);
+
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+        {
+            Correlation = correlation,
+            Status = NodeChatMessageStatusValues.Completed,
+            UpdatedAtUtc = 3,
+            Content = "answer",
+            InputCount = 3_000,
+            OutputCount = 300,
+            TotalCount = 3_300,
+            ReasoningCount = 255,
+            Envelope = new AgentRunEnvelopeMetadata
+            {
+                InvocationId = Guid.NewGuid(),
+                DurationMs = 5L,
+                TurnInputTokens = 6_000,
+                TurnOutputTokens = 600,
+                TurnTotalTokens = 6_600,
+                TurnReasoningTokens = null,
+                TurnUsageReported = true
+            }
+        });
+
+        var tokens = await ReadEnvelopeTokensAsync(provider, correlation);
+        AssertEx.Null(tokens.ReasoningTokens, "the envelope must not record the last round's 255 as the turn's reasoning");
+        AssertEx.Equal(expected: 6_000L, tokens.PromptTokens);
+        var stored = AssertEx.NotNull(await persistence.GetConversationAsync(conversation.ConversationId));
+        AssertEx.Equal(255, stored.Messages.Single(message => message.MessageId == correlation.MessageId).ReasoningCount);
+    }
+
     // Reads the run-envelope row's four token columns in ONE statement with a literal command text, for the same reason
     // as the helper below: no column name is ever interpolated into SQL.
     private static async Task<EnvelopeTokens> ReadEnvelopeTokensAsync(ServiceProvider provider, NodeChatMessageCorrelation correlation)

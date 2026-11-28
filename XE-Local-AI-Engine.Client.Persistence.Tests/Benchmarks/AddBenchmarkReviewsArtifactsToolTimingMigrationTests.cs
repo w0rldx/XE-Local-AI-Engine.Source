@@ -105,16 +105,19 @@ public sealed class AddBenchmarkReviewsArtifactsToolTimingMigrationTests
         AssertEx.Equal(expected: 1L, await LongAsync(probe, "SELECT COUNT(*) FROM benchmark_judge_attempts;"));
     }
 
-    private static Task SeedAsync(MigrationSchemaProbe probe) =>
-        probe.ExecuteAsync("""
+    private static async Task SeedAsync(MigrationSchemaProbe probe)
+    {
+        // The run's agent column exists only from a later migration, and a later table rebuild drops its migration-only default: name it when present.
+        var agent = (await probe.ColumnsAsync("benchmark_runs")).Contains("agent_definition_id");
+        await probe.ExecuteAsync($"""
                            INSERT INTO benchmark_projects (id, name, core_task_json, context_tokens, agent_definition_id, version, created_at_utc, updated_at_utc)
                            VALUES ($project, 'p', X'7B7D', 4096, $agent, 1, 1, 1);
                            INSERT INTO benchmark_judge_policy_revisions (id, project_id, revision, policy_json, policy_hash, cohort_generation, comparison_set_version, created_at_utc)
                            VALUES ($revision, $project, 1, X'00', 'hash', 1, 0, 1);
                            INSERT INTO benchmark_runs (id, project_id, runtime_snapshot_json, primary_model_name, model_content_fingerprint, agent_name,
                                                        agent_version, requested_context_tokens, primary_status, duration_ms, last_stream_sequence,
-                                                       user_score, cell_key, version, created_at_utc, updated_at_utc)
-                           VALUES ($run, $project, X'00', 'model.gguf', 'v1:aa', 'Agent', 1, 4096, 'Succeeded', 1234, 9, 70, 'run:seed', 3, 1, 2);
+                                                       user_score, cell_key, version, created_at_utc, updated_at_utc{(agent ? ", agent_definition_id" : string.Empty)})
+                           VALUES ($run, $project, X'00', 'model.gguf', 'v1:aa', 'Agent', 1, 4096, 'Succeeded', 1234, 9, 70, 'run:seed', 3, 1, 2{(agent ? ", $agent" : string.Empty)});
                            INSERT INTO benchmark_judge_attempts (id, run_id, sequence, policy_revision_id, cohort_generation, status, score, enqueued_at_utc, version)
                            VALUES ($attempt, $run, 1, $revision, 1, 'Succeeded', 60, 1, 1);
                            UPDATE benchmark_runs SET current_judge_attempt_id = $attempt WHERE id = $run;
@@ -127,6 +130,7 @@ public sealed class AddBenchmarkReviewsArtifactsToolTimingMigrationTests
                 command.Parameters.AddWithValue("$run", RunId.ToString());
                 command.Parameters.AddWithValue("$attempt", AttemptId.ToString());
             });
+    }
 
     private static Task InsertReviewAsync(MigrationSchemaProbe probe, string state, int? score) =>
         probe.ExecuteAsync("""

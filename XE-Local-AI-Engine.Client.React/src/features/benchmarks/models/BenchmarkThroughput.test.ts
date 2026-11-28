@@ -110,6 +110,18 @@ describe("benchmarkRepeatStats", () => {
 		expect(stats.get(benchmarkRepeatCohortKey(measured("a", 80)))?.tokensPerSecond?.mean).toBe(81);
 	});
 
+	// The budget is per request, so a sweep's runs match on every launch fact; pooling them would report a spread that
+	// is really the budget.
+	it("keeps two budgets of one otherwise identical run in different cohorts", () => {
+		const low = measured("a", 80, { reasoningBudgetTokens: 256 });
+		const high = measured("b", 40, { reasoningBudgetTokens: 4096 });
+
+		const stats = benchmarkRepeatStats([low, high]);
+
+		expect(stats.get(benchmarkRepeatCohortKey(low))?.tokensPerSecond?.count).toBe(1);
+		expect(stats.get(benchmarkRepeatCohortKey(high))?.tokensPerSecond?.count).toBe(1);
+	});
+
 	// Two runs of one model on different launch arguments are two experiments; averaging them would report a spread
 	// that is really a configuration difference.
 	it("keeps different KV types and different launch identities in different cohorts", () => {

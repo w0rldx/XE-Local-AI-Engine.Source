@@ -8,7 +8,6 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
-using CapturingServer = DeferredLlamaServerResponseSchemaEntryPointTests.CapturingServer;
 
 /// <summary>
 ///     Every request a <see cref="DeferredLlamaServerChatClient" /> sends names the chat process's slot: background work

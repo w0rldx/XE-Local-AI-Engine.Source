@@ -49,7 +49,8 @@ public sealed class StartBenchmarkRunBatchEndpoint : Endpoint<StartBenchmarkRunB
                 {
                     ModelName = item.ModelName,
                     KvCacheType = item.KvCacheType,
-                    AgentDefinitionId = item.AgentDefinitionId
+                    AgentDefinitionId = item.AgentDefinitionId,
+                    ReasoningBudgetTokens = item.ReasoningBudgetTokens
                 })
             ],
             RepeatCount = req.RepeatCount,
@@ -67,6 +68,7 @@ public sealed class StartBenchmarkRunBatchEndpoint : Endpoint<StartBenchmarkRunB
                     ModelName = item.ModelName,
                     KvCacheType = item.KvCacheType,
                     AgentDefinitionId = item.AgentDefinitionId,
+                    ReasoningBudgetTokens = item.ReasoningBudgetTokens,
                     RunIds = item.RunIds
                 })
             ],
@@ -90,6 +92,7 @@ public sealed class StartBenchmarkRunBatchEndpoint : Endpoint<StartBenchmarkRunB
             ModelName = item.ModelName,
             KvCacheType = item.KvCacheType,
             AgentDefinitionId = item.AgentDefinitionId,
+            ReasoningBudgetTokens = item.ReasoningBudgetTokens,
             Code = code.ToString(),
             Message = message
         };

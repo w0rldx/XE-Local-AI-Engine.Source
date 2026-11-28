@@ -13,7 +13,7 @@ export * from "@/features/benchmarks/models/BenchmarkRunModels";
  * run knobs. An item without `agentDefinitionId` runs the project's own agent.
  */
 export interface BenchmarkMatrixSelection {
-	items: { modelName: string; kvCacheType?: string; agentDefinitionId?: string }[];
+	items: { modelName: string; kvCacheType?: string; agentDefinitionId?: string; reasoningBudgetTokens?: number }[];
 	repeatCount: number;
 	warmup: boolean;
 	repeatMode: BenchmarkRepeatMode;

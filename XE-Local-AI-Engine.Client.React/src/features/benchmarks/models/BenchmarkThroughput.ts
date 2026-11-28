@@ -56,7 +56,7 @@ export interface BenchmarkRepeatStats {
 
 /**
  * What makes two runs comparable measurements of the same thing: the same model BUILD, the same KV-cache type, the
- * same effective launch identity, the same agent definition, and the same repeat MODE. Two agent variants of one model are
+ * same effective launch identity, the same agent definition, the same repeat MODE and the same frozen reasoning budget. Two agent variants of one model are
  * two experiments, not repeats, so the agent definition id keeps them apart. Two runs of one model on different launch arguments are two different experiments,
  * and averaging them would report a spread that is really a configuration difference. The NAME is not the build — a
  * model deleted and reinstalled, or a repo tag repointed at new weights, keeps its name and changes its content
@@ -67,7 +67,12 @@ export interface BenchmarkRepeatStats {
 export function benchmarkRepeatCohortKey(
 	run: Pick<
 		BenchmarkRunSummary,
-		"primaryModelName" | "modelContentFingerprint" | "primaryLaunch" | "agentDefinitionId" | "repeatMode"
+		| "primaryModelName"
+		| "modelContentFingerprint"
+		| "primaryLaunch"
+		| "agentDefinitionId"
+		| "repeatMode"
+		| "reasoningBudgetTokens"
 	>,
 ): string {
 	const { kvCacheType, effectiveLaunchIdentity, intendedLaunchIdentity } = run.primaryLaunch;
@@ -81,6 +86,9 @@ export function benchmarkRepeatCohortKey(
 		// spread is the machine; an answer-variance group samples and its spread is the model. One mean over both
 		// would describe neither, and the runs are otherwise identical in every member above.
 		run.repeatMode,
+		// The budget rides per request, so a budget sweep shares every member above; 256 and 4096 thinking tokens are
+		// two experiments, not repeats of one.
+		run.reasoningBudgetTokens ?? "",
 	].join("|");
 }
 

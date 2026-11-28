@@ -10,6 +10,12 @@ namespace XE_Local_AI_Engine.AI.Agent.Invocation;
 /// </remarks>
 public sealed record ReasoningBudgets
 {
+    /// <summary>Lower bound for every budget a user or operator sets: node settings, a conversation pin, a send, Direct Inference.</summary>
+    public const int MinTokens = 128;
+
+    /// <summary>Upper bound for every budget a user or operator sets; the launched window narrows it further per turn.</summary>
+    public const int MaxTokens = 131_072;
+
     /// <summary>The shipped defaults.</summary>
     public static ReasoningBudgets Default { get; } = new()
     {

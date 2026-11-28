@@ -196,6 +196,11 @@ internal static class BenchmarkEndpointMapper
             SegmentCount = run.Throughput?.SegmentCount,
             ToolCallCount = run.ToolCallCount,
             ToolTimeMs = run.ToolTimeMs,
+            ReasoningBudgetTokens = run.ReasoningBudgetTokens,
+            ReasoningTokens = run.ReasoningTokens,
+            AppliedReasoningBudgetTokens = run.AppliedReasoningBudgetTokens,
+            ReasoningAtBudget = BenchmarkReasoningReadout.ReasoningAtBudget(run.ReasoningTokens, run.AppliedReasoningBudgetTokens, run.ToolCallCount, run.Throughput?.SegmentCount),
+            NonReasoningOutputTokens = BenchmarkReasoningReadout.NonReasoningOutputTokens(run.Throughput?.GenerationTokens, run.ReasoningTokens, run.ToolCallCount, run.Throughput?.SegmentCount),
             UserScore = run.UserScore,
             LastStreamSequence = run.LastStreamSequence,
             Version = run.Version,
@@ -252,7 +257,6 @@ internal static class BenchmarkEndpointMapper
         string? expectedKldBaseLogitsDigest = null,
         Guid? currentJudgePolicyRevisionId = null)
     {
-        var (reasoningBudgetTokens, reasoningBudgetApplicable) = ReadReasoningBudget(run.RuntimeSnapshotJson);
         var detail = new BenchmarkRunDetailResponse
         {
             Id = run.Id,
@@ -299,6 +303,11 @@ internal static class BenchmarkEndpointMapper
             OutputParts = ParseJson(run.OutputPartsJson),
             ToolCallCount = run.ToolCallCount,
             ToolTimeMs = run.ToolTimeMs,
+            ReasoningBudgetTokens = run.ReasoningBudgetTokens,
+            ReasoningTokens = run.ReasoningTokens,
+            AppliedReasoningBudgetTokens = run.AppliedReasoningBudgetTokens,
+            ReasoningAtBudget = BenchmarkReasoningReadout.ReasoningAtBudget(run.ReasoningTokens, run.AppliedReasoningBudgetTokens, run.ToolCallCount, run.Throughput?.SegmentCount),
+            NonReasoningOutputTokens = BenchmarkReasoningReadout.NonReasoningOutputTokens(run.Throughput?.GenerationTokens, run.ReasoningTokens, run.ToolCallCount, run.Throughput?.SegmentCount),
             UserScore = run.UserScore,
             LastStreamSequence = run.LastStreamSequence,
             PrimaryErrorMessage = run.PrimaryErrorMessage,
@@ -309,8 +318,7 @@ internal static class BenchmarkEndpointMapper
             UpdatedAtUtc = run.UpdatedAtUtc,
             PrimaryLaunchReceipt = ParseJson(run.PrimaryLaunchEvidence?.ReceiptJson),
             PrimaryEnvironmentFacts = ParseJson(run.PrimaryLaunchEvidence?.EnvironmentFactsJson),
-            ReasoningBudgetTokens = reasoningBudgetTokens,
-            ReasoningBudgetApplicable = reasoningBudgetApplicable,
+            ReasoningBudgetApplicable = ReadReasoningBudgetApplicable(run.RuntimeSnapshotJson),
             Review = run.Review is { } review ? ToReview(review, currentJudgePolicyRevisionId) : null,
             // The detail describes the current judging: an earlier attempt's artifacts stay stored and downloadable by id, never listed here.
             Artifacts =
@@ -488,18 +496,18 @@ internal static class BenchmarkEndpointMapper
                 PromptVersionOutdated = policy.PromptVersion != BenchmarkJudgePolicyVersions.PromptVersion
             };
 
-    /// <summary>The two frozen reasoning-budget facts, read straight out of the run's snapshot.</summary>
+    /// <summary>Whether a pinned thinking budget applies, read straight out of the run's snapshot; null when none is pinned or unknown.</summary>
     /// <remarks>
-    ///     Two scalars rather than the snapshot itself: the payload stays unexposed, and this needs no column of its
-    ///     own. A plain parse, NOT the factory's verifying deserialize — this is a display value, and a run whose
-    ///     snapshot no longer validates should still render rather than fail its own detail read. Detail only: the
-    ///     listing projection never loads the snapshot column, so it arrives empty and both facts are null.
+    ///     A scalar rather than the snapshot itself: the payload stays unexposed. A plain parse, NOT the factory's
+    ///     verifying deserialize — this is a display value, and a run whose snapshot no longer validates should still
+    ///     render rather than fail its own detail read. Detail only: the listing projection never loads the snapshot
+    ///     column. The budget itself is the flat <c>reasoning_budget_tokens</c> column.
     /// </remarks>
-    private static ReasoningBudget ReadReasoningBudget(ReadOnlyMemory<byte> snapshotJson)
+    private static bool? ReadReasoningBudgetApplicable(ReadOnlyMemory<byte> snapshotJson)
     {
         if (snapshotJson.IsEmpty)
         {
-            return new ReasoningBudget(null, null);
+            return null;
         }
 
         try
@@ -509,23 +517,18 @@ internal static class BenchmarkEndpointMapper
                 || !sampling.TryGetProperty("reasoningBudgetTokens", out var tokens)
                 || tokens.ValueKind != JsonValueKind.Number)
             {
-                return new ReasoningBudget(null, null);
+                return null;
             }
 
             // Absent means a run frozen before the field existed; the executor reads that as the inert true, so this
             // must agree rather than reporting "not applicable" for every legacy run.
-            var applicable = !sampling.TryGetProperty("reasoningBudgetEnforceable", out var enforceable)
-                             || enforceable.ValueKind != JsonValueKind.False;
-            return new ReasoningBudget(tokens.GetInt32(), applicable);
+            return !sampling.TryGetProperty("reasoningBudgetEnforceable", out var enforceable) || enforceable.ValueKind != JsonValueKind.False;
         }
         catch (JsonException)
         {
-            return new ReasoningBudget(null, null);
+            return null;
         }
     }
-
-    /// <summary>The frozen reasoning-budget token count and whether the budget applied, both null when unknown.</summary>
-    private readonly record struct ReasoningBudget(int? Tokens, bool? Applicable);
 
     private static JsonElement? ParseJson(ReadOnlyMemory<byte>? payload)
     {

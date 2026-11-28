@@ -37,6 +37,7 @@ export function useStartBenchmarkRun() {
 			expectedProjectVersion,
 			kvCacheType,
 			agentDefinitionId,
+			reasoningBudgetTokens,
 			repeatMode,
 			answerVarianceTemperature,
 		}: {
@@ -47,6 +48,8 @@ export function useStartBenchmarkRun() {
 			kvCacheType: BenchmarkKvCacheType | null;
 			/** An agent variant to run instead of the project's agent; omitted = the project's agent. */
 			agentDefinitionId?: string;
+			/** A thinking budget to run instead of the project's; omitted = the project's budget. */
+			reasoningBudgetTokens?: number;
 			repeatMode: BenchmarkRepeatMode;
 			/** null = the node's default (0.7). Never sent in throughput mode, which the node samples at 0. */
 			answerVarianceTemperature: number | null;
@@ -56,6 +59,7 @@ export function useStartBenchmarkRun() {
 				expectedProjectVersion,
 				...(kvCacheType === null ? {} : { kvCacheType }),
 				...(agentDefinitionId === undefined ? {} : { agentDefinitionId }),
+				...(reasoningBudgetTokens === undefined ? {} : { reasoningBudgetTokens }),
 				repeatMode,
 				...(repeatMode === "AnswerVariance" && answerVarianceTemperature !== null ? { answerVarianceTemperature } : {}),
 			};
@@ -72,6 +76,8 @@ export interface BenchmarkBatchRejection {
 	kvCacheType: string | null;
 	/** The variant the refused cell asked for; null = the project's own agent. */
 	agentDefinitionId: string | null;
+	/** The thinking budget the refused cell asked for; null = the project's budget. */
+	reasoningBudgetTokens: number | null;
 	code: string;
 	message: string;
 }
@@ -125,6 +131,7 @@ export function useStartBenchmarkRunBatch() {
 					modelName: item.modelName,
 					kvCacheType: item.kvCacheType ?? null,
 					agentDefinitionId: item.agentDefinitionId ?? null,
+					reasoningBudgetTokens: item.reasoningBudgetTokens ?? null,
 					code: item.code,
 					message: item.message,
 				})),

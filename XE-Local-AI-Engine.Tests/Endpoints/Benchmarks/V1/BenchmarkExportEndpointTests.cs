@@ -89,7 +89,7 @@ public sealed class BenchmarkExportEndpointTests
                           ], StringComparer.Ordinal),
             "The export root must retain its versioned wire schema and property ordering.");
         AssertEx.Equal(BenchmarkExportProjection.SchemaVersion, root.GetProperty("schemaVersion").GetInt32());
-        AssertEx.Equal(expected: 6, root.GetProperty("schemaVersion").GetInt32());
+        AssertEx.Equal(expected: 7, root.GetProperty("schemaVersion").GetInt32());
         AssertEx.Equal(expected: 0, root.GetProperty("taskItems").GetArrayLength());
         AssertEx.Equal(expected: 0, root.GetProperty("cells").GetArrayLength());
         AssertEx.Equal(expected: 0, root.GetProperty("scorableItemCount").GetInt32());
@@ -174,6 +174,7 @@ public sealed class BenchmarkExportEndpointTests
                            AgentDefinitionId = Guid.Parse("00000000-0000-0000-0000-0000000000dd"),
                            AgentName = "Export agent",
                            AgentVersion = 4,
+                           ReasoningBudgetTokens = 1024,
                            RepeatGroupId = null,
                            RepeatIndex = null,
                            Quality = 84,
@@ -188,7 +189,13 @@ public sealed class BenchmarkExportEndpointTests
                                    TaskItemIndex = 0,
                                    QualityScore = 84,
                                    PrimaryStopReason = null,
-                                   RankExclusionReason = null
+                                   RankExclusionReason = null,
+                                   ReasoningTokens = 1023,
+                                   AppliedReasoningBudgetTokens = 1024,
+                                   GenerationTokens = 1500,
+                                   ToolCallCount = 0,
+                                   SegmentCount = 1,
+                                   DurationMs = 9000
                                }
                            ]
                        }
@@ -211,7 +218,13 @@ public sealed class BenchmarkExportEndpointTests
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         var root = document.RootElement;
-        AssertEx.Equal(expected: 6, root.GetProperty("schemaVersion").GetInt32());
+        AssertEx.Equal(expected: 7, root.GetProperty("schemaVersion").GetInt32());
+        AssertEx.Equal(expected: 1024, root.GetProperty("cells")[0].GetProperty("reasoningBudgetTokens").GetInt32(), "Schema 7 carries each cell's budget.");
+        var cellItem = root.GetProperty("cells")[0].GetProperty("items")[0];
+        AssertEx.Equal(expected: 1023, cellItem.GetProperty("reasoningTokens").GetInt32());
+        AssertEx.Equal(expected: 477, cellItem.GetProperty("nonReasoningOutputTokens").GetInt32(), "A single round: generation minus reasoning.");
+        AssertEx.Equal(expected: 9000L, cellItem.GetProperty("durationMs").GetInt64());
+        AssertEx.True(cellItem.GetProperty("reasoningAtBudget").GetBoolean(), "1023 of an applied 1024 is at budget within the slack");
         AssertEx.Equal("Score this answer.", root.GetProperty("taskItems")[0].GetProperty("prompt").GetString());
         AssertEx.Equal("cell:model:1", root.GetProperty("cells")[0].GetProperty("cellKey").GetString());
         AssertEx.Equal("00000000-0000-0000-0000-0000000000dd", root.GetProperty("cells")[0].GetProperty("agentDefinitionId").GetString(),
@@ -284,7 +297,10 @@ public sealed class BenchmarkExportEndpointTests
                 SamplingSeed = "3",
                 SamplingTemperature = 0.7d,
                 ToolCallCount = 3,
-                ToolTimeMs = 1250
+                ToolTimeMs = 1250,
+                ReasoningBudgetTokens = 1024,
+                ReasoningTokens = 1000,
+                AppliedReasoningBudgetTokens = 512
             });
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export.csv");
@@ -313,7 +329,8 @@ public sealed class BenchmarkExportEndpointTests
                        + "pairwiseScore,pairwiseCiLow,pairwiseCiHigh,pairwiseComparisons,pairwiseFitKey,"
                        + "taskItemId,taskItemIndex,cellKey,taskInputHash,taskItemSetHash,cellQuality,"
                        + "reviewState,toolCallCount,toolTimeMs,"
-                       + "agentDefinitionId,agentName,agentVersion",
+                       + "agentDefinitionId,agentName,agentVersion,"
+                       + "reasoningBudgetTokens,reasoningTokens,appliedReasoningBudgetTokens",
             lines[0]);
 
         // pp is 123 tokens over 500 ms = 246, tg is 89 over 2000 ms = 44.5. The group key is the base model, so the
@@ -324,8 +341,8 @@ public sealed class BenchmarkExportEndpointTests
 
                        // A run with no fidelity attempt, no pairwise fit and no task item still writes every cell,
                        // empty. A short row is what breaks an index-reading consumer, which is the whole reason these
-                       // were appended. reviewState is empty outside a review project; the tool timing closes the row.
-                       + new string(',', count: 25) + "3,1250,00000000-0000-0000-0000-000000000000,Agent,2",
+                       // were appended. reviewState is empty outside a review project; the reasoning trio closes the row.
+                       + new string(',', count: 25) + "3,1250,00000000-0000-0000-0000-000000000000,Agent,2,1024,1000,512",
             lines[1]);
     }
 
@@ -358,9 +375,9 @@ public sealed class BenchmarkExportEndpointTests
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         var row = body.Split("\r\n", StringSplitOptions.RemoveEmptyEntries)[1];
-        AssertEx.True(row.EndsWith("," + itemId.ToString("D") + ",\"'-1\",cell:80000000-0000-0000-0000-000000000008:1,v1:item,v1:set,75,,,,00000000-0000-0000-0000-000000000000,Agent,2",
+        AssertEx.True(row.EndsWith("," + itemId.ToString("D") + ",\"'-1\",cell:80000000-0000-0000-0000-000000000008:1,v1:item,v1:set,75,,,,00000000-0000-0000-0000-000000000000,Agent,2,,,",
                 StringComparison.Ordinal),
-            "The four stamps, the cell mean and the agent identity close the row, and the index is escaped: " + row);
+            "The four stamps, the cell mean, the agent identity and the empty reasoning trio close the row, and the index is escaped: " + row);
     }
 
     [Test]
@@ -390,9 +407,9 @@ public sealed class BenchmarkExportEndpointTests
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         var rows = body.Split("\r\n", StringSplitOptions.RemoveEmptyEntries).Skip(1).ToArray();
         AssertEx.Equal(expected: 2, rows.Length);
-        // Same model, same KV type: only the three appended agent columns tell the two rows apart, so both endings are pinned.
-        AssertEx.Contains(rows, candidate => candidate.EndsWith(",00000000-0000-0000-0000-000000000000,Agent,2", StringComparison.Ordinal));
-        AssertEx.Contains(rows, candidate => candidate.EndsWith("," + variantId.ToString("D") + ",\"Terse, variant\",5", StringComparison.Ordinal));
+        // Same model, same KV type: only the three agent columns tell the two rows apart, so both are pinned (the reasoning trio after them is empty).
+        AssertEx.Contains(rows, candidate => candidate.EndsWith(",00000000-0000-0000-0000-000000000000,Agent,2,,,", StringComparison.Ordinal));
+        AssertEx.Contains(rows, candidate => candidate.EndsWith("," + variantId.ToString("D") + ",\"Terse, variant\",5,,,", StringComparison.Ordinal));
     }
 
     [Test]
@@ -647,11 +664,11 @@ public sealed class BenchmarkExportEndpointTests
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         var states = body.Split("\r\n", StringSplitOptions.RemoveEmptyEntries)
                          .Skip(1)
-                         // Sixth from the end: the tool timing and the three agent columns are appended after it.
-                         .Select(static row => row.Split(',')[^6])
+                         // Ninth from the end: the tool timing, the three agent columns and the reasoning trio are appended after it.
+                         .Select(static row => row.Split(',')[^9])
                          .ToArray();
         AssertEx.True(states.SequenceEqual(["pending", "stale", "rejected", "approved", "", "stale", "", "approved", "stale"], StringComparer.Ordinal),
-            "reviewState, sixth from the end, per row: " + string.Join("|", states));
+            "reviewState, ninth from the end, per row: " + string.Join("|", states));
     }
 
     [Test]
@@ -1063,13 +1080,14 @@ public sealed class BenchmarkExportEndpointTests
     public async Task ExportJson_ForARunFrozenWithABudgetTheModelCannotHonour_SaysSoOnTheRun()
     {
         // The budget is exported and shown either way, so the run detail is the only place that can say it was never
-        // applied. Read straight off the frozen snapshot rather than a column of its own.
+        // applied. The budget is the flat column; its applicability is read straight off the frozen snapshot.
         await using var context = CreateContext();
         ArrangeProject(context);
         ArrangeRuns(context,
             Run() with
             {
-                RuntimeSnapshotJson = Encoding.UTF8.GetBytes("{\"primarySampling\":{\"reasoningBudgetTokens\":4096,\"reasoningBudgetEnforceable\":false}}")
+                RuntimeSnapshotJson = Encoding.UTF8.GetBytes("{\"primarySampling\":{\"reasoningBudgetTokens\":4096,\"reasoningBudgetEnforceable\":false}}"),
+                ReasoningBudgetTokens = 4096
             });
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export");

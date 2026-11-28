@@ -152,6 +152,9 @@ public sealed class InvocationState
     /// <summary>The turn's reasoning tokens summed over its provider rounds; null for the same reasons as <see cref="TurnInputTokens" />.</summary>
     public int? TurnReasoningTokens { get; set; }
 
+    /// <summary>Whether the runner reported the turn's summed usage, so a null turn total means unmeasured rather than absent.</summary>
+    public bool TurnUsageReported { get; set; }
+
     /// <summary>
     ///     Estimated tool-schema tokens the turn spent across all its provider rounds, read from the provider-call
     ///     budget just before the terminal report.
@@ -292,6 +295,7 @@ public sealed class InvocationState
             TurnOutputTokens = TurnOutputTokens,
             TurnTotalTokens = TurnTotalTokens,
             TurnReasoningTokens = TurnReasoningTokens,
+            TurnUsageReported = TurnUsageReported,
             ToolSchemaTokens = ToolSchemaTokens,
             MaxToolSchemaTokens = MaxToolSchemaTokens,
             ContextSnapshot = ContextSnapshot,

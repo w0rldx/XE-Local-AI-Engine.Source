@@ -15,7 +15,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.14");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.15");
 
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.AgentDefinition", b =>
                 {
@@ -1580,6 +1580,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("agent_version");
 
+                    b.Property<int?>("AppliedReasoningBudgetTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("applied_reasoning_budget_tokens");
+
                     b.Property<int?>("CachedPromptTokens")
                         .HasColumnType("INTEGER")
                         .HasColumnName("cached_prompt_tokens");
@@ -1823,6 +1827,14 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("prompt_tokens");
 
+                    b.Property<int?>("ReasoningBudgetTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("reasoning_budget_tokens");
+
+                    b.Property<int?>("ReasoningTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("reasoning_tokens");
+
                     b.Property<Guid?>("RepeatGroupId")
                         .HasColumnType("TEXT")
                         .HasColumnName("repeat_group_id");
@@ -1946,6 +1958,8 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.ToTable("benchmark_runs", null, t =>
                         {
                             t.HasCheckConstraint("CK_benchmark_runs_model_origin", "primary_model_origin IS NULL OR primary_model_origin IN ('huggingface', 'imported', 'trained')");
+
+                            t.HasCheckConstraint("CK_benchmark_runs_reasoning_budget_tokens", "reasoning_budget_tokens IS NULL OR reasoning_budget_tokens >= 1");
 
                             t.HasCheckConstraint("CK_benchmark_runs_requested_context", "requested_context_tokens > 0");
 

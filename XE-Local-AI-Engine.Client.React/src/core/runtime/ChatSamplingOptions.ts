@@ -15,6 +15,7 @@ export interface ChatSamplingOptions {
 	seed?: number;
 	stop?: string[];
 	numCtx?: number;
+	reasoningBudgetTokens?: number;
 }
 
 // The serialized wire shape sent to the backend. Identical to ChatSamplingOptions except seed is a string: a seed is
@@ -190,6 +191,22 @@ export const samplingFieldGroups: { groupKey: string; fields: SamplingFieldMeta[
 	},
 ];
 
+// The per-send thinking budget, deliberately outside samplingFieldGroups: only chat and Direct Inference offer it, and
+// only for a budget-capable llama.cpp model. Bounds mirror ReasoningBudgets.MinTokens/MaxTokens, which every input path
+// enforces.
+export const reasoningBudgetField: SamplingFieldMeta = {
+	key: "reasoningBudgetTokens",
+	labelKey: "pages.chat.samplingOptions.reasoningBudgetTokens",
+	descriptionKey: "pages.chat.samplingOptions.reasoningBudgetTokensDescription",
+	infoKey: "pages.chat.samplingOptions.reasoningBudgetTokensInfo",
+	min: 128,
+	max: 131072,
+	step: 128,
+	allowDecimal: false,
+	slider: false,
+	localRuntimeOnly: true,
+};
+
 // Clamps a field's configured max down to maxContextTokens for the two context-sensitive params.
 // Exported so consumers (dialog, tests) use the same logic without duplicating it.
 export function clampFieldMax(meta: SamplingFieldMeta, maxContextTokens: number | undefined): number {
@@ -227,6 +244,7 @@ export function fromWireSamplingOptions(
 		"frequencyPenalty",
 		"seed",
 		"numCtx",
+		"reasoningBudgetTokens",
 	] as const) {
 		const n = toFiniteNumber(wire[key]);
 		if (n !== undefined) {
@@ -266,6 +284,7 @@ export function toWireSamplingOptions(opts: ChatSamplingOptions): WireSamplingOp
 	setNum("presencePenalty", opts.presencePenalty);
 	setNum("frequencyPenalty", opts.frequencyPenalty);
 	setNum("numCtx", opts.numCtx);
+	setNum("reasoningBudgetTokens", opts.reasoningBudgetTokens);
 
 	// Seed rides the wire as a precision-safe string (see the backend SeedValue contract). The dialog bounds it to a
 	// finite integer, so serialize the finite value and drop a non-finite/blank entry — matching the numeric fields.

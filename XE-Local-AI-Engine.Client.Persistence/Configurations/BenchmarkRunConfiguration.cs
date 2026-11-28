@@ -15,6 +15,7 @@ internal sealed class BenchmarkRunConfiguration : IEntityTypeConfiguration<Bench
             table.HasCheckConstraint("CK_benchmark_runs_user_score", "user_score IS NULL OR (user_score >= 0 AND user_score <= 100)");
             table.HasCheckConstraint("CK_benchmark_runs_model_origin", "primary_model_origin IS NULL OR primary_model_origin IN ('huggingface', 'imported', 'trained')");
             table.HasCheckConstraint("CK_benchmark_runs_requested_context", "requested_context_tokens > 0");
+            table.HasCheckConstraint("CK_benchmark_runs_reasoning_budget_tokens", "reasoning_budget_tokens IS NULL OR reasoning_budget_tokens >= 1");
         });
         builder.HasKey(entity => entity.Id);
         builder.Property(entity => entity.Id).HasColumnName("id");
@@ -47,6 +48,9 @@ internal sealed class BenchmarkRunConfiguration : IEntityTypeConfiguration<Bench
         builder.Property(entity => entity.SegmentCount).HasColumnName("segment_count");
         builder.Property(entity => entity.ToolCallCount).HasColumnName("tool_call_count");
         builder.Property(entity => entity.ToolTimeMs).HasColumnName("tool_time_ms");
+        builder.Property(entity => entity.ReasoningBudgetTokens).HasColumnName("reasoning_budget_tokens");
+        builder.Property(entity => entity.ReasoningTokens).HasColumnName("reasoning_tokens");
+        builder.Property(entity => entity.AppliedReasoningBudgetTokens).HasColumnName("applied_reasoning_budget_tokens");
         builder.Property(entity => entity.OutputPartsJson).HasColumnName("output_parts_json");
         builder.Property(entity => entity.LastStreamSequence).HasColumnName("last_stream_sequence");
         builder.Property(entity => entity.UserScore).HasColumnName("user_score");

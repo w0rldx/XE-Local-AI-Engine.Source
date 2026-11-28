@@ -55,6 +55,9 @@ public sealed record BenchmarkStartRunCommand
     public string? TaskInputHash { get; init; }
 
     public string? TaskItemSetHash { get; init; }
+
+    /// <summary>The thinking budget frozen onto the run (the launch's override, else the project's), or <see langword="null" /> when none is pinned.</summary>
+    public int? ReasoningBudgetTokens { get; init; }
 }
 
 /// <summary>
@@ -101,6 +104,12 @@ public sealed record BenchmarkPrimarySuccessCommand
 
     /// <summary>The sum of the measured tool execution times, or <see langword="null" /> when not measured.</summary>
     public long? ToolTimeMs { get; init; }
+
+    /// <summary>The turn's reasoning tokens, or <see langword="null" /> when the provider round usage reported none.</summary>
+    public int? ReasoningTokens { get; init; }
+
+    /// <summary>The thinking budget the provider applied on the turn's last round, or <see langword="null" /> when none or unknown.</summary>
+    public int? AppliedReasoningBudgetTokens { get; init; }
 }
 
 /// <summary>
@@ -244,6 +253,13 @@ public sealed record BenchmarkRunRecord
     public int? ToolCallCount { get; init; }
 
     public long? ToolTimeMs { get; init; }
+
+    /// <summary>The frozen thinking budget; see <see cref="BenchmarkStartRunCommand.ReasoningBudgetTokens" />.</summary>
+    public int? ReasoningBudgetTokens { get; init; }
+
+    public int? ReasoningTokens { get; init; }
+
+    public int? AppliedReasoningBudgetTokens { get; init; }
 
     /// <summary>
     ///     The stored review row's state (<see cref="BenchmarkReviewStates.Approved" /> or <see cref="BenchmarkReviewStates.Rejected" />), or

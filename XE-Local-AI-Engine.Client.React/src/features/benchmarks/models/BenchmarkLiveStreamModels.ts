@@ -17,6 +17,7 @@ const benchmarkRunEventKinds = [
 	"JudgeState",
 	"Metrics",
 	"TerminalSnapshotAvailable",
+	"OutputTrimmed",
 ] as const;
 
 export const benchmarkRunEventSchema = z.object({
@@ -129,7 +130,24 @@ function mergeTextPart(parts: BenchmarkOutputPart[], kind: "output" | "reasoning
 	return next;
 }
 
+/** Cuts the output parts, in order, to `length` characters; reasoning and tool parts keep their place (BenchmarkInvocationCapture.TrimOutputTo). */
+function trimOutputParts(parts: BenchmarkOutputPart[], length: number): BenchmarkOutputPart[] {
+	let remaining = length;
+	return parts.flatMap((part) => {
+		if (part.kind !== "output") {
+			return [part];
+		}
+		const text = part.content ?? "";
+		const kept = Math.min(text.length, remaining);
+		remaining -= kept;
+		return kept > 0 ? [{ ...part, content: text.slice(0, kept) }] : [];
+	});
+}
+
 export function applyBenchmarkEvent(parts: BenchmarkOutputPart[], event: BenchmarkRunEvent): BenchmarkOutputPart[] {
+	if (event.kind === "OutputTrimmed") {
+		return trimOutputParts(parts, (event.payload.content ?? "").length);
+	}
 	if (event.kind === "OutputDelta") {
 		return mergeTextPart(parts, "output", event.payload.content ?? "");
 	}

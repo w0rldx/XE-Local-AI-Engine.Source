@@ -69,6 +69,29 @@ public sealed class LocalChatHubDirectInferenceTests
     }
 
     [Test]
+    public async Task StreamDirectInference_AReasoningBudgetBelowTheSharedBound_IsRefusedWithAHubException()
+    {
+        await using var factory = new TestServerWebAppFactory();
+        await using var connection = CreateHubConnection(factory, authorized: true);
+        await connection.StartAsync();
+
+        var exception = await AssertEx.ThrowsAsync<HubException>(async () =>
+            await connection.StreamAsync<DirectInferenceEvent>(Method,
+                                new DirectInferenceRequest
+                                {
+                                    ModelId = "qwen3.5:0.8b",
+                                    Prompt = "hello",
+                                    SamplingOptions = new SamplingOptions
+                                    {
+                                        ReasoningBudgetTokens = 100
+                                    }
+                                })
+                            .ToListAsync());
+
+        AssertEx.Contains(exception.Message, "Reasoning budget must be from 128 to 131072.");
+    }
+
+    [Test]
     public async Task StreamDirectInference_TheRequestOptionsAndALogprobsEvent_CrossTheWireIntact()
     {
         // The fake chat client is no llama.cpp model, so the service is the seam: this test is about the hub's JSON protocol.

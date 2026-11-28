@@ -66,4 +66,10 @@ public sealed record ProviderRoundContextSnapshot
 
     /// <summary>Reasoning tokens the provider reported for this round, counted inside <see cref="ProviderOutputTokens" />.</summary>
     public int? ProviderReasoningTokens { get; init; }
+
+    /// <summary>The thinking budget the round asked for (the llama.cpp budget marker as the budget hop received it); null when none.</summary>
+    public int? RequestedReasoningBudgetTokens { get; init; }
+
+    /// <summary>The thinking budget the provider put on the wire, as its round usage reports it; null when no provider applied one.</summary>
+    public int? ReasoningBudgetTokens { get; init; }
 }

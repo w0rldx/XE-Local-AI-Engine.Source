@@ -246,7 +246,10 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
                     Throughput = throughput,
                     // A plain sum: AllowConcurrentInvocation is false, so calls never overlap. An unmeasured call counts but adds no time; 0 and 0 = no calls.
                     ToolCallCount = parts.Count(static part => part.Kind == BenchmarkOutputParts.ToolCallKind),
-                    ToolTimeMs = parts.Where(static part => part.Kind == BenchmarkOutputParts.ToolResultKind).Sum(static part => part.DurationMs ?? 0)
+                    ToolTimeMs = parts.Where(static part => part.Kind == BenchmarkOutputParts.ToolResultKind).Sum(static part => part.DurationMs ?? 0),
+                    ReasoningTokens = terminal.TurnReasoningTokens,
+                    // The last round's: a tool-calling turn's earlier rounds are not recorded, which is why the at-budget read needs a single round.
+                    AppliedReasoningBudgetTokens = terminal.ContextSnapshot?.ReasoningBudgetTokens
                 });
             _events.PublishReserved(metricsEvent);
             _events.PublishReserved(terminalEvent with

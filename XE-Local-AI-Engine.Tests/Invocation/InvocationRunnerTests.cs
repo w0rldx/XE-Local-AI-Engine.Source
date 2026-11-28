@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Invocation;
 
 using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
+using System.Runtime.CompilerServices;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
@@ -303,6 +304,140 @@ public sealed class InvocationRunnerTests
                                                                      && usage.OutputTokens == 60
                                                                      && usage.TotalTokens == 6_078
                                                                      && usage.ReasoningTokens == 18));
+    }
+
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task RunAsync_WhenOneRoundsReasoningWentUncounted_ReportsNoTurnReasoningTotal(bool uncountedFirst)
+    {
+        // A /tokenize timeout on one round of a tool run: summing the counted round alone would publish a partial total.
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var counted = new UsageDetails
+        {
+            InputTokenCount = 1_000,
+            OutputTokenCount = 300,
+            ReasoningTokenCount = 255
+        };
+        var uncounted = new UsageDetails
+        {
+            InputTokenCount = 2_000,
+            OutputTokenCount = 400,
+            AdditionalCounts = new AdditionalPropertiesDictionary<long>
+            {
+                [InvocationRunner.UsageSnapshot.ReasoningUncountedUsageKey] = 1
+            }
+        };
+        var runner = CreateRunner(eventDispatcher: dispatcher,
+            agentUpdates: uncountedFirst ? Rounds(uncounted, counted) : Rounds(counted, uncounted));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunPlainAsync(runner, package);
+
+        await dispatcher.Received(1)
+                        .ReportTurnTelemetryAsync(package.InvocationId,
+                            Arg.Any<long?>(),
+                            Arg.Is<TurnUsageTotals?>(static usage => usage != null
+                                                                     && usage.InputTokens == 3_000
+                                                                     && usage.OutputTokens == 700
+                                                                     && usage.ReasoningTokens == null));
+
+        static async IAsyncEnumerable<AgentResponseUpdate> Rounds(UsageDetails first, UsageDetails second)
+        {
+            yield return new AgentResponseUpdate(ChatRole.Assistant, [new UsageContent(first)]);
+            await Task.Yield();
+            yield return new AgentResponseUpdate(ChatRole.Assistant, [new UsageContent(second)]);
+        }
+    }
+
+    [Test]
+    [Arguments(false, false)]
+    [Arguments(true, false)]
+    [Arguments(false, true)]
+    public async Task RunAsync_WhenTheTurnEndsDuringALaterReasoningRound_ReportsATurnReasoningTotalOnlyIfThatRoundWasCounted(bool laterRoundCounted, bool providerFails)
+    {
+        // A counted tool round, then a round that reasons and is stopped (or fails) before its /tokenize count reaches the runner:
+        // the first round's 40 is a subtotal, and the cost ledger would store it as the whole turn's reasoning.
+        var package = RuntimePackageBuilder.Valid().WithTimeout().Build();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(CreateFactory(cancellationToken => Rounds(laterRoundCounted, providerFails, started, cancellationToken)), eventDispatcher: dispatcher);
+
+        var runTask = RunAsync(runner, package);
+        if (!providerFails)
+        {
+            await started.Task.WaitAsync(TestBudgets.Contended);
+            runner.Cancel(package.InvocationId);
+        }
+
+        await runTask.WaitAsync(TestBudgets.Contended);
+
+        await dispatcher.Received(1)
+                        .ReportTurnTelemetryAsync(package.InvocationId,
+                            Arg.Any<long?>(),
+                            Arg.Is<TurnUsageTotals?>(usage => usage != null
+                                                              && usage.InputTokens == (laterRoundCounted ? 3_000 : 1_000)
+                                                              && usage.ReasoningTokens == (laterRoundCounted ? 100 : null)));
+        await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId,
+            Arg.Any<string>(),
+            Arg.Is<FailureCategory>(category => providerFails ? category != FailureCategory.Cancelled : category == FailureCategory.Cancelled),
+            Arg.Any<bool>());
+
+        static async IAsyncEnumerable<AgentResponseUpdate> Rounds(bool laterRoundCounted,
+            bool providerFails,
+            TaskCompletionSource started,
+            [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            yield return new AgentResponseUpdate(ChatRole.Assistant, [new TextReasoningContent("call the tool")]);
+            yield return new AgentResponseUpdate(ChatRole.Assistant, [new UsageContent(new UsageDetails { InputTokenCount = 1_000, OutputTokenCount = 300, ReasoningTokenCount = 40 })]);
+            await Task.Yield();
+            yield return new AgentResponseUpdate(ChatRole.Assistant, [new TextReasoningContent("read the result")]);
+            if (laterRoundCounted)
+            {
+                yield return new AgentResponseUpdate(ChatRole.Assistant, [new UsageContent(new UsageDetails { InputTokenCount = 2_000, OutputTokenCount = 200, ReasoningTokenCount = 60 })]);
+            }
+
+            if (providerFails)
+            {
+                throw new HttpRequestException("The connection was reset.");
+            }
+
+            started.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+    }
+
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task RunAsync_WhenALaterReasoningRoundsUsageCarriesNoReasoningCount_ReportsNoTurnReasoningTotal(bool laterRoundReportsReasoning)
+    {
+        // A counted tool round, then a round from a provider that forwards input/output usage only (no reasoning count, no
+        // uncounted marker): the first round's 40 is a subtotal, and the cost ledger would store it as the whole turn's reasoning.
+        var package = RuntimePackageBuilder.Valid().Build();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(CreateFactory(_ => Rounds(laterRoundReportsReasoning)), eventDispatcher: dispatcher);
+
+        await RunPlainAsync(runner, package);
+
+        await dispatcher.Received(1)
+                        .ReportTurnTelemetryAsync(package.InvocationId,
+                            Arg.Any<long?>(),
+                            Arg.Is<TurnUsageTotals?>(usage => usage != null
+                                                              && usage.InputTokens == 3_000
+                                                              && usage.ReasoningTokens == (laterRoundReportsReasoning ? 100 : null)));
+        await dispatcher.DidNotReceiveWithAnyArgs().ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<FailureCategory>());
+
+        static async IAsyncEnumerable<AgentResponseUpdate> Rounds(bool laterRoundReportsReasoning)
+        {
+            yield return new AgentResponseUpdate(ChatRole.Assistant, [new TextReasoningContent("call the tool")]);
+            yield return new AgentResponseUpdate(ChatRole.Assistant, [new UsageContent(new UsageDetails { InputTokenCount = 1_000, OutputTokenCount = 300, ReasoningTokenCount = 40 })]);
+            await Task.Yield();
+            yield return new AgentResponseUpdate(ChatRole.Assistant, [new TextReasoningContent("read the result")]);
+            yield return new AgentResponseUpdate(ChatRole.Assistant, [new TextContent("done")]);
+            yield return new AgentResponseUpdate(ChatRole.Assistant,
+                [new UsageContent(new UsageDetails { InputTokenCount = 2_000, OutputTokenCount = 200, ReasoningTokenCount = laterRoundReportsReasoning ? 60 : null })]);
+        }
     }
 
     // The four tests below pin UsageSnapshot.From()'s SINGLE-ROUND arithmetic — int32 saturation and the

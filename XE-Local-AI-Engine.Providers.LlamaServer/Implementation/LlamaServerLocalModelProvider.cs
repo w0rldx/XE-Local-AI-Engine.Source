@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
@@ -28,20 +29,24 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
     private readonly ITokenEstimatorCalibrationScheduler _calibrationScheduler;
     private readonly ILlamaServerEndpointBinding? _endpointBinding;
     private readonly TimeProvider _timeProvider;
+    private readonly ILlamaServerNativeClient? _nativeClient;
+    private readonly ILogger? _chatClientLogger;
 
     /// <summary>Creates the provider over the process supervisor and the GGUF model store.</summary>
     /// <remarks>
     ///     The supervisor options supply the explicit per-call HTTP network timeouts the deferred chat and embedding
     ///     clients pin on the built OpenAI client, a null options bag falling back to the default policy. Chat and
     ///     embedding take SEPARATE values on purpose: a chat call also carries the invocation deadline, an embedding
-    ///     call has no other bound.
+    ///     call has no other bound. The native client lets a chat client count a round's reasoning tokens; without it they stay unreported.
     /// </remarks>
     public LlamaServerLocalModelProvider(ILlamaServerProcessSupervisor supervisor,
         IGgufModelStore modelStore,
         TimeProvider timeProvider,
         LlamaServerSupervisorOptions? options = null,
         ITokenEstimatorCalibrationScheduler? calibrationScheduler = null,
-        ILlamaServerEndpointBinding? endpointBinding = null)
+        ILlamaServerEndpointBinding? endpointBinding = null,
+        ILlamaServerNativeClient? nativeClient = null,
+        ILoggerFactory? loggerFactory = null)
     {
         ArgumentNullException.ThrowIfNull(supervisor);
         _supervisor = supervisor;
@@ -54,6 +59,8 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
         _embeddingNetworkTimeout = resolvedOptions.EmbeddingHttpNetworkTimeout;
         _calibrationScheduler = calibrationScheduler ?? new NullTokenEstimatorCalibrationScheduler();
         _endpointBinding = endpointBinding;
+        _nativeClient = nativeClient;
+        _chatClientLogger = loggerFactory?.CreateLogger<DeferredLlamaServerChatClient>();
     }
 
     /// <inheritdoc />
@@ -181,7 +188,8 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
     public IChatClient CreateChatClient(LocalModelSelection selection)
     {
         ValidateSelection(selection);
-        return new DeferredLlamaServerChatClient(_supervisor, selection.ModelName, _chatNetworkTimeout, _calibrationScheduler, _endpointBinding, selection.ResidencyIntent);
+        return new DeferredLlamaServerChatClient(_supervisor, selection.ModelName, _chatNetworkTimeout, _calibrationScheduler, _endpointBinding, selection.ResidencyIntent,
+            _nativeClient, _chatClientLogger);
     }
 
     /// <inheritdoc />

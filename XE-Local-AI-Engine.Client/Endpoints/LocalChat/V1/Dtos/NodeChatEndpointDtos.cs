@@ -190,6 +190,9 @@ public sealed class NodeChatSamplingOptionsDto
     public IReadOnlyList<string>? Stop { get; init; }
 
     public int? NumCtx { get; init; }
+
+    /// <summary>The thinking budget in tokens, overriding the reasoning effort's; ignored while reasoning is off.</summary>
+    public int? ReasoningBudgetTokens { get; init; }
 }
 
 /// <summary>
@@ -668,6 +671,10 @@ public sealed record NodeChatContextWindowResponse
     public int? ProviderOutputTokens { get; init; }
 
     public int? ProviderReasoningTokens { get; init; }
+
+    public int? RequestedReasoningBudgetTokens { get; init; }
+
+    public int? ReasoningBudgetTokens { get; init; }
 
     public NodeChatContextWindowEstimateResponse? Estimated { get; init; }
 

@@ -549,6 +549,47 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     }
 
     [Test]
+    [Arguments(127, false)]
+    [Arguments(128, true)]
+    [Arguments(131_072, true)]
+    [Arguments(131_073, false)]
+    public async Task RegenerateAsync_BoundsTheSentReasoningBudget_BeforeAnyVariantExists(int budgetTokens, bool accepted)
+    {
+        // The hub passes raw application sampling options, which never meet the conversation PATCH validator.
+        await using var provider = await BuildProviderAsync($"regeneration-reasoning-budget-{budgetTokens}.sqlite");
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
+        var (conversation, originalId) = await SeedCompletedOriginalAsync(persistence);
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new RegenContextCapturingRunner(dispatcher);
+        var service = CreateServiceWithScopeFactory(persistence, runner, dispatcher, CreateKnowledgeScopeFactory());
+        var sampling = new SamplingOptions
+        {
+            ReasoningBudgetTokens = budgetTokens
+        };
+
+        if (!accepted)
+        {
+            var messagesBefore = AssertEx.NotNull(await persistence.GetConversationAsync(conversation.ConversationId)).Messages.Count;
+
+            var exception = AssertEx.Throws<NodeChatInvalidRequestException>(() =>
+                _ = service.RegenerateAsync(conversation.ConversationId, originalId, samplingOptions: sampling));
+
+            AssertEx.Equal("Reasoning budget must be from 128 to 131072.", exception.Message);
+            AssertEx.Null(runner.LastContext, "A refused rerun never runs.");
+            AssertEx.Equal(messagesBefore, AssertEx.NotNull(await persistence.GetConversationAsync(conversation.ConversationId)).Messages.Count,
+                "no sibling variant was written");
+            return;
+        }
+
+        await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, originalId, samplingOptions: sampling))
+        {
+            // Drained for the run.
+        }
+
+        AssertEx.NotNull(runner.LastContext, "an in-range budget reruns");
+    }
+
+    [Test]
     public async Task RegenerateAsync_WhenTheRunsSearchToolReturnsHits_RecordsThemAsTheVariantsSources()
     {
         // Parity with the send path: hits the rerun's search tool returned land on the regenerated variant.

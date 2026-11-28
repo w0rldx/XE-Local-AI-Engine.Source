@@ -7,10 +7,11 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 internal static class BenchmarkExportProjection
 {
     /// <summary>
-    ///     Current export schema version. Version 6 adds each cell's <c>agentDefinitionId</c>, <c>agentName</c> and
-    ///     <c>agentVersion</c> while preserving every field from version 5 (run reviews, artifact metadata, tool timing).
+    ///     Current export schema version. Version 7 adds each run's <c>reasoningBudgetTokens</c>, <c>reasoningTokens</c>
+    ///     and <c>appliedReasoningBudgetTokens</c> and each cell's <c>reasoningBudgetTokens</c>, preserving every field
+    ///     from version 6 (the cells' agent identity).
     /// </summary>
-    public const int SchemaVersion = 6;
+    public const int SchemaVersion = 7;
 
     public static BenchmarkExportPairwiseFitResponse? ToResponse(BenchmarkPairwiseFitRecord? fit, IReadOnlyList<BenchmarkPairwiseScoreEntry> scores) =>
         fit is null

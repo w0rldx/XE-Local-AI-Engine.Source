@@ -90,6 +90,7 @@ Lookup material split out of the largest pages. Each is complete on its own and 
 | --- | --- |
 | 03 Local Runtime & Providers | [supervisor internals](reference/03-llama-server-supervisor.md) · [launch flags](reference/03-llama-server-launch-flags.md) · [clients](reference/03-llama-server-clients.md) · [runtime binaries & tuning](reference/03-runtime-binaries-and-tuning.md) · [satellite & cloud providers](reference/03-satellite-and-cloud-providers.md) |
 | 04 Agent Mode | [AI.Agent runtime](reference/04-ai-agent-runtime.md) · [application services](reference/04-application-services.md) · [agent skills](reference/04-agent-skills.md) · [work sessions](reference/04-work-sessions.md) |
+| 05 Chat | [thinking budget](reference/05-thinking-budget.md) |
 | 09 API & Hubs | [endpoint inventory](reference/09-endpoint-inventory.md) · [SignalR hubs](reference/09-signalr-hubs.md) |
 | 10 React Client | [feature folders](reference/10-feature-folders.md) |
 | 12 Security & Privacy | [admin API surface](reference/12-admin-api-surface.md) · [sandbox modes & options](reference/12-sandbox-modes-and-options.md) |

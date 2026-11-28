@@ -30,7 +30,10 @@ internal static class BenchmarkExportCsv
         + "reviewState,toolCallCount,toolTimeMs,"
 
         // Appended again. Two agent variants of one model and KV type differ only here; cellKey is opaque and cannot say which.
-        + "agentDefinitionId,agentName,agentVersion";
+        + "agentDefinitionId,agentName,agentVersion,"
+
+        // Appended again. A budget sweep's runs differ only here; the derived at-budget flag stays out (a read rule, not a measurement).
+        + "reasoningBudgetTokens,reasoningTokens,appliedReasoningBudgetTokens";
 
     /// <summary>Renders the export rows, applying the same KLD comparability gate as the live read.</summary>
     /// <remarks>
@@ -196,6 +199,12 @@ internal static class BenchmarkExportCsv
                    .Append(Field(run.AgentName))
                    .Append(',')
                    .Append(run.AgentVersion.ToString(CultureInfo.InvariantCulture))
+                   .Append(',')
+                   .Append(Number(run.ReasoningBudgetTokens))
+                   .Append(',')
+                   .Append(Number(run.ReasoningTokens))
+                   .Append(',')
+                   .Append(Number(run.AppliedReasoningBudgetTokens))
                    .Append("\r\n");
     }
 

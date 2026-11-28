@@ -744,17 +744,18 @@ entirely so the model's chat-template-baked reasoning runs, and only `none` or u
 of the **default effort** setting, shipped `low` (model-matrix 2026-10-04: a flat
 `medium` let a 0.8B spend minutes reasoning over a five-word greeting). Only the budget follows that setting: the
 turn still sends no effort, so `think` stays `true` and an external model keeps its registered default.
-Uncapped, a hard prompt reasoned until `finish_reason: length` with no answer. Anything else —
+Anything else —
 `none` (reasoning is being turned off, so a budget is meaningless), the binary `on` sentinel, an unrecognized
 value — sends no budget at all. The marker is inert off the llama.cpp path. `minimal` and `xhigh` are mapped
 rather than left null so a definition that pins a Codex-only level onto a local model does not silently get
 *more* thinking than `high`. The single-agent definition, every orchestration participant and a profile-bound
-sub-agent read the same node ladder.
+sub-agent read the same node ladder. A pinned budget (`definition.Sampling`) wins only while reasoning is on
+([thinking budget](05-thinking-budget.md)).
 
 **Reasoning off on llama.cpp** sends `chat_template_kwargs.enable_thinking=false` **and**
 `reasoning_budget_tokens: 0` (`DeferredLlamaServerChatClient.ApplyThinkingSwitch`). A template that renders
 `<think>` but never reads `enable_thinking` (LFM2.5) ignores the kwarg; the zero budget is its only off switch,
-probed at b10201 (`.tmp/model-matrix-data/phase2/track-1a/probe-summary.txt`), and it leaves the output of a
+probed at b10201, and it leaves the output of a
 template that honours the kwarg byte-identical. The forced empty block can surface as `<think></think>` at the
 head of the content; `LeadingThinkTagStripper` drops that, and a stray leading `</think>`, from every
 llama-server answer.

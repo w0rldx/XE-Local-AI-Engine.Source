@@ -27,7 +27,14 @@ public sealed partial class BenchmarkStore
                                        entity.RepeatIndex,
                                        entity.TaskItemId,
                                        entity.TaskItemIndex,
-                                       entity.PrimaryStopReason
+                                       entity.PrimaryStopReason,
+                                       entity.ReasoningBudgetTokens,
+                                       entity.ReasoningTokens,
+                                       entity.AppliedReasoningBudgetTokens,
+                                       entity.GenerationTokens,
+                                       entity.ToolCallCount,
+                                       entity.SegmentCount,
+                                       entity.DurationMs
                                    })
                                    .ToArrayAsync(cancellationToken);
 
@@ -62,6 +69,7 @@ public sealed partial class BenchmarkStore
                 AgentDefinitionId = members[0].AgentDefinitionId,
                 AgentName = members[0].AgentName,
                 AgentVersion = members[0].AgentVersion,
+                ReasoningBudgetTokens = members[0].ReasoningBudgetTokens,
                 RepeatGroupId = members[0].RepeatGroupId,
                 RepeatIndex = members[0].RepeatIndex,
                 Quality = cell.Quality,
@@ -77,7 +85,13 @@ public sealed partial class BenchmarkStore
                         TaskItemIndex = member.TaskItemIndex,
                         QualityScore = ranking.Runs[member.Id].QualityScore,
                         PrimaryStopReason = member.PrimaryStopReason,
-                        RankExclusionReason = ranking.Runs[member.Id].Judge.RankExclusionReason
+                        RankExclusionReason = ranking.Runs[member.Id].Judge.RankExclusionReason,
+                        ReasoningTokens = member.ReasoningTokens,
+                        AppliedReasoningBudgetTokens = member.AppliedReasoningBudgetTokens,
+                        GenerationTokens = member.GenerationTokens,
+                        ToolCallCount = member.ToolCallCount,
+                        SegmentCount = member.SegmentCount,
+                        DurationMs = member.DurationMs
                     })
                 ]
             });

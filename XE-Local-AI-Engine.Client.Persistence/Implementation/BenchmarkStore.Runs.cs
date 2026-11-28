@@ -94,6 +94,7 @@ public sealed partial class BenchmarkStore
             run.TaskInputHash = command.TaskInputHash ?? LegacyTaskHash;
             run.TaskItemSetHash = command.TaskItemSetHash ?? project.TaskItemSetHash ?? LegacyTaskHash;
             run.AgentDefinitionId = command.AgentDefinitionId ?? project.AgentDefinitionId;
+            run.ReasoningBudgetTokens = command.ReasoningBudgetTokens;
 
             // Added in caller order, and the queue sequence is assigned in insert order, which is what makes a repeat
             // group run back-to-back — warm-up first, then 1..N — rather than interleaved with whatever else is queued.
@@ -336,6 +337,9 @@ public sealed partial class BenchmarkStore
                                   TaskItemSetHash = entity.TaskItemSetHash,
                                   ToolCallCount = entity.ToolCallCount,
                                   ToolTimeMs = entity.ToolTimeMs,
+                                  ReasoningBudgetTokens = entity.ReasoningBudgetTokens,
+                                  ReasoningTokens = entity.ReasoningTokens,
+                                  AppliedReasoningBudgetTokens = entity.AppliedReasoningBudgetTokens,
                                   ReviewState = _dbContext.BenchmarkRunReviews.Where(review => review.RunId == entity.Id)
                                                           .Select(static review => review.State)
                                                           .FirstOrDefault(),
