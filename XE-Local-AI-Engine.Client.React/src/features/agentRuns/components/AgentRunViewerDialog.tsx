@@ -22,7 +22,7 @@ type ViewerTab = "log" | "patch";
  *
  * Both files are model-authored, so neither is rewritten on the way here — an operator reading a doctored patch needs
  * to see the bytes the run produced, not a cleaned-up rendering of them. What makes that safe to show is the surface:
- * `CodeEditor` is Monaco with its unicode highlighting left at the default, which marks invisible, ambiguous and
+ * `CodeEditor` is Monaco in inspection mode, which marks invisible, ambiguous and
  * bidirectional characters in place, so a right-to-left override cannot silently reorder a line an operator is about
  * to approve elsewhere.
  *
@@ -118,7 +118,7 @@ function ViewerPanel({
 	}
 
 	const text = query.data?.text ?? "";
-	if (text.length === 0) {
+	if (text.length === 0 && !query.data?.truncated) {
 		return <EmptyState message={emptyMessage} data-testid={`${testId}-empty`} />;
 	}
 
@@ -129,7 +129,15 @@ function ViewerPanel({
 					{t("pages.agentRuns.viewer.truncated", "This file is longer than what is shown here; part of it was left out.")}
 				</Alert>
 			) : null}
-			<CodeEditor value={text} language={language} readOnly={true} height={420} aria-label={testId} data-testid={testId} />
+			<CodeEditor
+				inspect={true}
+				value={text}
+				language={language}
+				readOnly={true}
+				height={420}
+				aria-label={testId}
+				data-testid={testId}
+			/>
 		</Stack>
 	);
 }

@@ -15,7 +15,7 @@
 #             scripts/run-backend-tests.sh: <time> <worktree> <tip> Tests=p/f/s ... scope=<scope> ... exit=<code>.
 #             scope is full, no-build, shard, siblings-only or contracts-skipped; only full is accepted.
 #             A tip suffixed +dirty or +moved never equals a branch tip, so it never authorises a squash.
-#             The backend row is the newest row ending exit=0 with no lane= field. Lane rows are
+#             The backend row is the newest completed run with no lane= field (a lock miss, exit 69, ran nothing). Lane rows are
 #             <time> <worktree> <tip> lane=<name> wall=<s> lane-exit=<code> (scripts/run-gate-lane.sh).
 #
 # Required lanes: openapi always; frontend unless every path of the branch diff against its merge base with
@@ -37,10 +37,10 @@
 #                                   13 develop is not an ancestor of <branch> (develop moved: absorb it, re-gate)
 #                                   14 <branch> is not checked out in any worktree
 #                                   15 the branch worktree has changes (untracked included)
-#                                   16 no gated run recorded: no gate log, or no exit=0 line for that worktree
-#                                   17 the last exit=0 run gated a different tip than the branch tip
-#                                   18 the last exit=0 run recorded failed tests (Tests=p/f/s with f > 0)
-#                                   19 the last exit=0 run was partial (scope= other than full, such
+#                                   16 no gated run recorded: no gate log, or no completed backend run for that worktree
+#                                   17 the latest backend run failed or gated a different tip
+#                                   18 the latest backend run has invalid or failing test counts
+#                                   19 the latest backend run was partial (scope= other than full, such
 #                                      as contracts-skipped: the release contract lane was bypassed)
 #                                   20 a required lane's newest row for that worktree is missing, red,
 #                                      for another tip, or suffixed +dirty/+moved
@@ -114,29 +114,32 @@ fi
 require_clean "${worktree}" 15 "branch worktree"
 
 [[ -r "${gate_log}" ]] || fail "16: no gated run recorded: ${gate_log} does not exist."
-# The newest exit=0 line for this worktree; the path is compared after resolving symlinks on both sides.
+# The newest backend run other than a lock miss for this worktree; the path is compared after resolving symlinks on both sides.
 worktree_real="$(realpath "${worktree}")"
 gated=""
 while IFS= read -r line; do
   IFS=$'\t' read -r -a f <<<"${line}"
-  [[ "${#f[@]}" -ge 4 && "${f[-1]}" == "exit=0" && "${f[3]}" != lane=* ]] || continue
+  [[ "${#f[@]}" -ge 4 && "${f[-1]}" == exit=* && "${f[-1]}" != exit=69 && "${f[3]}" != lane=* ]] || continue
   [[ "$(realpath -m "${f[1]}")" == "${worktree_real}" ]] && gated="${line}"
 done <"${gate_log}"
-[[ -n "${gated}" ]] || fail "16: no gated run recorded: ${gate_log} has no exit=0 line for ${worktree}."
+[[ -n "${gated}" ]] || fail "16: no gated run recorded: ${gate_log} has no backend run for ${worktree}."
 
 IFS=$'\t' read -r -a f <<<"${gated}"
+[[ "${f[-1]}" == exit=0 ]] || fail "17: latest backend run recorded ${f[-1]}: gate this tip again."
 if [[ "${f[2]}" == *+* ]]; then
   fail "17: last green gate of ${worktree} recorded tip ${f[2]}: the tree was dirty when the gate started or HEAD moved during it, so it certifies no commit. Commit, then gate this tip (${tip})."
 fi
 [[ "${f[2]}" == "${tip}" ]] \
   || fail "17: last green gate of ${worktree} ran on ${f[2]}, but '${branch}' is at ${tip}: gate this tip."
-tests="" scope=""
+tests="" scope="" tests_seen=""
 for field in "${f[@]}"; do
-  [[ "${field}" == Tests=* ]] && tests="${field#Tests=}"
+  if [[ "${field}" == Tests=* ]]; then
+    [[ -z "${tests_seen}" ]] || fail "18: duplicate Tests field in backend evidence."
+    tests_seen=1 tests="${field#Tests=}"
+  fi
   [[ "${field}" == scope=* ]] && scope="${field#scope=}"
 done
-IFS=/ read -r _ failed _ <<<"${tests}"
-[[ "${failed}" == 0 ]] || fail "18: last green gate of ${worktree} recorded Tests=${tests:-<missing>}, failures must be 0."
+[[ "${tests}" =~ ^[1-9][0-9]*/0/[0-9]+$ ]] || fail "18: last green gate of ${worktree} recorded Tests=${tests:-<missing>}, expected positive passes, zero failures and a numeric skip count."
 [[ "${scope}" == full ]] \
   || fail "19: last green gate of ${worktree} recorded scope=${scope:-<missing>}: only a full run (built, unsharded, every lane, release contract tests not bypassed; contracts-skipped is not full) certifies a squash."
 

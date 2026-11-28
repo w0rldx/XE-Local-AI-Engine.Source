@@ -21,7 +21,7 @@
 #   Every run past the argument checks appends ONE tab-separated line to the MAIN checkout's
 #   .tmp/gate-history.log, the file scripts/run-backend-tests.sh writes, resolved the same way:
 #     <ISO time> <worktree real path or -> <tip> lane=<name> wall=<seconds> lane-exit=<code>
-#   The last field is lane-exit=, never exit=, so a reader that takes the newest row ending exit=0 as the
+#   The last field is lane-exit=, never exit=, so a reader selecting the newest completed
 #   backend row never selects a lane row. tip is HEAD once the lock is held ("-" outside git), suffixed
 #   "+dirty" when the tree had changes (untracked included) then or at exit and "+moved" when HEAD differed at exit; a
 #   suffixed tip certifies nothing. wall counts from the lock; for 69 it is the time spent waiting and tip is

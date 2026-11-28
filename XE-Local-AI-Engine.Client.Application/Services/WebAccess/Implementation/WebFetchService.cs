@@ -19,8 +19,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 ///     The node kill switch is read HERE, not in the handler, so every caller is refused while web access is off
 ///     (the <c>ComputeToolGateway</c> rule). Every hop is validated by the custom-tool SSRF guard and dialled through
 ///     its pinned connect callback; redirects are followed by hand (at most <see cref="MaxRedirects" />) under ONE
-///     time budget; the body is read as a capped stream. Bodies are never logged and URLs only at Debug: a query
-///     string is exactly what an injected page would use to exfiltrate. ADR 0017.
+///     time budget; the body is read as a capped stream. Diagnostics record host names only. ADR 0017.
 /// </remarks>
 internal sealed class WebFetchService
 {
@@ -157,13 +156,13 @@ internal sealed class WebFetchService
         }
         catch (HttpRequestException exception)
         {
-            _logger.LogDebug(exception, "web_fetch request to {Url} failed.", requested);
+            _logger.LogDebug("web_fetch request to {Host} failed: {ExceptionType}.", requested.IdnHost, exception.GetType().Name);
             return WebFetchOutcome.Refused("request-failed", "The request failed before a response arrived.");
         }
         catch (Exception exception) when (exception is IOException or InvalidDataException)
         {
             // A connection reset mid-body, or a corrupt gzip/brotli body the handler failed to decode.
-            _logger.LogDebug("web_fetch body from {Url} could not be read: {ExceptionType}.", requested, exception.GetType().Name);
+            _logger.LogDebug("web_fetch body from {Host} could not be read: {ExceptionType}.", requested.IdnHost, exception.GetType().Name);
             return WebFetchOutcome.Refused("request-failed", "The response body could not be read.");
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -187,7 +186,7 @@ internal sealed class WebFetchService
                     : "The page redirected to a URL that is not in this node's allowed links.");
             }
 
-            _logger.LogDebug("web_fetch GET {Url} (hop {Hop}).", current, hop);
+            _logger.LogDebug("web_fetch GET {Host} (hop {Hop}).", current.IdnHost, hop);
             using var request = new HttpRequestMessage(HttpMethod.Get, current);
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
@@ -229,7 +228,7 @@ internal sealed class WebFetchService
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
                 // A parser throw on hostile HTML is a refusal of this page, never a failure of the caller's turn.
-                _logger.LogDebug("web_fetch could not extract text from {Url}: {ExceptionType}.", current, exception.GetType().Name);
+                _logger.LogDebug("web_fetch could not extract text from {Host}: {ExceptionType}.", current.IdnHost, exception.GetType().Name);
                 return WebFetchOutcome.Refused("extraction-failed", "The page could not be read as text.");
             }
         }

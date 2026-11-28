@@ -4,6 +4,7 @@ using System.IO.Compression;
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Tools;
@@ -20,6 +21,19 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 public sealed class WebSearchServiceTests
 {
     private const string SearxngBase = "http://192.168.1.20:8888/searx/";
+
+    [Test]
+    public async Task SearchAsync_OmitsQueryAndExceptionDetailFromLogs()
+    {
+        const string Query = "private-search-sentinel";
+        using var handler = new StubHandler(_ => throw new HttpRequestException(Query));
+        var logger = new RecordingLogger<WebSearchService>();
+        var service = CreateService(handler, searxngUrl: SearxngBase, logger: logger);
+
+        AssertEx.Equal("request-failed", ErrorCode(await SearchJsonAsync(service, Query)));
+        AssertEx.True(logger.AllText.Contains(WebSearchService.SearxngBackend, StringComparison.Ordinal));
+        AssertEx.False(logger.AllText.Contains(Query, StringComparison.Ordinal));
+    }
 
     [Test]
     public async Task SearchAsync_WhenWebAccessOff_RefusesWithoutSending()
@@ -315,7 +329,7 @@ public sealed class WebSearchServiceTests
     private static async Task<string> SearchJsonAsync(WebSearchService service, string? query, int? maxResults = null) =>
         WebSearchService.Serialize(await service.SearchAsync(query, maxResults));
 
-    private static WebSearchService CreateService(StubHandler handler, bool webAccessEnabled = true, string? searxngUrl = null)
+    private static WebSearchService CreateService(StubHandler handler, bool webAccessEnabled = true, string? searxngUrl = null, ILogger<WebSearchService>? logger = null)
     {
         var factory = Substitute.For<IHttpClientFactory>();
         factory.CreateClient(Arg.Any<string>()).Returns(call =>
@@ -326,7 +340,7 @@ public sealed class WebSearchServiceTests
         return new WebSearchService(factory,
             StubNodeRuntimeSettings.Create().WithWebAccessEnabled(webAccessEnabled).WithWebSearchSearxngUrl(searxngUrl).Build(),
             TimeProvider.System,
-            NullLogger<WebSearchService>.Instance);
+            logger ?? NullLogger<WebSearchService>.Instance);
     }
 
     private static string? ErrorCode(string result)

@@ -16,7 +16,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 ///     <see cref="WebFetchService.HttpClientName" /> client and is best-effort (ADR 0017): a bot challenge or a
 ///     refusal becomes <c>search-backend-unavailable</c>. SearXNG gets its own client WITHOUT the private-address deny
 ///     list, because the operator typed that URL and it is usually on localhost or the LAN; the model controls only
-///     the query string, never the host or path. Queries are logged at Debug only.
+///     the query string, never the host or path.
 /// </remarks>
 internal sealed class WebSearchService
 {
@@ -83,7 +83,7 @@ internal sealed class WebSearchService
         }
 
         var backend = searxngUrl is null ? DuckDuckGoBackend : SearxngBackend;
-        _logger.LogDebug("web_search via {Backend}: {Query}", backend, query);
+        _logger.LogDebug("web_search via {Backend}.", backend);
 
         // One time budget for both web tools: the node's WebFetchTimeoutSeconds.
         var timeBudget = await _runtimeSettings.GetWebFetchTimeoutAsync(cancellationToken);
@@ -98,7 +98,7 @@ internal sealed class WebSearchService
         catch (HttpRequestException exception)
         {
             // Includes the DuckDuckGo client's pinned connect callback refusing a resolved address.
-            _logger.LogDebug(exception, "web_search request to {Backend} failed.", backend);
+            _logger.LogDebug("web_search request to {Backend} failed: {ExceptionType}.", backend, exception.GetType().Name);
             return WebSearchOutcome.Refused("request-failed", "The search request failed before a response arrived.");
         }
         catch (Exception exception) when (exception is IOException or InvalidDataException)

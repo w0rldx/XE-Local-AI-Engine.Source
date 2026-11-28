@@ -1,6 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 
-import { applyAgentHomePatchMutation, previewAgentHomePatchMutation } from "@/core/api/generated/@tanstack/react-query.gen";
+import { applyAgentHomePatchMutation } from "@/core/api/generated/@tanstack/react-query.gen";
+import { getAgentHomeRunPatch, previewAgentHomePatch } from "@/core/api/generated/sdk.gen";
 
 // Both routes are POSTs — the preview runs `git apply --check` against the host folders, which is a command rather
 // than a read — so both arrive from the generated client as mutations rather than query options. The dialog fires the
@@ -9,7 +10,24 @@ import { applyAgentHomePatchMutation, previewAgentHomePatchMutation } from "@/co
 
 /** The non-mutating dry run: the per-file plan, the rejections, and the hash an apply has to echo back. */
 export function usePreviewAgentHomePatch() {
-	return useMutation({ ...previewAgentHomePatchMutation() });
+	return useMutation({
+		mutationFn: async ({ path }: { path: { runId: string } }) => {
+			const { data: plan } = await previewAgentHomePatch({ path, throwOnError: true });
+			if (!plan.canApply) {
+				return { ...plan, reviewText: null };
+			}
+			const { data: patch } = await getAgentHomeRunPatch({ path, throwOnError: true });
+			let reviewText: string | null = null;
+			if (!patch.truncated && patch.text) {
+				const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(patch.text));
+				const hash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+				if (hash === plan.patchSha256) {
+					reviewText = patch.text;
+				}
+			}
+			return { ...plan, reviewText };
+		},
+	});
 }
 
 /**

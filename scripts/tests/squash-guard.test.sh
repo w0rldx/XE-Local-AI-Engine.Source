@@ -167,6 +167,20 @@ log_line "$(fg -C "$WT" rev-parse HEAD)" 119/1/3 1 >>"$LOG"
 guard feature --repo "$MAIN"
 check "g gate line for a different tip" 17 "$status"
 
+fixture same-tip
+log_line "$TIP" 119/1/3 1 >>"$LOG"
+guard feature --repo "$MAIN"
+check "newer backend failure on the same tip" 17 "$status"
+log_line "$TIP" 120/0/3 0 >>"$LOG"
+log_line "$TIP" '' 69 >>"$LOG"
+guard feature --repo "$MAIN"
+check "fresh pass restores eligibility and a lock miss ran nothing" 0 "$status"
+for counts in 0/0/0 abc/0/1 /0/ 1/0/1/2 $'1/0/1\tTests=2/0/0'; do
+  log_line "$TIP" "$counts" 0 >>"$LOG"
+  guard feature --repo "$MAIN"
+  check "invalid backend evidence $counts" 18 "$status"
+done
+
 # (h) the newest green line recorded failed tests
 fixture h
 log_line "$TIP" 118/2/3 0 >>"$LOG"

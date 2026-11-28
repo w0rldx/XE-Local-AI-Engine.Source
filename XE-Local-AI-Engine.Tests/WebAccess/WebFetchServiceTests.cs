@@ -4,6 +4,7 @@ using System.IO.Compression;
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Tools;
@@ -26,6 +27,37 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 public sealed class WebFetchServiceTests
 {
     private const string PageUrl = "https://news.example.com/tidal";
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task FetchAsync_KeepsRequestAndRedirectSecretsOutOfLogs(bool fail)
+    {
+        const string Secret = "private-link-sentinel";
+        using var handler = new StubHandler((request, _) =>
+        {
+            if (request.RequestUri?.Host == "news.example.com")
+            {
+                return Task.FromResult(Redirect($"https://other.example.com/{Secret}?key={Secret}"));
+            }
+
+            return fail ? throw new HttpRequestException(Secret) : Task.FromResult(Text("text/plain", "ok"));
+        });
+        var logger = new RecordingLogger<WebFetchService>();
+        var result = await FetchJsonAsync(CreateService(handler, logger: logger), $"{PageUrl}?key={Secret}", allowedUrls: null);
+
+        if (fail)
+        {
+            AssertEx.Equal("request-failed", ErrorCode(result));
+        }
+        else
+        {
+            AssertEx.Null(ErrorCode(result));
+        }
+
+        AssertEx.True(logger.AllText.Contains("other.example.com", StringComparison.Ordinal));
+        AssertEx.False(logger.AllText.Contains(Secret, StringComparison.Ordinal));
+    }
 
     [Test]
     public async Task FetchAsync_WhenWebAccessOff_RefusesWithoutSending()
@@ -470,14 +502,15 @@ public sealed class WebFetchServiceTests
     private static WebFetchService CreateService(StubHandler handler,
         bool webAccessEnabled = true,
         TimeProvider? timeProvider = null,
-        INodeRuntimeSettings? runtimeSettings = null)
+        INodeRuntimeSettings? runtimeSettings = null,
+        ILogger<WebFetchService>? logger = null)
     {
         var factory = Substitute.For<IHttpClientFactory>();
         factory.CreateClient(WebFetchService.HttpClientName).Returns(_ => new HttpClient(handler, disposeHandler: false));
         return new WebFetchService(factory,
             runtimeSettings ?? StubNodeRuntimeSettings.Create().WithWebAccessEnabled(webAccessEnabled).Build(),
             timeProvider ?? TimeProvider.System,
-            NullLogger<WebFetchService>.Instance);
+            logger ?? NullLogger<WebFetchService>.Instance);
     }
 
     private static string? ErrorCode(string result)

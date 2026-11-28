@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
-import { http, HttpResponse } from "msw";
+import { HttpResponse, http } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AgentHomePatchApplyDialog } from "@/core/ui/components/AgentHomePatchApplyDialog/AgentHomePatchApplyDialog";
@@ -12,10 +12,12 @@ import { setupMswServer } from "@/test/UseMswServer";
 // Driven through the real generated SDK and the shared axios interceptors against MSW, so the wire shape and the
 // ProblemDetails → ApiError path are exercised rather than stubbed. What this file owes is the ORDER of the flow: the
 // dialog must read before it offers, and it must send back the hash it was shown.
-const server = setupMswServer();
 
 const RUN_ID = "run-1758300000000-1";
-const PATCH_HASH = "a".repeat(64);
+const PATCH_TEXT = "+reviewed change";
+const PATCH_HASH = "5dcde98b6e16cebde840e40ea8cd8c7226f71dbdeaa79afc3b8373ce3ae3f5da";
+const TEXT_ROUTE = `agent-home/runs/${RUN_ID}/patch`;
+const server = setupMswServer(jsonRoute("get", TEXT_ROUTE, { text: PATCH_TEXT, truncated: false }));
 
 const PREVIEW_ROUTE = `agent-home/runs/${RUN_ID}/patch/preview`;
 const APPLY_ROUTE = `agent-home/runs/${RUN_ID}/patch/apply`;
@@ -64,6 +66,16 @@ describe("AgentHomePatchApplyDialog", () => {
 		expect(table.textContent).toContain("+3 −1");
 	});
 
+	it.each([
+		{ text: "+different change", truncated: false },
+		{ text: PATCH_TEXT, truncated: true },
+	])("blocks approval when the review is incomplete or differs from preview", async (patch) => {
+		server.use(jsonRoute("post", PREVIEW_ROUTE, cleanPreview), jsonRoute("get", TEXT_ROUTE, patch));
+		renderDialog();
+		expect(await screen.findByText(/complete patch could not be verified/)).toBeTruthy();
+		expect((screen.getByTestId("agent-home-patch-apply-confirm") as HTMLButtonElement).disabled).toBe(true);
+	});
+
 	it("sends the hash the preview reported, and reports what landed", async () => {
 		const bodies: unknown[] = [];
 		server.use(
@@ -77,6 +89,7 @@ describe("AgentHomePatchApplyDialog", () => {
 
 		const confirm = await screen.findByTestId("agent-home-patch-apply-confirm");
 		await waitFor(() => expect((confirm as HTMLButtonElement).disabled).toBe(false));
+		expect(screen.getByText(PATCH_TEXT)).toBeTruthy();
 		fireEvent.click(confirm);
 
 		const applied = await screen.findByTestId("agent-home-patch-apply-applied");

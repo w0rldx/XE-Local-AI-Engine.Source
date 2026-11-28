@@ -237,7 +237,7 @@ red row with `reason=tests` counts, against a `scope=full` green row on the same
 compare mode), each a fixed command under the build lock. The lane name is its only argument; it refuses the
 variables that skip a check or change what runs (its header lists them). Lane rows have six columns,
 `<time> <worktree> <tip> lane=<name> wall=<seconds> lane-exit=<code>`, with the tip taken under the lock and suffixed
-`+dirty` when the tree had changes when the lock was taken or at exit, `+moved` when HEAD moved. The last column is never `exit=`, so a reader that takes the newest row ending `exit=0`
+`+dirty` when the tree had changes when the lock was taken or at exit, `+moved` when HEAD moved. The last column is never `exit=`, so a reader that takes the newest completed backend row
 never selects a lane row. The openapi lane is not part of the backend gate, whose wall it would lengthen.
 
 For a memory-constrained development machine, use
@@ -406,9 +406,8 @@ file: drop the branch's migration and re-add it on top of `develop` with `dotnet
 [`scripts/squash-guard.sh`](../../scripts/squash-guard.sh) `<branch>` is the last step before `git merge --squash` on
 `develop`, and it never merges. It checks, each with its own exit code: the main checkout is clean (untracked files
 included) and on `develop`; the branch exists and `develop` is its ancestor; the branch worktree is clean; and the
-newest `exit=0` line for that worktree in the main checkout's `.tmp/gate-history.log` (written by
-`scripts/run-backend-tests.sh`) recorded the branch's current tip (no `+dirty`/`+moved` suffix) with zero failed
-tests and `scope=full` (so `contracts-skipped` is refused). Then, exit 20 otherwise, the newest lane row of that
+latest backend row for that worktree in the main checkout’s `.tmp/gate-history.log` (except lock misses, exit 69)
+must record the current unsuffixed tip, exit zero, positive passes, zero failures and `scope=full` (so `contracts-skipped` is refused). Then, exit 20 otherwise, the newest lane row of that
 worktree for every required lane holds the same unsuffixed tip and `lane-exit=0`: `openapi` always, `frontend` unless
 every path of the branch diff against its merge base with `develop` (a rename is a deletion plus an addition)
 is under `docs/` or `tools/training/` or ends in `.md`, and both when that diff cannot be read. Last, exit 21

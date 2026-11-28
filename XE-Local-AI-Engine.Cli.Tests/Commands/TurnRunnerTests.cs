@@ -552,6 +552,13 @@ public sealed class TurnRunnerTests
             }
         });
 
+        public GatedConsole()
+        {
+            // The simulated terminal must also have dimensions when the runner has no terminal attached.
+            _inner.Profile.Width = 80;
+            _inner.Profile.Height = 24;
+        }
+
         public TaskCompletionSource<ConsoleKeyInfo> Key { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         /// <summary>Set once a prompt waits for a key.</summary>

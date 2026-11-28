@@ -110,9 +110,16 @@ internal sealed class DesktopInstance : IAsyncDisposable
         }
 
         await _stopping.CancelAsync();
-        await _server.DisposeAsync();
-        await _listener;
-        _listeningStopped = true;
+        try
+        {
+            // Both pipe waits observe cancellation. Let the listener finish its disconnect before closing the pipe.
+            await _listener;
+        }
+        finally
+        {
+            await _server.DisposeAsync();
+            _listeningStopped = true;
+        }
     }
 
     public async ValueTask DisposeAsync()
@@ -147,12 +154,6 @@ internal sealed class DesktopInstance : IAsyncDisposable
                 {
                     return;
                 }
-            }
-            catch (Exception) when (cancellationToken.IsCancellationRequested)
-            {
-                // StopListeningAsync disposes the server while WaitForConnectionAsync is in flight; on Unix that
-                // surfaces as a NullReferenceException from inside the runtime rather than ObjectDisposedException.
-                return;
             }
             finally
             {

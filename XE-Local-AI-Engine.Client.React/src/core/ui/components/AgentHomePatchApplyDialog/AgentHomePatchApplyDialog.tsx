@@ -106,9 +106,6 @@ function RejectionList({ entries }: { entries: readonly RejectionEntry[] }) {
  * re-exported in between is refused by the node rather than landed. A failure leaves the dialog open with a re-read
  * button, because re-reading is exactly what the operator should do after a refusal.
  *
- * A per-file list, not a diff viewer: what an operator needs before approving is which files in which folder change
- * and by how much. Rendering hunks is a separate feature, and pretending to review content this list does not show
- * would be worse than showing the list honestly.
  */
 export function AgentHomePatchApplyDialog({ runId, onClose }: AgentHomePatchApplyDialogProps) {
 	const { t } = useTranslation();
@@ -141,17 +138,15 @@ export function AgentHomePatchApplyDialog({ runId, onClose }: AgentHomePatchAppl
 
 	const plan = preview.data;
 	const applied = apply.data;
-	// A plan that can be applied always carries the hash of what it validated; the null branch is the shapes that
-	// never read a patch (over the size budget, unreadable), and those report `canApply: false` anyway.
-	const previewedHash = plan?.canApply === true ? (plan.patchSha256 ?? null) : null;
+	const previewedHash = plan?.reviewText != null ? (plan.patchSha256 ?? null) : null;
 	const canApply = previewedHash !== null && applied === undefined;
 
 	const handleApply = useCallback(() => {
-		if (previewedHash === null) {
+		if (!canApply || previewedHash === null) {
 			return;
 		}
 		apply.mutate({ body: { patchSha256: previewedHash }, path: { runId } });
-	}, [apply, previewedHash, runId]);
+	}, [apply, canApply, previewedHash, runId]);
 
 	const applyRejections = rejectionEntries(apply.error);
 
@@ -238,6 +233,26 @@ export function AgentHomePatchApplyDialog({ runId, onClose }: AgentHomePatchAppl
 
 				{plan === undefined ? null : (
 					<>
+						{plan.canApply && plan.reviewText === null ? (
+							<Alert color="yellow" role="alert">
+								{t(
+									"chat.toolCall.patchApply.reviewUnavailable",
+									"The complete patch could not be verified. Check again, or export a smaller patch.",
+								)}
+							</Alert>
+						) : null}
+						{plan.reviewText !== null ? (
+							<Code
+								block={true}
+								tabIndex={0}
+								aria-label={t("pages.agentRuns.viewer.patchTab", "Patch")}
+								style={{ maxHeight: 420, overflow: "auto" }}
+							>
+								{plan.reviewText.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, (char) =>
+									char === "\n" || char === "\t" ? char : `\\u{${char.codePointAt(0)?.toString(16)}}`,
+								)}
+							</Code>
+						) : null}
 						{plan.containsBinary ? (
 							<Alert
 								variant="light"

@@ -309,6 +309,7 @@
 				"recheck": "Check again",
 				"rejectedTitle": "These changes cannot be applied",
 				"review": "Review and apply changes",
+				"reviewUnavailable": "The complete patch could not be verified. Check again, or export a smaller patch.",
 				"runLabel": "Run",
 				"tableLabel": "Files this patch changes",
 				"title": "Review and apply changes"

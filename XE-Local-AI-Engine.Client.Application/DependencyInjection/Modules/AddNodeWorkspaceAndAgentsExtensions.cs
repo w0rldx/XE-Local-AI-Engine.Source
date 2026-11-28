@@ -50,6 +50,7 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         // Aspire-installed standard pipeline: its retries and attempt timeout would re-send a model-chosen request
         // outside the service's own 20-second budget. A no-op outside Aspire.
         builder.Services.AddHttpClient(WebFetchService.HttpClientName, static client => client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (compatible; XE-Local-AI-Engine web_fetch)"))
+               .RemoveAllLoggers()
                .ConfigurePrimaryHttpMessageHandler(static () => new SocketsHttpHandler
                {
                    AllowAutoRedirect = false,
@@ -67,6 +68,7 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         // the LAN, so its client carries NO private-address pin. The model supplies only the escaped query string.
 #pragma warning disable EXTEXP0001 // As for the web_fetch client above.
         builder.Services.AddHttpClient(WebSearchService.SearxngHttpClientName)
+               .RemoveAllLoggers()
                .ConfigurePrimaryHttpMessageHandler(static () => new SocketsHttpHandler
                {
                    AllowAutoRedirect = false,

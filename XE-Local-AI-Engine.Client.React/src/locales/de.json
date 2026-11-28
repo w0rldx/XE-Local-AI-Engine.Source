@@ -309,6 +309,7 @@
 				"recheck": "Erneut prüfen",
 				"rejectedTitle": "Diese Änderungen können nicht angewendet werden",
 				"review": "Änderungen prüfen und anwenden",
+				"reviewUnavailable": "Der vollständige Patch konnte nicht überprüft werden. Prüfen Sie ihn erneut oder exportieren Sie einen kleineren Patch.",
 				"runLabel": "Lauf",
 				"tableLabel": "Dateien, die dieser Patch ändert",
 				"title": "Änderungen prüfen und anwenden"

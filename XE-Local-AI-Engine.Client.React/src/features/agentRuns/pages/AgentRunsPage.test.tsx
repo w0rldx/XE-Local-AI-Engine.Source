@@ -163,7 +163,10 @@ describe("AgentRunsPage", () => {
 	});
 
 	it("opens the existing apply dialog for the run whose row was clicked", async () => {
-		server.use(...listRoutes({ items: [runDto()], totalCount: 1 }));
+		server.use(
+			...listRoutes({ items: [runDto()], totalCount: 1 }),
+			jsonRoute("get", `agent-home/runs/${runId}/patch`, { text: "+change", truncated: false }),
+		);
 
 		renderWithProviders(<AgentRunsPage />);
 		fireEvent.click(await screen.findByTestId(`agent-run-review-${runId}`));
@@ -313,13 +316,15 @@ describe("AgentRunsPage", () => {
 		server.use(
 			...listRoutes({ items: [runDto()], totalCount: 1 }),
 			jsonRoute("get", `agent-home/runs/${runId}/log`, { text: '{"eventName":"started"}', truncated: true }),
-			jsonRoute("get", `agent-home/runs/${runId}/patch`, { text: "", truncated: false }),
+			jsonRoute("get", `agent-home/runs/${runId}/patch`, { text: "", truncated: true }),
 		);
 
 		renderWithProviders(<AgentRunsPage />);
 		fireEvent.click(await screen.findByTestId(`agent-run-view-${runId}`));
 
 		expect(await screen.findByTestId("agent-run-viewer-log-truncated")).toBeTruthy();
+		fireEvent.click(await screen.findByTestId("agent-run-viewer-tab-patch"));
+		expect(await screen.findByTestId("agent-run-viewer-patch-truncated")).toBeTruthy();
 	});
 
 	it("says a run exported nothing rather than showing an empty editor", async () => {
