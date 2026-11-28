@@ -123,8 +123,8 @@
     <PackageVersion Include="Microsoft.Mxc.Sdk" Version="1.0.1" />
     <!-- ModelContextProtocol.AspNetCore takes an exact dependency on the matching ModelContextProtocol
          build, so these two only ever move together; a split bump fails restore with NU1107/NU1608. -->
-    <PackageVersion Include="ModelContextProtocol" Version="2.3.0" />
-    <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.3.0" />
+    <PackageVersion Include="ModelContextProtocol" Version="2.4.0" />
+    <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.4.0" />
     <!-- WASAPI process-loopback capture for Windows per-application audio (transcription source kind
          ApplicationProcess). NOTE the package id: the `NAudio` META-package multi-targets
          net9.0;net9.0-windows;net9.0-windows10.0.19041.0 and drags in Midi/Asio/WinMM, which would force a Windows
